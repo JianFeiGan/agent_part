@@ -81,8 +81,7 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
                 ),
                 (
                     "human",
-                    "分镜脚本：{storyboard}\n\n"
-                    "请设计组合方案。",
+                    "分镜脚本：{storyboard}\n\n请设计组合方案。",
                 ),
             ]
         )
@@ -200,15 +199,15 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
 
         for scene in scenes:
             # 优化场景提示词
-            prompt = await self._optimize_scene_prompt(
-                scene, visual_style
+            prompt = await self._optimize_scene_prompt(scene, visual_style)
+            processed_scenes.append(
+                {
+                    "scene_id": scene.scene_id,
+                    "prompt": prompt,
+                    "duration": scene.duration,
+                    "shot_type": scene.shot_type.value,
+                }
             )
-            processed_scenes.append({
-                "scene_id": scene.scene_id,
-                "prompt": prompt,
-                "duration": scene.duration,
-                "shot_type": scene.shot_type.value,
-            })
 
         return processed_scenes
 
@@ -341,12 +340,14 @@ async def generate_storyboard(
 
     scenes = []
     for i in range(num_scenes):
-        scenes.append({
-            "scene_id": i + 1,
-            "duration": video_duration / num_scenes,
-            "description": f"场景 {i + 1}",
-            "shot_type": "medium",
-        })
+        scenes.append(
+            {
+                "scene_id": i + 1,
+                "duration": video_duration / num_scenes,
+                "description": f"场景 {i + 1}",
+                "shot_type": "medium",
+            }
+        )
 
     return {
         "success": True,
