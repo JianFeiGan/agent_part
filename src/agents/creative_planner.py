@@ -198,13 +198,9 @@ class CreativePlannerAgent(BaseAgent[AgentState]):
         """
         # 准备输入
         product_info = f"{product.name} - {product.description[:100]}"
-        requirement_report = (
-            report.model_dump_json() if report else "{}"
-        )
+        requirement_report = report.model_dump_json() if report else "{}"
         style_preference = (
-            state.generation_request.style_preference
-            if state.generation_request
-            else None
+            state.generation_request.style_preference if state.generation_request else None
         ) or "自动推荐"
 
         # 调用LLM
@@ -223,9 +219,7 @@ class CreativePlannerAgent(BaseAgent[AgentState]):
         # 默认方案
         return self._create_default_plan(product)
 
-    def _parse_creative_response(
-        self, response: str, product: Any
-    ) -> CreativePlan:
+    def _parse_creative_response(self, response: str, product: Any) -> CreativePlan:
         """解析创意响应。
 
         Args:
@@ -302,9 +296,7 @@ class CreativePlannerAgent(BaseAgent[AgentState]):
         """
         # 根据类目选择配色
         category = (
-            product.category.value
-            if hasattr(product.category, "value")
-            else str(product.category)
+            product.category.value if hasattr(product.category, "value") else str(product.category)
         )
         palette_name = "tech"  # 默认科技风
         if category in ["clothing", "beauty"]:

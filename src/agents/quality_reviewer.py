@@ -97,9 +97,7 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
                 ),
                 (
                     "human",
-                    "内容描述：{content}\n"
-                    "商品类目：{category}\n\n"
-                    "请进行合规审核。",
+                    "内容描述：{content}\n商品类目：{category}\n\n请进行合规审核。",
                 ),
             ]
         )
@@ -131,20 +129,22 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
                 quality_reports.append(report)
                 if report.issues:
                     all_issues.extend(
-                        [{"asset_id": image.image_id, **issue.model_dump()}
-                         for issue in report.issues]
+                        [
+                            {"asset_id": image.image_id, **issue.model_dump()}
+                            for issue in report.issues
+                        ]
                     )
 
             # 审核视频
             if state.generated_video:
-                report = await self._review_video(
-                    state.generated_video, product, state
-                )
+                report = await self._review_video(state.generated_video, product, state)
                 quality_reports.append(report)
                 if report.issues:
                     all_issues.extend(
-                        [{"asset_id": state.generated_video.video_id, **issue.model_dump()}
-                         for issue in report.issues]
+                        [
+                            {"asset_id": state.generated_video.video_id, **issue.model_dump()}
+                            for issue in report.issues
+                        ]
                     )
 
             # 计算总体评分
@@ -227,28 +227,33 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
 
         # 检查图片规格
         if image.width < 800 or image.height < 800:
-            issues.append(QualityIssue(
-                issue_type="resolution",
-                severity="medium",
-                description="图片分辨率较低，建议提高至至少800x800",
-                suggestion="使用更高质量参数重新生成",
-            ))
+            issues.append(
+                QualityIssue(
+                    issue_type="resolution",
+                    severity="medium",
+                    description="图片分辨率较低，建议提高至至少800x800",
+                    suggestion="使用更高质量参数重新生成",
+                )
+            )
 
         # 检查状态
         if image.status != AssetStatus.COMPLETED:
-            issues.append(QualityIssue(
-                issue_type="status",
-                severity="high",
-                description=f"图片生成状态异常: {image.status.value}",
-                suggestion="检查生成过程或重试",
-            ))
+            issues.append(
+                QualityIssue(
+                    issue_type="status",
+                    severity="high",
+                    description=f"图片生成状态异常: {image.status.value}",
+                    suggestion="检查生成过程或重试",
+                )
+            )
 
         return QualityReport(
             asset_id=image.image_id,
             asset_type="image",
             score=score,
             issues=issues,
-            passed=score.overall_score >= self.QUALITY_THRESHOLD and len([i for i in issues if i.severity == "high"]) == 0,
+            passed=score.overall_score >= self.QUALITY_THRESHOLD
+            and len([i for i in issues if i.severity == "high"]) == 0,
         )
 
     async def _review_video(
@@ -288,36 +293,43 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
 
         # 检查视频规格
         if video.duration < 5:
-            issues.append(QualityIssue(
-                issue_type="duration",
-                severity="low",
-                description="视频时长较短",
-                suggestion="考虑增加视频时长以更好展示产品",
-            ))
+            issues.append(
+                QualityIssue(
+                    issue_type="duration",
+                    severity="low",
+                    description="视频时长较短",
+                    suggestion="考虑增加视频时长以更好展示产品",
+                )
+            )
 
         if video.fps < 24:
-            issues.append(QualityIssue(
-                issue_type="fps",
-                severity="medium",
-                description="视频帧率较低，可能影响播放流畅度",
-                suggestion="提高帧率至至少24fps",
-            ))
+            issues.append(
+                QualityIssue(
+                    issue_type="fps",
+                    severity="medium",
+                    description="视频帧率较低，可能影响播放流畅度",
+                    suggestion="提高帧率至至少24fps",
+                )
+            )
 
         # 检查状态
         if video.status != AssetStatus.COMPLETED:
-            issues.append(QualityIssue(
-                issue_type="status",
-                severity="high",
-                description=f"视频生成状态异常: {video.status.value}",
-                suggestion="检查生成过程或重试",
-            ))
+            issues.append(
+                QualityIssue(
+                    issue_type="status",
+                    severity="high",
+                    description=f"视频生成状态异常: {video.status.value}",
+                    suggestion="检查生成过程或重试",
+                )
+            )
 
         return QualityReport(
             asset_id=video.video_id,
             asset_type="video",
             score=score,
             issues=issues,
-            passed=score.overall_score >= self.QUALITY_THRESHOLD and len([i for i in issues if i.severity == "high"]) == 0,
+            passed=score.overall_score >= self.QUALITY_THRESHOLD
+            and len([i for i in issues if i.severity == "high"]) == 0,
         )
 
     def _parse_quality_score(self, response: str) -> QualityScore:
@@ -346,9 +358,7 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
 
         return QualityScore(overall_score=0.8)
 
-    def _calculate_overall_score(
-        self, reports: list[QualityReport]
-    ) -> float:
+    def _calculate_overall_score(self, reports: list[QualityReport]) -> float:
         """计算总体评分。
 
         Args:
@@ -397,9 +407,7 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
             "completed_at": datetime.now().isoformat(),
         }
 
-    def _get_recommendation(
-        self, score: float, issues: list[dict[str, Any]]
-    ) -> str:
+    def _get_recommendation(self, score: float, issues: list[dict[str, Any]]) -> str:
         """获取改进建议。
 
         Args:

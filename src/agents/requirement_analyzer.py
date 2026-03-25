@@ -144,8 +144,7 @@ class RequirementAnalyzerAgent(BaseAgent[AgentState]):
         """
         # 准备输入
         existing_points = [
-            {"title": sp.title, "description": sp.description}
-            for sp in product.selling_points
+            {"title": sp.title, "description": sp.description} for sp in product.selling_points
         ]
 
         prompt = self.get_prompt("analysis")
@@ -157,7 +156,9 @@ class RequirementAnalyzerAgent(BaseAgent[AgentState]):
             {
                 "name": product.name,
                 "brand": product.brand or "未知品牌",
-                "category": product.category.value if hasattr(product.category, 'value') else str(product.category),
+                "category": product.category.value
+                if hasattr(product.category, "value")
+                else str(product.category),
                 "description": product.description,
                 "specifications": str(product.specifications) if product.specifications else "无",
                 "existing_selling_points": str(existing_points) if existing_points else "无",
@@ -167,9 +168,7 @@ class RequirementAnalyzerAgent(BaseAgent[AgentState]):
         # 解析响应
         return self._parse_analysis_response(response, product)
 
-    def _parse_analysis_response(
-        self, response: str, product: Any
-    ) -> RequirementReport:
+    def _parse_analysis_response(self, response: str, product: Any) -> RequirementReport:
         """解析分析响应。
 
         Args:

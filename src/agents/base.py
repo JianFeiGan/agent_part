@@ -60,13 +60,9 @@ class AgentResult(BaseModel):
 
     success: bool = Field(..., description="是否成功")
     data: dict[str, Any] = Field(default_factory=dict, description="结果数据")
-    messages: list[BaseMessage] = Field(
-        default_factory=list, description="消息历史"
-    )
+    messages: list[BaseMessage] = Field(default_factory=list, description="消息历史")
     error: str | None = Field(default=None, description="错误信息")
-    next_agent: AgentRole | None = Field(
-        default=None, description="下一个要执行的Agent"
-    )
+    next_agent: AgentRole | None = Field(default=None, description="下一个要执行的Agent")
 
 
 class BaseAgent(ABC, Generic[StateT]):
@@ -139,9 +135,7 @@ class BaseAgent(ABC, Generic[StateT]):
                 temperature=0.7,
             )
         except ImportError:
-            raise ImportError(
-                "请安装 langchain-community: pip install langchain-community"
-            )
+            raise ImportError("请安装 langchain-community: pip install langchain-community")
 
     def register_tool(self, tool: Any) -> None:
         """注册工具。

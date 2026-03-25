@@ -8,6 +8,7 @@ Description:
 2026-03-23
 """
 
+from datetime import datetime
 from operator import add
 from typing import Annotated, Any
 
@@ -22,6 +23,64 @@ from src.models.assets import (
 from src.models.creative import CreativePlan
 from src.models.product import Product
 from src.models.storyboard import Storyboard
+
+
+class AgentLog(BaseModel):
+    """Agent 执行日志。
+
+    记录每个 Agent 的执行状态、时间和消息。
+
+    Attributes:
+        agent_name: Agent 名称。
+        step: 步骤标识。
+        start_time: 开始时间。
+        end_time: 结束时间。
+        status: 状态: pending/running/completed/failed。
+        message: 执行消息/错误原因。
+        output_summary: 输出摘要。
+
+    Example:
+        >>> log = AgentLog(
+        ...     agent_name="需求分析Agent",
+        ...     step="requirement_analysis",
+        ...     start_time="2026-03-25T10:00:00",
+        ...     status="running"
+        ... )
+    """
+
+    agent_name: str = Field(..., description="Agent 名称")
+    step: str = Field(..., description="步骤标识")
+    start_time: str | None = Field(default=None, description="开始时间")
+    end_time: str | None = Field(default=None, description="结束时间")
+    status: str = Field(default="pending", description="状态: pending/running/completed/failed")
+    message: str | None = Field(default=None, description="执行消息/错误原因")
+    output_summary: str | None = Field(default=None, description="输出摘要")
+
+    def mark_running(self) -> None:
+        """标记为运行中。"""
+        self.status = "running"
+        self.start_time = datetime.now().isoformat()
+
+    def mark_completed(self, output_summary: str | None = None) -> None:
+        """标记为完成。
+
+        Args:
+            output_summary: 输出摘要。
+        """
+        self.status = "completed"
+        self.end_time = datetime.now().isoformat()
+        if output_summary:
+            self.output_summary = output_summary
+
+    def mark_failed(self, error_message: str) -> None:
+        """标记为失败。
+
+        Args:
+            error_message: 错误信息。
+        """
+        self.status = "failed"
+        self.end_time = datetime.now().isoformat()
+        self.message = error_message
 
 
 class TaskType(str):
@@ -62,15 +121,9 @@ class RequirementReport(BaseModel):
 
     product_summary: str = Field(..., description="商品摘要")
     key_features: list[str] = Field(default_factory=list, description="关键特性")
-    selling_points: list[dict[str, Any]] = Field(
-        default_factory=list, description="卖点列表"
-    )
-    target_audience: list[str] = Field(
-        default_factory=list, description="目标人群"
-    )
-    style_recommendations: list[str] = Field(
-        default_factory=list, description="风格推荐"
-    )
+    selling_points: list[dict[str, Any]] = Field(default_factory=list, description="卖点列表")
+    target_audience: list[str] = Field(default_factory=list, description="目标人群")
+    style_recommendations: list[str] = Field(default_factory=list, description="风格推荐")
     keywords: list[str] = Field(default_factory=list, description="关键词")
 
 
@@ -101,28 +154,18 @@ class AgentState(BaseModel):
     """
 
     # ==================== 输入 ====================
-    product_info: Product | None = Field(
-        default=None, description="商品信息"
-    )
-    generation_request: GenerationRequest | None = Field(
-        default=None, description="生成请求"
-    )
+    product_info: Product | None = Field(default=None, description="商品信息")
+    generation_request: GenerationRequest | None = Field(default=None, description="生成请求")
 
     # ==================== 分析阶段 ====================
-    requirement_report: RequirementReport | None = Field(
-        default=None, description="需求分析报告"
-    )
+    requirement_report: RequirementReport | None = Field(default=None, description="需求分析报告")
     selling_points: Annotated[list[dict[str, Any]], add] = Field(
         default_factory=list, description="提取的卖点列表（累加）"
     )
 
     # ==================== 创意阶段 ====================
-    creative_plan: CreativePlan | None = Field(
-        default=None, description="创意方案"
-    )
-    color_palette: dict[str, Any] | None = Field(
-        default=None, description="配色方案"
-    )
+    creative_plan: CreativePlan | None = Field(default=None, description="创意方案")
+    color_palette: dict[str, Any] | None = Field(default=None, description="配色方案")
 
     # ==================== 设计阶段 ====================
     generation_prompts: Annotated[list[dict[str, Any]], add] = Field(
@@ -133,37 +176,30 @@ class AgentState(BaseModel):
     generated_images: Annotated[list[GeneratedImage], add] = Field(
         default_factory=list, description="生成的图片列表（累加）"
     )
-    storyboard: Storyboard | None = Field(
-        default=None, description="分镜脚本"
-    )
-    generated_video: GeneratedVideo | None = Field(
-        default=None, description="生成的视频"
-    )
+    storyboard: Storyboard | None = Field(default=None, description="分镜脚本")
+    generated_video: GeneratedVideo | None = Field(default=None, description="生成的视频")
 
     # ==================== 审核阶段 ====================
     quality_reports: Annotated[list[QualityReport], add] = Field(
         default_factory=list, description="质量报告列表（累加）"
     )
-    quality_score: float | None = Field(
-        default=None, description="总体质量评分"
-    )
+    quality_score: float | None = Field(default=None, description="总体质量评分")
     issues: Annotated[list[dict[str, Any]], add] = Field(
         default_factory=list, description="问题列表（累加）"
     )
 
     # ==================== 输出 ====================
-    asset_collection: AssetCollection | None = Field(
-        default=None, description="资源集合"
-    )
-    final_results: dict[str, Any] | None = Field(
-        default=None, description="最终结果"
-    )
+    asset_collection: AssetCollection | None = Field(default=None, description="资源集合")
+    final_results: dict[str, Any] | None = Field(default=None, description="最终结果")
     error: str | None = Field(default=None, description="错误信息")
 
     # ==================== 元数据 ====================
     current_step: str = Field(default="init", description="当前步骤")
-    completed_steps: list[str] = Field(
-        default_factory=list, description="已完成步骤"
+    completed_steps: list[str] = Field(default_factory=list, description="已完成步骤")
+
+    # ==================== Agent 执行日志 ====================
+    agent_logs: Annotated[list[AgentLog], add] = Field(
+        default_factory=list, description="Agent 执行日志列表（累加）"
     )
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -208,6 +244,7 @@ class AgentState(BaseModel):
             "has_video": self.generated_video is not None,
             "quality_score": self.quality_score,
             "has_error": self.has_error(),
+            "agent_logs_count": len(self.agent_logs),
         }
 
 

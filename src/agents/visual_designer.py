@@ -145,19 +145,13 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
 
             # 生成图片提示词
             if task_type in ["image_only", "image_and_video"]:
-                image_prompts = await self._generate_image_prompts(
-                    product, creative_plan, state
-                )
-                result_data["image_prompts"] = [
-                    p.model_dump() for p in image_prompts
-                ]
+                image_prompts = await self._generate_image_prompts(product, creative_plan, state)
+                result_data["image_prompts"] = [p.model_dump() for p in image_prompts]
                 state.generation_prompts = result_data["image_prompts"]
 
             # 生成分镜脚本
             if task_type in ["video_only", "image_and_video"]:
-                storyboard = await self._generate_storyboard(
-                    product, creative_plan, state
-                )
+                storyboard = await self._generate_storyboard(product, creative_plan, state)
                 result_data["storyboard"] = storyboard.model_dump()
                 state.storyboard = storyboard
 
@@ -201,15 +195,9 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
         """
         # 准备输入
         selling_points = (
-            [sp.get("title", "") for sp in state.selling_points]
-            if state.selling_points
-            else []
+            [sp.get("title", "") for sp in state.selling_points] if state.selling_points else []
         )
-        image_types = (
-            state.generation_request.image_types
-            if state.generation_request
-            else ["main"]
-        )
+        image_types = state.generation_request.image_types if state.generation_request else ["main"]
 
         prompt = self.get_prompt("image_prompt")
         if prompt is None:
@@ -229,9 +217,7 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
 
         return self._parse_image_prompts(response, image_types)
 
-    def _parse_image_prompts(
-        self, response: str, image_types: list[str]
-    ) -> list[ImagePrompt]:
+    def _parse_image_prompts(self, response: str, image_types: list[str]) -> list[ImagePrompt]:
         """解析图片提示词响应。
 
         Args:
@@ -270,9 +256,7 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
 
         return self._create_default_prompts(None, image_types)
 
-    def _create_default_prompts(
-        self, product: Any, image_types: list[str]
-    ) -> list[ImagePrompt]:
+    def _create_default_prompts(self, product: Any, image_types: list[str]) -> list[ImagePrompt]:
         """创建默认图片提示词。
 
         Args:
@@ -312,8 +296,7 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
                 )
             else:
                 prompt_text = (
-                    f"Product photography of {product_name}, "
-                    f"professional quality, high detail"
+                    f"Product photography of {product_name}, professional quality, high detail"
                 )
 
             prompts.append(
@@ -344,15 +327,9 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
         Returns:
             分镜脚本。
         """
-        duration = (
-            state.generation_request.video_duration
-            if state.generation_request
-            else 30.0
-        )
+        duration = state.generation_request.video_duration if state.generation_request else 30.0
         selling_points = (
-            [sp.get("title", "") for sp in state.selling_points]
-            if state.selling_points
-            else []
+            [sp.get("title", "") for sp in state.selling_points] if state.selling_points else []
         )
 
         prompt = self.get_prompt("storyboard")
@@ -372,9 +349,7 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
 
         return self._parse_storyboard(response, product, duration)
 
-    def _parse_storyboard(
-        self, response: str, product: Any, duration: float
-    ) -> Storyboard:
+    def _parse_storyboard(self, response: str, product: Any, duration: float) -> Storyboard:
         """解析分镜脚本响应。
 
         Args:
@@ -393,9 +368,7 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
 
                 scenes = []
                 for i, scene_data in enumerate(data.get("scenes", [])):
-                    scene_type_str = scene_data.get(
-                        "scene_type", "product_intro"
-                    )
+                    scene_type_str = scene_data.get("scene_type", "product_intro")
                     try:
                         scene_type = SceneType(scene_type_str)
                     except ValueError:
@@ -432,9 +405,7 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
 
         return self._create_default_storyboard(product, duration)
 
-    def _create_default_storyboard(
-        self, product: Any, duration: float
-    ) -> Storyboard:
+    def _create_default_storyboard(self, product: Any, duration: float) -> Storyboard:
         """创建默认分镜脚本。
 
         Args:

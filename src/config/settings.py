@@ -25,15 +25,12 @@ class Settings(BaseSettings):
     )
 
     # ==================== API Keys ====================
-    dashscope_api_key: str = Field(
-        default="", description="阿里云 DashScope API Key"
-    )
-    kling_api_key: str = Field(default="", description="可灵AI API Key")
+    dashscope_api_key: str = Field(default="", description="阿里云 DashScope API Key")
+    kling_access_key: str = Field(default="", description="可灵AI Access Key")
+    kling_secret_key: str = Field(default="", description="可灵AI Secret Key")
 
     # ==================== LangChain 配置 ====================
-    langchain_tracing_v2: bool = Field(
-        default=False, description="启用 LangSmith 追踪"
-    )
+    langchain_tracing_v2: bool = Field(default=False, description="启用 LangSmith 追踪")
     langchain_api_key: str = Field(default="", description="LangSmith API Key")
     langchain_project: str = Field(
         default="product-visual-generator", description="LangSmith 项目名"
@@ -55,24 +52,20 @@ class Settings(BaseSettings):
     # ==================== 日志配置 ====================
     log_level: str = Field(default="INFO", description="日志级别")
 
+    # ==================== Redis 配置 ====================
+    redis_url: str = Field(default="redis://localhost:6379/0", description="Redis 连接 URL")
+    redis_prefix: str = Field(default="pvg:", description="Redis Key 前缀")  # product-visual-generator
+
     # ==================== 生成配置 ====================
     default_image_width: int = Field(default=1024, description="默认图片宽度")
     default_image_height: int = Field(default=1024, description="默认图片高度")
     default_video_fps: int = Field(default=30, description="默认视频帧率")
-    max_concurrent_generations: int = Field(
-        default=5, description="最大并发生成数"
-    )
+    max_concurrent_generations: int = Field(default=5, description="最大并发生成数")
 
     # ==================== 模型配置 ====================
-    llm_model: str = Field(
-        default="qwen-max", description="LLM 模型名称"
-    )
-    image_model: str = Field(
-        default="wanx-v1", description="图像生成模型"
-    )
-    video_model: str = Field(
-        default="kling-v1", description="视频生成模型"
-    )
+    llm_model: str = Field(default="qwen3.5-flash", description="LLM 模型名称")
+    image_model: str = Field(default="wanx-v1", description="图像生成模型")
+    video_model: str = Field(default="kling-v1", description="视频生成模型")
 
     @property
     def is_langchain_tracing_enabled(self) -> bool:

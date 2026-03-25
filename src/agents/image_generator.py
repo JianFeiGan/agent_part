@@ -110,9 +110,7 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
             return AgentResult(
                 success=True,
                 data={
-                    "generated_images": [
-                        img.model_dump() for img in generated_images
-                    ],
+                    "generated_images": [img.model_dump() for img in generated_images],
                     "total_count": len(generated_images),
                 },
                 next_agent=AgentRole.QUALITY_REVIEWER,
@@ -222,9 +220,7 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         except Exception:
             return self._default_optimize(prompt, style_keywords)
 
-    def _default_optimize(
-        self, prompt: str, style_keywords: list[str]
-    ) -> str:
+    def _default_optimize(self, prompt: str, style_keywords: list[str]) -> str:
         """默认提示词优化。
 
         Args:

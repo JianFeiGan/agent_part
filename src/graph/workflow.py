@@ -8,12 +8,47 @@ Description:
 2026-03-23
 """
 
-from typing import Literal
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Literal
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
-from src.graph.state import AgentState, create_initial_state
+from src.graph.state import AgentLog, AgentState, GenerationRequest, create_initial_state
+from src.models.product import Product
+
+if TYPE_CHECKING:
+    from langgraph.pregel import Pregel
+
+
+# Agent 名称映射
+AGENT_NAMES = {
+    "orchestrator": "编排调度Agent",
+    "requirement_analyzer": "需求分析Agent",
+    "creative_planner": "创意策划Agent",
+    "visual_designer": "视觉设计Agent",
+    "image_generator": "图片生成Agent",
+    "video_generator": "视频生成Agent",
+    "quality_reviewer": "质量审核Agent",
+}
+
+
+def create_agent_log(agent_key: str, status: str = "running") -> AgentLog:
+    """创建 Agent 执行日志。
+
+    Args:
+        agent_key: Agent 标识。
+        status: 日志状态。
+
+    Returns:
+        AgentLog 实例。
+    """
+    return AgentLog(
+        agent_name=AGENT_NAMES.get(agent_key, agent_key),
+        step=agent_key,
+        start_time=datetime.now().isoformat() if status == "running" else None,
+        status=status,
+    )
 
 
 class WorkflowBuilder:
@@ -41,48 +76,182 @@ class WorkflowBuilder:
         Returns:
             self，支持链式调用。
         """
-        # 定义节点处理函数（占位符，实际Agent实现后替换）
+        # 延迟导入以避免循环导入
+        from src.agents.creative_planner import CreativePlannerAgent
+        from src.agents.image_generator import ImageGeneratorAgent
+        from src.agents.orchestrator import OrchestratorAgent
+        from src.agents.quality_reviewer import QualityReviewerAgent
+        from src.agents.requirement_analyzer import RequirementAnalyzerAgent
+        from src.agents.video_generator import VideoGeneratorAgent
+        from src.agents.visual_designer import VisualDesignerAgent
+
+        # 创建 Agent 实例
+        orchestrator = OrchestratorAgent()
+        requirement_analyzer = RequirementAnalyzerAgent()
+        creative_planner = CreativePlannerAgent()
+        visual_designer = VisualDesignerAgent()
+        image_generator = ImageGeneratorAgent()
+        video_generator = VideoGeneratorAgent()
+        quality_reviewer = QualityReviewerAgent()
+
+        # 定义节点处理函数
         async def orchestrator_node(state: AgentState) -> dict:
             """编排器节点。"""
-            state.set_current_step("orchestration")
-            # TODO: 调用实际的OrchestratorAgent
-            return {"current_step": "orchestration"}
+            # 记录开始日志
+            start_log = create_agent_log("orchestrator", "running")
+
+            result = await orchestrator.execute(state)
+
+            # 记录结束日志
+            if not result.success:
+                start_log.mark_failed(result.error or "执行失败")
+                return {
+                    "error": result.error,
+                    "current_step": "orchestration",
+                    "agent_logs": [start_log],
+                }
+            start_log.mark_completed("编排调度完成")
+            return {
+                "current_step": "orchestration",
+                "completed_steps": state.completed_steps,
+                "agent_logs": [start_log],
+            }
 
         async def requirement_analyzer_node(state: AgentState) -> dict:
             """需求分析节点。"""
-            state.set_current_step("requirement_analysis")
-            # TODO: 调用实际的RequirementAnalyzerAgent
-            return {"current_step": "requirement_analysis"}
+            start_log = create_agent_log("requirement_analyzer", "running")
+
+            result = await requirement_analyzer.execute(state)
+
+            if not result.success:
+                start_log.mark_failed(result.error or "执行失败")
+                return {
+                    "error": result.error,
+                    "current_step": "requirement_analysis",
+                    "agent_logs": [start_log],
+                }
+            start_log.mark_completed(f"分析完成，发现 {len(result.data.get('selling_points', []))} 个卖点")
+            return {
+                "current_step": "requirement_analysis",
+                "requirement_report": result.data.get("requirement_report"),
+                "selling_points": result.data.get("selling_points", []),
+                "completed_steps": state.completed_steps,
+                "agent_logs": [start_log],
+            }
 
         async def creative_planner_node(state: AgentState) -> dict:
             """创意策划节点。"""
-            state.set_current_step("creative_planning")
-            # TODO: 调用实际的CreativePlannerAgent
-            return {"current_step": "creative_planning"}
+            start_log = create_agent_log("creative_planner", "running")
+
+            result = await creative_planner.execute(state)
+
+            if not result.success:
+                start_log.mark_failed(result.error or "执行失败")
+                return {
+                    "error": result.error,
+                    "current_step": "creative_planning",
+                    "agent_logs": [start_log],
+                }
+            start_log.mark_completed("创意方案生成完成")
+            return {
+                "current_step": "creative_planning",
+                "creative_plan": result.data.get("creative_plan"),
+                "color_palette": result.data.get("color_palette"),
+                "completed_steps": state.completed_steps,
+                "agent_logs": [start_log],
+            }
 
         async def visual_designer_node(state: AgentState) -> dict:
             """视觉设计节点。"""
-            state.set_current_step("visual_design")
-            # TODO: 调用实际的VisualDesignerAgent
-            return {"current_step": "visual_design"}
+            start_log = create_agent_log("visual_designer", "running")
+
+            result = await visual_designer.execute(state)
+
+            if not result.success:
+                start_log.mark_failed(result.error or "执行失败")
+                return {
+                    "error": result.error,
+                    "current_step": "visual_design",
+                    "agent_logs": [start_log],
+                }
+            prompts_count = len(result.data.get("image_prompts", []))
+            start_log.mark_completed(f"生成 {prompts_count} 个图片提示词")
+            return {
+                "current_step": "visual_design",
+                "generation_prompts": result.data.get("image_prompts", []),
+                "storyboard": result.data.get("storyboard"),
+                "completed_steps": state.completed_steps,
+                "agent_logs": [start_log],
+            }
 
         async def image_generator_node(state: AgentState) -> dict:
             """图片生成节点。"""
-            state.set_current_step("image_generation")
-            # TODO: 调用实际的ImageGeneratorAgent
-            return {"current_step": "image_generation"}
+            start_log = create_agent_log("image_generator", "running")
+
+            result = await image_generator.execute(state)
+
+            if not result.success:
+                start_log.mark_failed(result.error or "执行失败")
+                return {
+                    "error": result.error,
+                    "current_step": "image_generation",
+                    "agent_logs": [start_log],
+                }
+            images_count = len(result.data.get("generated_images", []))
+            start_log.mark_completed(f"成功生成 {images_count} 张图片")
+            return {
+                "current_step": "image_generation",
+                "generated_images": result.data.get("generated_images", []),
+                "completed_steps": state.completed_steps,
+                "agent_logs": [start_log],
+            }
 
         async def video_generator_node(state: AgentState) -> dict:
             """视频生成节点。"""
-            state.set_current_step("video_generation")
-            # TODO: 调用实际的VideoGeneratorAgent
-            return {"current_step": "video_generation"}
+            start_log = create_agent_log("video_generator", "running")
+
+            result = await video_generator.execute(state)
+
+            if not result.success:
+                start_log.mark_failed(result.error or "执行失败")
+                return {
+                    "error": result.error,
+                    "current_step": "video_generation",
+                    "agent_logs": [start_log],
+                }
+            start_log.mark_completed("视频生成完成")
+            return {
+                "current_step": "video_generation",
+                "generated_video": result.data.get("generated_video"),
+                "completed_steps": state.completed_steps,
+                "agent_logs": [start_log],
+            }
 
         async def quality_reviewer_node(state: AgentState) -> dict:
             """质量审核节点。"""
-            state.set_current_step("quality_review")
-            # TODO: 调用实际的QualityReviewerAgent
-            return {"current_step": "quality_review"}
+            start_log = create_agent_log("quality_reviewer", "running")
+
+            result = await quality_reviewer.execute(state)
+
+            if not result.success:
+                start_log.mark_failed(result.error or "执行失败")
+                return {
+                    "error": result.error,
+                    "current_step": "quality_review",
+                    "agent_logs": [start_log],
+                }
+            score = result.data.get("overall_score", 0)
+            start_log.mark_completed(f"质量评分: {score}")
+            return {
+                "current_step": "quality_review",
+                "quality_reports": result.data.get("quality_reports", []),
+                "quality_score": result.data.get("overall_score"),
+                "issues": result.data.get("issues", []),
+                "asset_collection": result.data.get("asset_collection"),
+                "final_results": result.data.get("final_results"),
+                "completed_steps": state.completed_steps,
+                "agent_logs": [start_log],
+            }
 
         # 添加节点
         self.graph.add_node("orchestrator", orchestrator_node)
@@ -203,9 +372,7 @@ class WorkflowBuilder:
             编译后的可执行图。
         """
         if not self._nodes_added or not self._edges_added:
-            raise RuntimeError(
-                "请先调用 add_agent_nodes() 和 add_edges() 完成工作流构建"
-            )
+            raise RuntimeError("请先调用 add_agent_nodes() 和 add_edges() 完成工作流构建")
 
         return self.graph.compile(checkpointer=self.checkpointer)
 
@@ -217,15 +384,14 @@ def create_workflow() -> "CompiledGraph":
         编译后的工作流实例。
     """
     builder = WorkflowBuilder()
-    return (
-        builder.add_agent_nodes()
-        .add_edges()
-        .compile()
-    )
+    return builder.add_agent_nodes().add_edges().compile()
 
 
-# 类型别名
-CompiledGraph = StateGraph | None  # 实际类型由 compile() 返回
+# 类型别名 - 编译后的图类型
+if TYPE_CHECKING:
+    CompiledGraph = Pregel
+else:
+    CompiledGraph = Any
 
 
 class ProductVisualWorkflow:
@@ -240,12 +406,12 @@ class ProductVisualWorkflow:
 
     def __init__(self) -> None:
         """初始化工作流。"""
-        self.app = create_workflow()
+        self.app: CompiledGraph = create_workflow()
 
     async def run(
         self,
-        product,
-        request=None,
+        product: Product,
+        request: GenerationRequest | None = None,
         thread_id: str = "default",
     ) -> AgentState:
         """运行工作流。
@@ -262,6 +428,9 @@ class ProductVisualWorkflow:
         config = {"configurable": {"thread_id": thread_id}}
 
         result = await self.app.ainvoke(initial_state, config=config)
+        # 将结果转换为 AgentState
+        if isinstance(result, dict):
+            return AgentState(**result)
         return result
 
     async def get_state(self, thread_id: str = "default") -> AgentState | None:
@@ -275,4 +444,8 @@ class ProductVisualWorkflow:
         """
         config = {"configurable": {"thread_id": thread_id}}
         state = await self.app.aget_state(config)
-        return state.values if state else None
+        if state and state.values:
+            if isinstance(state.values, dict):
+                return AgentState(**state.values)
+            return state.values
+        return None

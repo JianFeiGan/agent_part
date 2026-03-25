@@ -7,4 +7,11 @@
 - 辅助工具
 """
 
-__all__ = []
+from src.agents.image_generator import generate_product_image
+from src.agents.video_generator import generate_product_video, generate_storyboard
+
+__all__ = [
+    "generate_product_image",
+    "generate_product_video",
+    "generate_storyboard",
+]
