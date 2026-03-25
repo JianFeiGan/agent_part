@@ -4,7 +4,6 @@
 Tests for Agent base class and implementations.
 """
 
-
 from src.agents.base import AgentResult, AgentRole, AgentStatus
 from src.graph.state import AgentState, GenerationRequest, create_initial_state
 from src.models.product import Product, ProductCategory

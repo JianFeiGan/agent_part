@@ -90,24 +90,16 @@ class Scene(BaseModel):
     visual_prompt: str = Field(..., description="视觉生成提示词")
 
     # 叠加元素
-    text_overlays: list[TextOverlay] = Field(
-        default_factory=list, description="文字叠加层"
-    )
+    text_overlays: list[TextOverlay] = Field(default_factory=list, description="文字叠加层")
     audio_description: str | None = Field(default=None, description="音频描述")
 
     # 转场
-    transition_in: TransitionType = Field(
-        default=TransitionType.CUT, description="入场转场"
-    )
-    transition_out: TransitionType = Field(
-        default=TransitionType.CUT, description="出场转场"
-    )
+    transition_in: TransitionType = Field(default=TransitionType.CUT, description="入场转场")
+    transition_out: TransitionType = Field(default=TransitionType.CUT, description="出场转场")
 
     # 素材引用
     product_focus: str | None = Field(default=None, description="聚焦的产品卖点")
-    asset_references: list[str] = Field(
-        default_factory=list, description="引用的素材ID"
-    )
+    asset_references: list[str] = Field(default_factory=list, description="引用的素材ID")
 
     model_config = {
         "json_schema_extra": {
@@ -121,9 +113,7 @@ class Scene(BaseModel):
                     "visual_prompt": "Smart watch product shot, "
                     "front view, clean background, "
                     "brand logo fade in",
-                    "text_overlays": [
-                        {"content": "TechFit 智能手表", "position": "bottom"}
-                    ],
+                    "text_overlays": [{"content": "TechFit 智能手表", "position": "bottom"}],
                     "transition_in": "fade",
                     "transition_out": "dissolve",
                 }
@@ -153,9 +143,7 @@ class Storyboard(BaseModel):
     color_grading: str | None = Field(default=None, description="调色风格")
 
     # 音频设定
-    background_music_style: str | None = Field(
-        default=None, description="背景音乐风格"
-    )
+    background_music_style: str | None = Field(default=None, description="背景音乐风格")
     voiceover_style: str | None = Field(default=None, description="旁白风格")
 
     # 元数据

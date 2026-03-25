@@ -77,8 +77,7 @@ class OrchestratorAgent(BaseAgent[AgentState]):
                 ),
                 (
                     "human",
-                    "执行结果：{execution_results}\n\n"
-                    "请生成最终报告。",
+                    "执行结果：{execution_results}\n\n请生成最终报告。",
                 ),
             ]
         )
@@ -146,7 +145,7 @@ class OrchestratorAgent(BaseAgent[AgentState]):
         任务类型: {request.task_type}
         图片类型: {request.image_types}
         视频时长: {request.video_duration}秒
-        风格偏好: {request.style_preference or '自动推荐'}
+        风格偏好: {request.style_preference or "自动推荐"}
         """
 
         # 调用LLM分析

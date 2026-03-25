@@ -73,9 +73,7 @@ class GeneratedImage(BaseModel):
     error_message: str | None = Field(default=None, description="错误信息")
 
     # 时间戳
-    created_at: datetime = Field(
-        default_factory=datetime.now, description="创建时间"
-    )
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
     completed_at: datetime | None = Field(default=None, description="完成时间")
 
     # 元数据
@@ -153,9 +151,7 @@ class GeneratedVideo(BaseModel):
     error_message: str | None = Field(default=None, description="错误信息")
 
     # 时间戳
-    created_at: datetime = Field(
-        default_factory=datetime.now, description="创建时间"
-    )
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
     completed_at: datetime | None = Field(default=None, description="完成时间")
 
     # 元数据
@@ -211,13 +207,9 @@ class QualityScore(BaseModel):
 
     overall_score: float = Field(..., description="总体评分", ge=0, le=1)
     clarity_score: float = Field(default=0.8, description="清晰度评分", ge=0, le=1)
-    composition_score: float = Field(
-        default=0.8, description="构图评分", ge=0, le=1
-    )
+    composition_score: float = Field(default=0.8, description="构图评分", ge=0, le=1)
     color_score: float = Field(default=0.8, description="色彩评分", ge=0, le=1)
-    relevance_score: float = Field(
-        default=0.8, description="相关性评分", ge=0, le=1
-    )
+    relevance_score: float = Field(default=0.8, description="相关性评分", ge=0, le=1)
 
     model_config = {
         "json_schema_extra": {
@@ -277,18 +269,14 @@ class QualityReport(BaseModel):
     score: QualityScore = Field(..., description="质量评分")
 
     # 问题列表
-    issues: list[QualityIssue] = Field(
-        default_factory=list, description="问题列表"
-    )
+    issues: list[QualityIssue] = Field(default_factory=list, description="问题列表")
 
     # 审核结果
     passed: bool = Field(..., description="是否通过")
     review_comments: str | None = Field(default=None, description="审核意见")
 
     # 时间戳
-    reviewed_at: datetime = Field(
-        default_factory=datetime.now, description="审核时间"
-    )
+    reviewed_at: datetime = Field(default_factory=datetime.now, description="审核时间")
 
     model_config = {
         "json_schema_extra": {
@@ -314,27 +302,17 @@ class AssetCollection(BaseModel):
     product_name: str = Field(..., description="商品名称")
 
     # 图片资源
-    images: list[GeneratedImage] = Field(
-        default_factory=list, description="图片列表"
-    )
+    images: list[GeneratedImage] = Field(default_factory=list, description="图片列表")
 
     # 视频资源
-    videos: list[GeneratedVideo] = Field(
-        default_factory=list, description="视频列表"
-    )
+    videos: list[GeneratedVideo] = Field(default_factory=list, description="视频列表")
 
     # 质量报告
-    quality_reports: list[QualityReport] = Field(
-        default_factory=list, description="质量报告列表"
-    )
+    quality_reports: list[QualityReport] = Field(default_factory=list, description="质量报告列表")
 
     # 时间戳
-    created_at: datetime = Field(
-        default_factory=datetime.now, description="创建时间"
-    )
-    updated_at: datetime = Field(
-        default_factory=datetime.now, description="更新时间"
-    )
+    created_at: datetime = Field(default_factory=datetime.now, description="创建时间")
+    updated_at: datetime = Field(default_factory=datetime.now, description="更新时间")
 
     model_config = {
         "json_schema_extra": {

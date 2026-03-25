@@ -96,19 +96,13 @@ class Product(BaseModel):
     )
 
     # 卖点信息
-    selling_points: list[SellingPoint] = Field(
-        default_factory=list, description="卖点列表"
-    )
+    selling_points: list[SellingPoint] = Field(default_factory=list, description="卖点列表")
 
     # 规格信息
-    specifications: list[ProductSpec] = Field(
-        default_factory=list, description="规格列表"
-    )
+    specifications: list[ProductSpec] = Field(default_factory=list, description="规格列表")
 
     # 目标用户
-    target_audience: list[str] = Field(
-        default_factory=list, description="目标人群标签"
-    )
+    target_audience: list[str] = Field(default_factory=list, description="目标人群标签")
 
     # 价格区间
     price_range: tuple[float, float] | None = Field(
@@ -116,12 +110,8 @@ class Product(BaseModel):
     )
 
     # 已有素材
-    existing_images: list[str] = Field(
-        default_factory=list, description="已有图片URL列表"
-    )
-    existing_videos: list[str] = Field(
-        default_factory=list, description="已有视频URL列表"
-    )
+    existing_images: list[str] = Field(default_factory=list, description="已有图片URL列表")
+    existing_videos: list[str] = Field(default_factory=list, description="已有视频URL列表")
 
     # 元数据
     tags: list[str] = Field(default_factory=list, description="标签列表")
@@ -160,9 +150,7 @@ class Product(BaseModel):
         Returns:
             按优先级排序的主要卖点列表。
         """
-        sorted_points = sorted(
-            self.selling_points, key=lambda x: x.priority, reverse=True
-        )
+        sorted_points = sorted(self.selling_points, key=lambda x: x.priority, reverse=True)
         return sorted_points[:limit]
 
     def get_keywords(self) -> list[str]:

@@ -71,9 +71,7 @@ class ColorPalette(BaseModel):
     description: str = Field(..., description="配色方案描述")
     colors: list[ColorInfo] = Field(..., description="颜色列表")
     mood: str = Field(..., description="配色情绪/氛围")
-    suitable_categories: list[str] = Field(
-        default_factory=list, description="适用的商品类目"
-    )
+    suitable_categories: list[str] = Field(default_factory=list, description="适用的商品类目")
 
     model_config = {
         "json_schema_extra": {
@@ -160,25 +158,17 @@ class CreativePlan(BaseModel):
     color_palette: ColorPalette = Field(..., description="配色方案")
 
     # 图片提示词
-    image_prompts: list[ImagePrompt] = Field(
-        default_factory=list, description="图片生成提示词列表"
-    )
+    image_prompts: list[ImagePrompt] = Field(default_factory=list, description="图片生成提示词列表")
 
     # 创意元素
-    key_elements: list[str] = Field(
-        default_factory=list, description="关键视觉元素"
-    )
-    composition_notes: str | None = Field(
-        default=None, description="构图建议"
-    )
+    key_elements: list[str] = Field(default_factory=list, description="关键视觉元素")
+    composition_notes: str | None = Field(default=None, description="构图建议")
 
     # 目标情感
     target_emotion: str | None = Field(default=None, description="目标情感")
 
     # 参考风格
-    reference_styles: list[str] = Field(
-        default_factory=list, description="参考风格/品牌"
-    )
+    reference_styles: list[str] = Field(default_factory=list, description="参考风格/品牌")
 
     model_config = {
         "json_schema_extra": {
@@ -191,9 +181,7 @@ class CreativePlan(BaseModel):
                     "color_palette": {
                         "name": "科技蓝",
                         "description": "专业科技感配色",
-                        "colors": [
-                            {"hex": "#0066CC", "name": "科技蓝", "role": "primary"}
-                        ],
+                        "colors": [{"hex": "#0066CC", "name": "科技蓝", "role": "primary"}],
                         "mood": "专业科技",
                     },
                     "key_elements": ["产品特写", "光影效果", "几何元素"],

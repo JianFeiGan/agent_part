@@ -4,7 +4,6 @@
 Tests for Product, SellingPoint, and related models.
 """
 
-
 from src.models.product import (
     Product,
     ProductCategory,
