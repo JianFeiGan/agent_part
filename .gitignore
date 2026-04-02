@@ -208,3 +208,4 @@ __marimo__/
 frontend/node_modules/
 documents/
 .claude/
+frontend/dump.rdb
