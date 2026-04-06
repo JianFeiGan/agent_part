@@ -37,6 +37,16 @@ dependencies = [
 
     # Redis
     "redis>=5.0.0",
+
+    # PostgreSQL + PGVector
+    "asyncpg>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "pgvector>=0.2.0",
+    "psycopg[binary]>=3.1.0",
+
+    # RAG Embedding
+    "sentence-transformers>=2.2.0",
+    "FlagEmbedding>=1.2.0",
 ]
 
 [project.optional-dependencies]

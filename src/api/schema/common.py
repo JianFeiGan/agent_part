@@ -48,6 +48,10 @@ class ApiResponse(BaseModel, Generic[T]):
     }
 
 
+# 类型别名，保持向后兼容
+Result = ApiResponse
+
+
 class PageResponse(BaseModel, Generic[T]):
     """分页响应模型。
 

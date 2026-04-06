@@ -3,6 +3,7 @@ LangGraph工作流定义模块。
 
 Description:
     构建多Agent协作的状态图工作流，定义节点和边的连接关系。
+    支持 RAG 知识库增强的 Agent 注入。
 @author ganjianfei
 @version 1.0.0
 2026-03-23
@@ -19,6 +20,7 @@ from src.models.product import Product
 
 if TYPE_CHECKING:
     from langgraph.pregel import Pregel
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 # Agent 名称映射
@@ -55,20 +57,117 @@ class WorkflowBuilder:
     """工作流构建器。
 
     负责构建和编译LangGraph状态图。
+    支持 RAG 知识库增强的 Agent 注入。
 
     Example:
         >>> builder = WorkflowBuilder()
         >>> builder.add_agent_nodes()
         >>> app = builder.compile()
         >>> result = await app.ainvoke(initial_state)
+
+        # 使用 RAG 增强模式
+        >>> from src.rag.retriever import KnowledgeRetriever
+        >>> retriever = KnowledgeRetriever()
+        >>> builder = WorkflowBuilder(retriever=retriever, session=db_session)
     """
 
-    def __init__(self) -> None:
-        """初始化工作流构建器。"""
+    def __init__(
+        self,
+        retriever: Any | None = None,
+        session: "AsyncSession | None" = None,
+        rag_enabled: bool = True,
+    ) -> None:
+        """初始化工作流构建器。
+
+        Args:
+            retriever: 知识检索器实例（可选）。
+            session: 数据库会话，用于 RAG 检索（可选）。
+            rag_enabled: 是否启用 RAG 增强，默认启用。
+        """
         self.graph = StateGraph(AgentState)
         self.checkpointer = MemorySaver()
         self._nodes_added = False
         self._edges_added = False
+        self._retriever = retriever
+        self._session = session
+        self._rag_enabled = rag_enabled
+
+    def set_rag_dependencies(
+        self,
+        retriever: Any | None = None,
+        session: "AsyncSession | None" = None,
+    ) -> "WorkflowBuilder":
+        """设置 RAG 依赖。
+
+        Args:
+            retriever: 知识检索器实例。
+            session: 数据库会话。
+
+        Returns:
+            self，支持链式调用。
+        """
+        if retriever:
+            self._retriever = retriever
+        if session:
+            self._session = session
+        return self
+
+    def _create_requirement_analyzer(self) -> Any:
+        """创建需求分析 Agent。
+
+        根据 RAG 配置选择普通或 RAG 增强版本。
+
+        Returns:
+            Agent 实例。
+        """
+        if self._rag_enabled and self._retriever:
+            from src.agents.rag_requirement_analyzer import RAGEnhancedRequirementAnalyzer
+
+            return RAGEnhancedRequirementAnalyzer(
+                retriever=self._retriever,
+                session=self._session,
+            )
+        from src.agents.requirement_analyzer import RequirementAnalyzerAgent
+
+        return RequirementAnalyzerAgent()
+
+    def _create_creative_planner(self) -> Any:
+        """创建创意策划 Agent。
+
+        根据 RAG 配置选择普通或 RAG 增强版本。
+
+        Returns:
+            Agent 实例。
+        """
+        if self._rag_enabled and self._retriever:
+            from src.agents.rag_creative_planner import RAGEnhancedCreativePlanner
+
+            return RAGEnhancedCreativePlanner(
+                retriever=self._retriever,
+                session=self._session,
+            )
+        from src.agents.creative_planner import CreativePlannerAgent
+
+        return CreativePlannerAgent()
+
+    def _create_quality_reviewer(self) -> Any:
+        """创建质量审核 Agent。
+
+        根据 RAG 配置选择普通或 RAG 增强版本。
+
+        Returns:
+            Agent 实例。
+        """
+        if self._rag_enabled and self._retriever:
+            from src.agents.rag_quality_reviewer import RAGEnhancedQualityReviewer
+
+            return RAGEnhancedQualityReviewer(
+                retriever=self._retriever,
+                session=self._session,
+            )
+        from src.agents.quality_reviewer import QualityReviewerAgent
+
+        return QualityReviewerAgent()
 
     def add_agent_nodes(self) -> "WorkflowBuilder":
         """添加所有Agent节点。
@@ -77,22 +176,19 @@ class WorkflowBuilder:
             self，支持链式调用。
         """
         # 延迟导入以避免循环导入
-        from src.agents.creative_planner import CreativePlannerAgent
         from src.agents.image_generator import ImageGeneratorAgent
         from src.agents.orchestrator import OrchestratorAgent
-        from src.agents.quality_reviewer import QualityReviewerAgent
-        from src.agents.requirement_analyzer import RequirementAnalyzerAgent
         from src.agents.video_generator import VideoGeneratorAgent
         from src.agents.visual_designer import VisualDesignerAgent
 
-        # 创建 Agent 实例
+        # 创建 Agent 实例（根据 RAG 配置选择版本）
         orchestrator = OrchestratorAgent()
-        requirement_analyzer = RequirementAnalyzerAgent()
-        creative_planner = CreativePlannerAgent()
+        requirement_analyzer = self._create_requirement_analyzer()
+        creative_planner = self._create_creative_planner()
         visual_designer = VisualDesignerAgent()
         image_generator = ImageGeneratorAgent()
         video_generator = VideoGeneratorAgent()
-        quality_reviewer = QualityReviewerAgent()
+        quality_reviewer = self._create_quality_reviewer()
 
         # 定义节点处理函数
         async def orchestrator_node(state: AgentState) -> dict:
@@ -130,7 +226,9 @@ class WorkflowBuilder:
                     "current_step": "requirement_analysis",
                     "agent_logs": [start_log],
                 }
-            start_log.mark_completed(f"分析完成，发现 {len(result.data.get('selling_points', []))} 个卖点")
+            start_log.mark_completed(
+                f"分析完成，发现 {len(result.data.get('selling_points', []))} 个卖点"
+            )
             return {
                 "current_step": "requirement_analysis",
                 "requirement_report": result.data.get("requirement_report"),
@@ -377,13 +475,26 @@ class WorkflowBuilder:
         return self.graph.compile(checkpointer=self.checkpointer)
 
 
-def create_workflow() -> "CompiledGraph":
+def create_workflow(
+    retriever: Any | None = None,
+    session: "AsyncSession | None" = None,
+    rag_enabled: bool = True,
+) -> "CompiledGraph":
     """创建并编译完整的工作流。
+
+    Args:
+        retriever: 知识检索器实例（可选）。
+        session: 数据库会话（可选）。
+        rag_enabled: 是否启用 RAG 增强。
 
     Returns:
         编译后的工作流实例。
     """
-    builder = WorkflowBuilder()
+    builder = WorkflowBuilder(
+        retriever=retriever,
+        session=session,
+        rag_enabled=rag_enabled,
+    )
     return builder.add_agent_nodes().add_edges().compile()
 
 
@@ -398,15 +509,39 @@ class ProductVisualWorkflow:
     """商品视觉生成工作流。
 
     封装完整的工作流执行逻辑。
+    支持 RAG 知识库增强模式。
 
     Example:
         >>> workflow = ProductVisualWorkflow()
         >>> result = await workflow.run(product, request)
+
+        # 使用 RAG 增强模式
+        >>> from src.rag.retriever import KnowledgeRetriever
+        >>> retriever = KnowledgeRetriever()
+        >>> workflow = ProductVisualWorkflow(retriever=retriever, session=db_session)
     """
 
-    def __init__(self) -> None:
-        """初始化工作流。"""
-        self.app: CompiledGraph = create_workflow()
+    def __init__(
+        self,
+        retriever: Any | None = None,
+        session: "AsyncSession | None" = None,
+        rag_enabled: bool = True,
+    ) -> None:
+        """初始化工作流。
+
+        Args:
+            retriever: 知识检索器实例（可选）。
+            session: 数据库会话（可选）。
+            rag_enabled: 是否启用 RAG 增强。
+        """
+        self.app: CompiledGraph = create_workflow(
+            retriever=retriever,
+            session=session,
+            rag_enabled=rag_enabled,
+        )
+        self._retriever = retriever
+        self._session = session
+        self._rag_enabled = rag_enabled
 
     async def run(
         self,
@@ -449,3 +584,18 @@ class ProductVisualWorkflow:
                 return AgentState(**state.values)
             return state.values
         return None
+
+    def set_session(self, session: "AsyncSession") -> None:
+        """设置数据库会话。
+
+        注意：设置会话后需要重新创建工作流才能生效。
+
+        Args:
+            session: 数据库会话。
+        """
+        self._session = session
+        self.app = create_workflow(
+            retriever=self._retriever,
+            session=self._session,
+            rag_enabled=self._rag_enabled,
+        )

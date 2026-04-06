@@ -202,6 +202,13 @@ class AgentState(BaseModel):
         default_factory=list, description="Agent 执行日志列表（累加）"
     )
 
+    # ==================== RAG 增强字段 ====================
+    rag_sources: Annotated[list[dict[str, Any]], add] = Field(
+        default_factory=list, description="RAG 检索来源列表（累加）"
+    )
+    rag_context: str | None = Field(default=None, description="RAG 检索上下文")
+    rag_enabled: bool = Field(default=True, description="是否启用 RAG 增强")
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def mark_step_completed(self, step: str) -> None:

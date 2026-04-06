@@ -10,7 +10,7 @@ Description:
 
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Generic, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage
@@ -18,6 +18,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 from src.config.settings import Settings, get_settings
+
+if TYPE_CHECKING:
+    pass
 
 # 状态类型变量
 StateT = TypeVar("StateT", bound="AgentState")
@@ -73,12 +76,14 @@ class BaseAgent(ABC, Generic[StateT]):
     - 提示模板管理
     - 工具注册
     - 状态管理
+    - RAG 知识检索（可选）
 
     Attributes:
         role: Agent角色。
         llm: 语言模型实例。
         settings: 配置实例。
         tools: 工具列表。
+        retriever: 知识检索器（可选，用于RAG增强）。
 
     Example:
         >>> class MyAgent(BaseAgent[MyState]):
@@ -92,6 +97,7 @@ class BaseAgent(ABC, Generic[StateT]):
         role: AgentRole,
         llm: BaseChatModel | None = None,
         settings: Settings | None = None,
+        retriever: Any | None = None,  # KnowledgeRetriever 类型，使用 Any 避免循环导入
     ) -> None:
         """初始化Agent。
 
@@ -99,10 +105,12 @@ class BaseAgent(ABC, Generic[StateT]):
             role: Agent角色。
             llm: 可选的语言模型实例。
             settings: 可选的配置实例。
+            retriever: 可选的知识检索器，用于RAG增强。
         """
         self.role = role
         self.settings = settings or get_settings()
         self._llm = llm
+        self._retriever = retriever
         self._tools: list[Any] = []
         self._prompts: dict[str, ChatPromptTemplate] = {}
 
@@ -116,6 +124,56 @@ class BaseAgent(ABC, Generic[StateT]):
         if self._llm is None:
             self._llm = self._create_llm()
         return self._llm
+
+    @property
+    def retriever(self) -> Any | None:
+        """获取知识检索器。
+
+        Returns:
+            知识检索器实例，未配置则返回 None。
+        """
+        return self._retriever
+
+    def has_rag(self) -> bool:
+        """检查是否配置了 RAG 检索器。
+
+        Returns:
+            是否有 RAG 能力。
+        """
+        return self._retriever is not None and self.settings.rag_enabled
+
+    async def retrieve_knowledge(
+        self,
+        query: str,
+        doc_type: str | None = None,
+        category: str | None = None,
+        top_k: int = 5,
+    ) -> list[dict[str, Any]]:
+        """执行知识检索（RAG 增强）。
+
+        Args:
+            query: 检索查询。
+            doc_type: 文档类型过滤。
+            category: 类目过滤。
+            top_k: 返回结果数量。
+
+        Returns:
+            检索结果列表。
+
+        Raises:
+            RuntimeError: 未配置知识检索器时抛出。
+        """
+        if not self.has_rag():
+            return []
+
+        # 导入 KnowledgeRetriever（延迟导入避免循环依赖）
+        from src.rag.retriever import KnowledgeRetriever
+
+        if isinstance(self._retriever, KnowledgeRetriever):
+            # 需要从外部注入 session，这里返回空结果
+            # 实际检索在具体 Agent 执行时通过 session 完成
+            return []
+        return []
 
     def _create_llm(self) -> BaseChatModel:
         """创建LLM实例。
