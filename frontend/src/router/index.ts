@@ -69,6 +69,24 @@ const routes: RouteRecordRaw[] = [
           title: '任务详情',
           hidden: true
         }
+      },
+      {
+        path: 'knowledge',
+        name: 'Knowledge',
+        component: () => import('@/views/knowledge/index.vue'),
+        meta: {
+          title: '知识库管理',
+          icon: 'Collection'
+        }
+      },
+      {
+        path: 'knowledge/search',
+        name: 'KnowledgeSearch',
+        component: () => import('@/views/knowledge/Search.vue'),
+        meta: {
+          title: '检索测试',
+          hidden: true
+        }
       }
     ]
   }

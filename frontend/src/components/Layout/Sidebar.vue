@@ -50,6 +50,21 @@
           <template #title>创建任务</template>
         </el-menu-item>
       </el-sub-menu>
+
+      <el-sub-menu index="knowledge">
+        <template #title>
+          <el-icon><Collection /></el-icon>
+          <span>知识库</span>
+        </template>
+        <el-menu-item index="/knowledge">
+          <el-icon><Folder /></el-icon>
+          <template #title>文档管理</template>
+        </el-menu-item>
+        <el-menu-item index="/knowledge/search">
+          <el-icon><Search /></el-icon>
+          <template #title>检索测试</template>
+        </el-menu-item>
+      </el-sub-menu>
     </el-menu>
   </div>
 </template>

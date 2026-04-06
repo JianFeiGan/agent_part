@@ -22,11 +22,19 @@
 ### 2.1 核心依赖
 
 ```txt
+# LangChain 核心
 langchain>=0.3.0
 langchain-anthropic>=0.3.0
 langgraph>=0.2.0
 langchain-community>=0.3.0
 pydantic>=2.0.0
+
+# RAG 知识库增强
+asyncpg>=0.29.0              # PostgreSQL 异步驱动
+sqlalchemy[asyncio]>=2.0.0   # ORM 框架
+pgvector>=0.2.0              # PostgreSQL 向量扩展
+sentence-transformers>=2.2.0 # Embedding 模型框架
+FlagEmbedding>=1.2.0         # BGE Embedding 模型
 ```
 
 ### 2.2 导入规范
@@ -367,9 +375,144 @@ result = await chain.ainvoke(
 
 ---
 
-## 六、环境配置
+## 六、RAG 知识库开发规范
 
-### 6.1 环境变量
+### 6.1 向量数据库规范
+
+```python
+from sqlalchemy import Column, String, Text, DateTime, Integer, Float
+from sqlalchemy.dialects.postgresql import JSONB
+from pgvector.sqlalchemy import Vector
+
+class KnowledgeChunk(Base):
+    """知识分块表模型。"""
+    __tablename__ = "knowledge_chunks"
+
+    id = Column(Integer, primary_key=True)
+    doc_id = Column(Integer, nullable=False, index=True)
+    chunk_index = Column(Integer, nullable=False)
+    content = Column(Text, nullable=False)
+    embedding = Column(Vector(1024))  # BGE-large-zh 向量维度
+    metadata = Column(JSONB, default={})
+    created_at = Column(DateTime, nullable=False)
+```
+
+### 6.2 Embedding 服务规范
+
+```python
+from sentence_transformers import SentenceTransformer
+
+class EmbeddingService:
+    """BGE-large-zh Embedding 服务封装。"""
+
+    def __init__(self, model_name: str = "BAAI/bge-large-zh") -> None:
+        """初始化 Embedding 模型。
+
+        Args:
+            model_name: HuggingFace 模型名称。
+        """
+        self.model = SentenceTransformer(model_name)
+
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """批量文档向量化。
+
+        Args:
+            texts: 文本列表。
+
+        Returns:
+            向量列表。
+        """
+        return self.model.encode(texts, normalize_embeddings=True).tolist()
+
+    async def embed_query(self, query: str) -> list[float]:
+        """查询向量化。
+
+        Args:
+            query: 查询文本。
+
+        Returns:
+            查询向量。
+        """
+        return self.model.encode([query], normalize_embeddings=True)[0].tolist()
+```
+
+### 6.3 知识检索规范
+
+```python
+from src.rag.retriever import KnowledgeRetriever
+from src.db import get_db
+
+class RAGEnhancedAgent:
+    """RAG 增强智能体基类。"""
+
+    def __init__(self, retriever: KnowledgeRetriever | None = None) -> None:
+        """初始化智能体。
+
+        Args:
+            retriever: 知识检索器实例。
+        """
+        self._retriever = retriever
+
+    async def retrieve_knowledge(
+        self,
+        query: str,
+        doc_types: list[str] | None = None,
+        top_k: int = 5
+    ) -> list[dict]:
+        """检索相关知识。
+
+        Args:
+            query: 查询文本。
+            doc_types: 文档类型过滤。
+            top_k: 返回数量。
+
+        Returns:
+            检索结果列表。
+        """
+        if not self._retriever:
+            return []
+
+        return await self._retriever.retrieve(
+            query=query,
+            doc_types=doc_types,
+            top_k=top_k
+        )
+```
+
+### 6.4 知识库文档类型
+
+| 类型 | 说明 | 用途 |
+|------|------|------|
+| `brand_guide` | 品牌规范 | 品牌调性、视觉规范、语言风格 |
+| `category_knowledge` | 类目知识 | 商品特点、卖点模板、关键词 |
+| `case_study` | 成功案例 | 历史优秀创意方案参考 |
+| `compliance_rule` | 合规规则 | 广告法禁止词、平台审核标准 |
+
+### 6.5 RAG 日志规范
+
+```python
+from src.rag.logger import get_rag_logger
+
+logger = get_rag_logger()
+
+# 记录检索操作
+await logger.log_retrieval(
+    session=db_session,
+    task_id="task_001",
+    agent_name="RequirementAnalyzer",
+    query="品牌视觉规范",
+    doc_types=["brand_guide"],
+    top_k=5,
+    results=[...],
+    similarity_scores=[0.85, 0.82, ...]
+)
+```
+
+---
+
+## 七、环境配置
+
+### 7.1 环境变量
 
 ```bash
 # .env 文件
@@ -377,14 +520,23 @@ ANTHROPIC_API_KEY=your_api_key
 LANGCHAIN_TRACING_V2=true
 LANGCHAIN_API_KEY=your_langchain_api_key  # 可选，用于 LangSmith
 LANGCHAIN_PROJECT=agent-part  # 项目名称
+
+# RAG 知识库配置
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/agent_part
+RAG_ENABLED=true
+EMBEDDING_MODEL=BAAI/bge-large-zh  # BGE-large-zh 本地模型
+EMBEDDING_DEVICE=cpu               # cpu 或 cuda
+VECTOR_DIMENSION=1024              # BGE-large-zh 向量维度
+RAG_TOP_K=5                        # 检索返回数量
+RAG_SIMILARITY_THRESHOLD=0.5       # 相似度阈值
 ```
 
-### 6.2 Python 版本
+### 7.2 Python 版本
 
 - 最低版本: Python 3.11
 - 当前版本: Python 3.13
 
-### 6.3 uv 工具使用 (强制执行)
+### 7.3 uv 工具使用 (强制执行)
 
 本项目使用 **uv** 进行 Python 环境管理，替代传统的 pip/poetry。
 
@@ -416,7 +568,7 @@ uv run pytest
 
 ---
 
-## 七、代码质量检查
+## 八、代码质量检查
 
 ```bash
 # 格式化
@@ -434,7 +586,7 @@ uv run ruff format . && uv run ruff check . && uv run mypy src/ && uv run pytest
 
 ---
 
-## 八、推荐技能/代理
+## 九、推荐技能/代理
 
 | 场景 | 推荐使用 |
 |------|----------|
@@ -444,12 +596,13 @@ uv run ruff format . && uv run ruff check . && uv run mypy src/ && uv run pytest
 | 安全审查 | `security-reviewer` |
 | Agent 架构设计 | `architect`, `agent-harness-construction` |
 | PyTorch 相关 | `pytorch-patterns` |
+| RAG 开发 | `database-reviewer`, `architect` |
 
 ---
 
-## 九、文档规范
+## 十、文档规范
 
-### 9.1 文档存放位置
+### 10.1 文档存放位置
 
 ```
 ./documents/
@@ -458,15 +611,15 @@ uv run ruff format . && uv run ruff check . && uv run mypy src/ && uv run pytest
 └── ...
 ```
 
-### 9.2 文档模板
+### 10.2 文档模板
 
 遵循全局配置中的 8 章节结构。
 
 ---
 
-## 十、快速参考
+## 十一、快速参考
 
-### 10.1 常用命令 (uv)
+### 11.1 常用命令 (uv)
 
 ```bash
 # 创建虚拟环境
@@ -500,7 +653,7 @@ uv run mypy src/
 uv run ruff format . && uv run ruff check . && uv run mypy src/ && uv run pytest --cov
 ```
 
-### 10.2 pyproject.toml 示例
+### 11.2 pyproject.toml 示例
 
 ```toml
 [project]
@@ -510,11 +663,18 @@ description = "LangChain Agent 智能体项目"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    # LangChain 核心
     "langchain>=0.3.0",
     "langchain-anthropic>=0.3.0",
     "langgraph>=0.2.0",
     "langchain-community>=0.3.0",
     "pydantic>=2.0.0",
+    # RAG 知识库增强
+    "asyncpg>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "pgvector>=0.2.0",
+    "sentence-transformers>=2.2.0",
+    "FlagEmbedding>=1.2.0",
 ]
 
 [project.optional-dependencies]
@@ -540,9 +700,16 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 ```
 
-### 10.3 LangChain 文档
+### 11.3 LangChain 文档
 
 - 官方文档: https://python.langchain.com/
 - LangGraph 文档: https://langchain-ai.github.io/langgraph/
 - Anthropic API: https://docs.anthropic.com/
 - uv 文档: https://docs.astral.sh/uv/
+
+### 11.4 RAG 相关文档
+
+- PGVector 文档: https://github.com/pgvector/pgvector
+- BGE Embedding: https://huggingface.co/BAAI/bge-large-zh
+- Sentence Transformers: https://www.sbert.net/
+- SQLAlchemy 异步: https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html

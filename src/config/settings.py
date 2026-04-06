@@ -54,7 +54,25 @@ class Settings(BaseSettings):
 
     # ==================== Redis 配置 ====================
     redis_url: str = Field(default="redis://localhost:6379/0", description="Redis 连接 URL")
-    redis_prefix: str = Field(default="pvg:", description="Redis Key 前缀")  # product-visual-generator
+    redis_prefix: str = Field(
+        default="pvg:", description="Redis Key 前缀"
+    )  # product-visual-generator
+
+    # ==================== PostgreSQL 配置 ====================
+    postgres_host: str = Field(default="localhost", description="PostgreSQL 主机")
+    postgres_port: int = Field(default=5432, description="PostgreSQL 端口")
+    postgres_user: str = Field(default="postgres", description="PostgreSQL 用户名")
+    postgres_password: str = Field(default="", description="PostgreSQL 密码")
+    postgres_db: str = Field(default="pvg", description="PostgreSQL 数据库名")
+
+    # ==================== RAG 配置 ====================
+    rag_enabled: bool = Field(default=True, description="启用 RAG 检索增强")
+    embedding_model: str = Field(default="BAAI/bge-large-zh", description="Embedding 模型名称")
+    embedding_device: str = Field(default="cuda", description="Embedding 设备: cuda/cpu")
+    chunk_size: int = Field(default=512, description="文档分块大小 (tokens)")
+    chunk_overlap: int = Field(default=64, description="分块重叠大小 (tokens)")
+    retrieval_top_k: int = Field(default=5, description="检索返回文档数量")
+    similarity_threshold: float = Field(default=0.7, description="相似度阈值")
 
     # ==================== 生成配置 ====================
     default_image_width: int = Field(default=1024, description="默认图片宽度")
@@ -94,6 +112,24 @@ class Settings(BaseSettings):
             "type": "local",
             "path": self.storage_path,
         }
+
+    @property
+    def postgres_url(self) -> str:
+        """获取 PostgreSQL 连接 URL。
+
+        Returns:
+            PostgreSQL 连接 URL。
+        """
+        return f"postgresql+asyncpg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+
+    @property
+    def postgres_url_sync(self) -> str:
+        """获取同步 PostgreSQL 连接 URL。
+
+        Returns:
+            同步 PostgreSQL 连接 URL。
+        """
+        return f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
 
 
 @lru_cache
