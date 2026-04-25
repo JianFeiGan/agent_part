@@ -3,7 +3,7 @@
 
 Description:
     基于 LangGraph StateGraph 构建刊登工作流，
-    支持商品导入、素材优化、文案生成、合规检查的并行执行。
+    真实调用各 Agent：素材优化、文案生成（LLM）、合规检查。
     工作流:
         START → ImportProduct → [AssetOptimizer | Copywriter] → ComplianceCheck → END
 @author ganjianfei
@@ -18,6 +18,8 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
 from src.agents.listing_compliance_checker import ComplianceCheckerAgent
+from src.agents.listing_asset_optimizer import AssetOptimizerAgent
+from src.agents.listing_copywriter import AICopywritingAgent
 from src.graph.listing_state import ListingState
 from src.models.listing import ListingProduct, Platform
 
@@ -29,17 +31,10 @@ class ListingWorkflow:
 
     工作流:
         START → ImportProduct → [AssetOptimizer | Copywriter] → ComplianceCheck → END
-
-    Attributes:
-        app: 编译后的 LangGraph 应用。
     """
 
     def __init__(self, settings: Any | None = None) -> None:
-        """初始化工作流。
-
-        Args:
-            settings: 可选的配置对象，用于注入到 Agent。
-        """
+        """初始化工作流。"""
         self._settings = settings
         self._builder = StateGraph(ListingState)
         self._build_graph()
@@ -63,45 +58,44 @@ class ListingWorkflow:
     async def _import_node(self, state: ListingState) -> dict:
         """商品导入节点。"""
         if state.product:
-            return {
-                "product": state.product,
-                "current_step": "imported",
-                "step_results": {"import": {"status": "success"}},
-            }
-        return {"error": "No product provided", "current_step": "import_failed"}
+            return {"product": state.product}
+        return {"error": "No product provided"}
 
     async def _asset_optimize_node(self, state: ListingState) -> dict:
-        """素材优化节点。"""
+        """素材优化节点：调用 AssetOptimizerAgent。"""
         if not state.product:
-            return {"error": "No product available", "current_step": "asset_failed"}
-        # Phase 1: placeholder, Phase 2 集成实际 AssetOptimizerAgent
-        return {
-            "asset_packages": state.asset_packages,
-            "current_step": "assets_optimized",
-            "step_results": {"assets": {"status": "pending"}},
-        }
+            return {"error": "No product available for asset optimization"}
+
+        try:
+            agent = AssetOptimizerAgent(settings=self._settings)
+            result = agent.execute_sync(state)
+            return {"asset_packages": result.get("asset_packages", state.asset_packages)}
+        except Exception as e:
+            logger.error(f"Asset optimization failed: {e}")
+            return {"asset_packages": state.asset_packages}
 
     async def _copy_node(self, state: ListingState) -> dict:
-        """文案生成节点。"""
+        """文案生成节点：调用 AICopywritingAgent（含 LLM）。"""
         if not state.product:
-            return {"error": "No product available", "current_step": "copy_failed"}
-        # Phase 1: placeholder, Phase 2 集成实际 CopywriterAgent
-        return {
-            "copywriting_packages": state.copywriting_packages,
-            "current_step": "copy_generated",
-            "step_results": {"copy": {"status": "pending"}},
-        }
+            return {"error": "No product available for copywriting"}
+
+        try:
+            agent = AICopywritingAgent(settings=self._settings)
+            result = await agent.execute(state)
+            return {"copywriting_packages": result.get("copywriting_packages", {})}
+        except Exception as e:
+            logger.error(f"Copywriting generation failed: {e}")
+            return {"copywriting_packages": {}}
 
     async def _compliance_node(self, state: ListingState) -> dict:
         """合规检查节点。"""
         if not state.product:
             return {"error": "No product available", "current_step": "compliance_failed"}
         agent = ComplianceCheckerAgent(settings=self._settings)
-        result = await agent.execute(state)
+        result = agent.execute_sync(state)
         return {
             "compliance_reports": result.get("compliance_reports", {}),
             "current_step": "compliance_checked",
-            "step_results": {"compliance": {"status": "done"}},
         }
 
     async def run(
@@ -110,16 +104,7 @@ class ListingWorkflow:
         target_platforms: list[Platform],
         thread_id: str = "default",
     ) -> dict:
-        """执行刊登工作流。
-
-        Args:
-            product: 待刊登商品。
-            target_platforms: 目标平台列表。
-            thread_id: 会话线程 ID，用于检查点。
-
-        Returns:
-            工作流最终状态。
-        """
+        """执行刊登工作流。"""
         config = {"configurable": {"thread_id": thread_id}}
         initial_state = ListingState(
             product=product,
