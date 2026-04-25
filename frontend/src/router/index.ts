@@ -87,6 +87,34 @@ const routes: RouteRecordRaw[] = [
           title: '检索测试',
           hidden: true
         }
+      },
+      // 刊登工具
+      {
+        path: 'listing/import',
+        name: 'ListingProductImport',
+        component: () => import('@/views/listing/ProductImport.vue'),
+        meta: {
+          title: '商品导入',
+          icon: 'Upload'
+        }
+      },
+      {
+        path: 'listing/tasks',
+        name: 'ListingTaskList',
+        component: () => import('@/views/listing/TaskList.vue'),
+        meta: {
+          title: '刊登任务',
+          icon: 'Promotion'
+        }
+      },
+      {
+        path: 'listing/tasks/:id',
+        name: 'ListingTaskDetail',
+        component: () => import('@/views/listing/TaskDetail.vue'),
+        meta: {
+          title: '任务详情',
+          hidden: true
+        }
       }
     ]
   }
