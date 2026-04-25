@@ -7,6 +7,9 @@
 
 import http from '@/api'
 import type {
+  AdapterConfigCreate,
+  AdapterConfigResponse,
+  AdapterConfigUpdate,
   ComplianceReportResponse,
   CreateListingTaskRequest,
   ListingTaskResponse,
@@ -65,4 +68,25 @@ export function getPushResults(taskId: number) {
   return http.get<ApiResponse<PushResultResponse[]>>(
     `/listing/tasks/${taskId}/push-results`
   )
+}
+
+/** 获取适配器配置列表 */
+export function listAdapterConfigs(platform?: string) {
+  const params = platform ? { platform } : {}
+  return http.get<ApiResponse<AdapterConfigResponse[]>>('/listing/adapter-configs', { params })
+}
+
+/** 创建适配器配置 */
+export function createAdapterConfig(data: AdapterConfigCreate) {
+  return http.post<ApiResponse<AdapterConfigResponse>>('/listing/adapter-configs', data)
+}
+
+/** 更新适配器配置 */
+export function updateAdapterConfig(id: number, data: AdapterConfigUpdate) {
+  return http.put<ApiResponse<AdapterConfigResponse>>(`/listing/adapter-configs/${id}`, data)
+}
+
+/** 删除适配器配置 */
+export function deleteAdapterConfig(id: number) {
+  return http.delete<ApiResponse<null>>(`/listing/adapter-configs/${id}`)
 }

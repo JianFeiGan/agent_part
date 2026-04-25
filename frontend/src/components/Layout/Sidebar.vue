@@ -79,6 +79,10 @@
           <el-icon><List /></el-icon>
           <template #title>刊登任务</template>
         </el-menu-item>
+        <el-menu-item index="/listing/configs">
+          <el-icon><Setting /></el-icon>
+          <template #title>适配器配置</template>
+        </el-menu-item>
       </el-sub-menu>
     </el-menu>
   </div>

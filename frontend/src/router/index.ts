@@ -115,6 +115,15 @@ const routes: RouteRecordRaw[] = [
           title: '任务详情',
           hidden: true
         }
+      },
+      {
+        path: 'listing/configs',
+        name: 'ListingAdapterConfig',
+        component: () => import('@/views/listing/AdapterConfig.vue'),
+        meta: {
+          title: '适配器配置',
+          icon: 'Setting'
+        }
       }
     ]
   }

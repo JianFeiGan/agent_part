@@ -86,3 +86,25 @@ export interface PushResponse {
   results: PushResultResponse[]
   status: string
 }
+
+export interface AdapterConfigCreate {
+  platform: Platform
+  shop_id?: string
+  credentials: Record<string, unknown>
+  is_active?: boolean
+}
+
+export interface AdapterConfigUpdate {
+  credentials?: Record<string, unknown>
+  is_active?: boolean
+}
+
+export interface AdapterConfigResponse {
+  id: number
+  platform: string
+  shop_id: string
+  credentials_masked: Record<string, string>
+  is_active: boolean
+  created_at: string | null
+  updated_at: string | null
+}
