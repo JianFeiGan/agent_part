@@ -1,0 +1,57 @@
+"""
+刊登工具 API Schema。
+
+Description:
+    定义刊登工具的请求/响应 DTO。
+@author ganjianfei
+@version 1.0.0
+2026-04-25
+"""
+
+from typing import Any
+
+from pydantic import BaseModel, Field
+
+from src.models.listing import Platform
+
+
+class ProductImportRequest(BaseModel):
+    """商品导入请求。"""
+
+    sku: str = Field(..., min_length=1, max_length=100, description="商品SKU")
+    title: str = Field(..., min_length=1, max_length=500, description="商品标题")
+    description: str | None = Field(default=None, description="商品描述")
+    category: str | None = Field(default=None, description="商品类目")
+    brand: str | None = Field(default=None, description="品牌")
+    price: float | None = Field(default=None, ge=0, description="价格")
+    weight: float | None = Field(default=None, ge=0, description="重量(kg)")
+    dimensions: dict[str, Any] | None = Field(default=None, description="尺寸")
+    source_images: list[dict[str, Any]] = Field(default_factory=list, description="图片列表")
+    attributes: dict[str, Any] = Field(default_factory=dict, description="属性")
+
+
+class ProductResponse(BaseModel):
+    """商品响应。"""
+
+    sku: str
+    title: str
+    description: str | None
+    category: str | None
+    brand: str | None
+    source_images: list[dict[str, Any]]
+
+
+class CreateListingTaskRequest(BaseModel):
+    """创建刊登任务请求。"""
+
+    product_sku: str = Field(..., description="商品SKU")
+    target_platforms: list[Platform] = Field(..., min_length=1, description="目标平台")
+
+
+class ListingTaskResponse(BaseModel):
+    """刊登任务响应。"""
+
+    task_id: int
+    product_sku: str
+    target_platforms: list[str]
+    status: str
