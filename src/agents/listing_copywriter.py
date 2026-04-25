@@ -98,7 +98,7 @@ class CopywriterAgent:
             base_title = base_title[: spec.max_title_length].rstrip()
         return base_title
 
-    def _generate_bullet_points(self, product: ListingProduct, platform: Platform) -> list[str]:
+    def _generate_bullet_points(self, product: ListingProduct, _platform: Platform) -> list[str]:
         """生成五点描述。
 
         Args:

@@ -13,13 +13,13 @@ Description:
 
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class Platform(str, Enum):
+class Platform(StrEnum):
     """目标电商平台。"""
 
     AMAZON = "amazon"
@@ -27,7 +27,7 @@ class Platform(str, Enum):
     SHOPIFY = "shopify"
 
 
-class TaskStatus(str, Enum):
+class TaskStatus(StrEnum):
     """刊登任务状态。"""
 
     PENDING = "pending"
