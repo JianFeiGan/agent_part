@@ -13,6 +13,9 @@ from src.models.assets import AssetCollection, GeneratedImage, GeneratedVideo
 from src.models.creative import ColorPalette, CreativePlan, VisualStyle
 from src.models.listing import (
     AssetPackage,
+    ComplianceIssue,
+    ComplianceReport,
+    ComplianceStatus,
     CopywritingPackage,
     ImageRef,
     ListingProduct,
@@ -39,6 +42,9 @@ __all__ = [
     "ImageRef",
     "AssetPackage",
     "CopywritingPackage",
+    "ComplianceReport",
+    "ComplianceIssue",
+    "ComplianceStatus",
     "ListingTask",
     "Platform",
     "TaskStatus",

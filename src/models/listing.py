@@ -119,6 +119,54 @@ class CopywritingPackage(BaseModel):
     search_terms: list[str] = Field(default_factory=list, description="搜索关键词")
 
 
+class ComplianceStatus(StrEnum):
+    """合规检查结果状态。"""
+
+    PASS = "pass"
+    FAIL = "fail"
+    WARNING = "warning"
+
+
+class ComplianceIssue(BaseModel):
+    """单条合规问题。"""
+
+    severity: ComplianceStatus = Field(..., description="严重程度")
+    rule: str = Field(..., description="触发的合规规则")
+    field: str = Field(..., description="问题字段")
+    message: str = Field(..., description="问题描述")
+    suggestion: str | None = Field(default=None, description="修复建议")
+
+
+class ComplianceReport(BaseModel):
+    """平台合规检查报告。"""
+
+    id: int | None = Field(default=None)
+    listing_task_id: int = Field(..., description="关联任务ID")
+    platform: Platform = Field(..., description="目标平台")
+    overall: ComplianceStatus = Field(default=ComplianceStatus.PASS)
+    image_issues: list[ComplianceIssue] = Field(default_factory=list)
+    text_issues: list[ComplianceIssue] = Field(default_factory=list)
+    forbidden_words: list[str] = Field(default_factory=list)
+
+    def mark_fail(self, issue: ComplianceIssue, field: str = "text") -> None:
+        """标记为不合规。
+
+        Args:
+            issue: 合规问题。
+            field: 问题类型，"image" 或 "text"。
+        """
+        self.overall = ComplianceStatus.FAIL
+        if field == "image":
+            self.image_issues.append(issue)
+        else:
+            self.text_issues.append(issue)
+
+    @property
+    def is_pass(self) -> bool:
+        """是否通过合规检查。"""
+        return self.overall == ComplianceStatus.PASS
+
+
 class ListingTask(BaseModel):
     """刊登任务。"""
 

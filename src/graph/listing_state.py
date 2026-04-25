@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from src.models.listing import (
     AssetPackage,
+    ComplianceReport,
     CopywritingPackage,
     ListingProduct,
     Platform,
@@ -30,6 +31,7 @@ class ListingState(BaseModel):
         product: 待刊登的标准化商品。
         asset_packages: 各平台的素材包 (platform -> package)。
         copywriting_packages: 各平台的文案包 (platform -> package)。
+        compliance_reports: 各平台的合规报告 (platform -> report)。
         target_platforms: 目标平台列表。
         error: 错误信息（如有）。
         current_step: 当前执行步骤。
@@ -39,6 +41,7 @@ class ListingState(BaseModel):
     product: ListingProduct | None = None
     asset_packages: dict[Platform, AssetPackage] = Field(default_factory=dict)
     copywriting_packages: dict[Platform, CopywritingPackage] = Field(default_factory=dict)
+    compliance_reports: dict[Platform, ComplianceReport] = Field(default_factory=dict)
     target_platforms: list[Platform] = Field(default_factory=list)
     error: str | None = None
     current_step: str = ""

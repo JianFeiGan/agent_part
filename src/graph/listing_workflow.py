@@ -3,7 +3,9 @@
 
 Description:
     基于 LangGraph StateGraph 构建刊登工作流，
-    支持商品导入、素材优化、文案生成的并行执行。
+    支持商品导入、素材优化、文案生成、合规检查的并行执行。
+    工作流:
+        START → ImportProduct → [AssetOptimizer | Copywriter] → ComplianceCheck → END
 @author ganjianfei
 @version 1.0.0
 2026-04-25
@@ -15,6 +17,7 @@ from typing import Any
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
+from src.agents.listing_compliance_checker import ComplianceCheckerAgent
 from src.graph.listing_state import ListingState
 from src.models.listing import ListingProduct, Platform
 
@@ -25,7 +28,7 @@ class ListingWorkflow:
     """刊登工作流封装。
 
     工作流:
-        START → ImportProduct → [AssetOptimizer | Copywriter] → 收集结果 → END
+        START → ImportProduct → [AssetOptimizer | Copywriter] → ComplianceCheck → END
 
     Attributes:
         app: 编译后的 LangGraph 应用。
@@ -48,17 +51,17 @@ class ListingWorkflow:
         self._builder.add_node("import_product", self._import_node)
         self._builder.add_node("optimize_assets", self._asset_optimize_node)
         self._builder.add_node("generate_copy", self._copy_node)
+        self._builder.add_node("compliance_check", self._compliance_node)
 
         self._builder.set_entry_point("import_product")
         self._builder.add_edge("import_product", "optimize_assets")
         self._builder.add_edge("import_product", "generate_copy")
-        self._builder.add_edge("optimize_assets", END)
-        self._builder.add_edge("generate_copy", END)
+        self._builder.add_edge("optimize_assets", "compliance_check")
+        self._builder.add_edge("generate_copy", "compliance_check")
+        self._builder.add_edge("compliance_check", END)
 
     async def _import_node(self, state: ListingState) -> dict:
         """商品导入节点。"""
-        # Note: ImportProductAgent will be implemented in Task 3
-        # For now, we just pass the product through
         if state.product:
             return {
                 "product": state.product,
@@ -71,8 +74,7 @@ class ListingWorkflow:
         """素材优化节点。"""
         if not state.product:
             return {"error": "No product available", "current_step": "asset_failed"}
-        # Note: AssetOptimizerAgent will be implemented in Task 4
-        # For now, we return placeholder result
+        # Phase 1: placeholder, Phase 2 集成实际 AssetOptimizerAgent
         return {
             "asset_packages": state.asset_packages,
             "current_step": "assets_optimized",
@@ -83,12 +85,23 @@ class ListingWorkflow:
         """文案生成节点。"""
         if not state.product:
             return {"error": "No product available", "current_step": "copy_failed"}
-        # Note: CopywriterAgent will be implemented in Task 5
-        # For now, we return placeholder result
+        # Phase 1: placeholder, Phase 2 集成实际 CopywriterAgent
         return {
             "copywriting_packages": state.copywriting_packages,
             "current_step": "copy_generated",
             "step_results": {"copy": {"status": "pending"}},
+        }
+
+    async def _compliance_node(self, state: ListingState) -> dict:
+        """合规检查节点。"""
+        if not state.product:
+            return {"error": "No product available", "current_step": "compliance_failed"}
+        agent = ComplianceCheckerAgent(settings=self._settings)
+        result = await agent.execute(state)
+        return {
+            "compliance_reports": result.get("compliance_reports", {}),
+            "current_step": "compliance_checked",
+            "step_results": {"compliance": {"status": "done"}},
         }
 
     async def run(
