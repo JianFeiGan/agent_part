@@ -100,3 +100,74 @@ class TestListingTaskAPI:
         assert list_resp.status_code == 200
         tasks = list_resp.json()["data"]
         assert any(t["product_sku"] == "FLOW-TEST-001" for t in tasks)
+
+
+class TestComplianceAPI:
+    """测试合规报告 API。"""
+
+    def test_run_compliance_check(self, client: TestClient) -> None:
+        """测试执行合规检查。"""
+        # 导入商品
+        import_resp = client.post(
+            "/api/v1/listing/import-product",
+            json={
+                "sku": "COMPLIANCE-001",
+                "title": "Clean Product Title",
+                "description": "A good product",
+            },
+        )
+        assert import_resp.status_code == 201
+
+        # 创建任务
+        task_resp = client.post(
+            "/api/v1/listing/tasks",
+            json={
+                "product_sku": "COMPLIANCE-001",
+                "target_platforms": ["amazon"],
+            },
+        )
+        assert task_resp.status_code == 201
+        task_id = task_resp.json()["data"]["task_id"]
+
+        # 执行合规检查
+        check_resp = client.post(f"/api/v1/listing/tasks/{task_id}/compliance")
+        assert check_resp.status_code == 201
+        data = check_resp.json()
+        assert data["code"] == 200
+        assert "amazon" in data["data"]
+
+    def test_get_compliance_report(self, client: TestClient) -> None:
+        """测试查询合规报告。"""
+        # 先导入并创建任务
+        client.post(
+            "/api/v1/listing/import-product",
+            json={
+                "sku": "COMPLIANCE-002",
+                "title": "Another Clean Product",
+                "description": "Another good product",
+            },
+        )
+        task_resp = client.post(
+            "/api/v1/listing/tasks",
+            json={
+                "product_sku": "COMPLIANCE-002",
+                "target_platforms": ["ebay"],
+            },
+        )
+        task_id = task_resp.json()["data"]["task_id"]
+
+        # 执行检查
+        client.post(f"/api/v1/listing/tasks/{task_id}/compliance")
+
+        # 查询报告
+        report_resp = client.get(f"/api/v1/listing/compliance/{task_id}")
+        assert report_resp.status_code == 200
+        data = report_resp.json()
+        assert "ebay" in data["data"]
+
+    def test_get_compliance_report_not_found(self, client: TestClient) -> None:
+        """测试查询不存在的合规报告。"""
+        response = client.get("/api/v1/listing/compliance/9999")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["code"] == 404

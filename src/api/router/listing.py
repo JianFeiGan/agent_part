@@ -10,17 +10,20 @@ Description:
 """
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, status
 
 from src.api.schema.common import ApiResponse
 from src.api.schema.listing import (
+    ComplianceIssueResponse,
+    ComplianceReportResponse,
     CreateListingTaskRequest,
     ListingTaskResponse,
     ProductImportRequest,
     ProductResponse,
 )
-from src.models.listing import ListingProduct
+from src.models.listing import ComplianceReport, ListingProduct
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +32,7 @@ router = APIRouter()
 # 内存存储（Phase 1），后续替换为数据库
 _products: dict[str, ListingProduct] = {}
 _tasks: list[dict] = []
+_compliance_reports: dict[int, dict[str, ComplianceReport]] = {}  # task_id -> {platform: report}
 
 
 @router.post(
@@ -155,4 +159,115 @@ async def list_tasks() -> ApiResponse[list[ListingTaskResponse]]:
             )
             for t in _tasks
         ],
+    )
+
+
+def _report_to_response(report: ComplianceReport) -> ComplianceReportResponse:
+    """将内部合规报告转换为 API 响应。
+
+    Args:
+        report: 内部合规报告。
+
+    Returns:
+        API 响应格式。
+    """
+
+    def _issue_to_dict(issue: Any) -> ComplianceIssueResponse:
+        return ComplianceIssueResponse(
+            severity=issue.severity,
+            rule=issue.rule,
+            field=issue.field,
+            message=issue.message,
+            suggestion=issue.suggestion,
+        )
+
+    return ComplianceReportResponse(
+        platform=report.platform.value,
+        overall=report.overall,
+        image_issues=[_issue_to_dict(i) for i in report.image_issues],
+        text_issues=[_issue_to_dict(i) for i in report.text_issues],
+        forbidden_words=report.forbidden_words,
+    )
+
+
+@router.post(
+    "/tasks/{task_id}/compliance",
+    response_model=ApiResponse[dict[str, ComplianceReportResponse]],
+    status_code=status.HTTP_201_CREATED,
+    summary="执行合规检查",
+)
+async def run_compliance_check(task_id: int) -> ApiResponse[dict[str, ComplianceReportResponse]]:
+    """对指定任务执行合规检查。
+
+    Args:
+        task_id: 任务ID。
+
+    Returns:
+        各平台合规报告。
+    """
+    task = next((t for t in _tasks if t["task_id"] == task_id), None)
+    if not task:
+        return ApiResponse(code=404, message=f"任务 {task_id} 不存在", data=None)
+
+    product = _products.get(task["product_sku"])
+    if not product:
+        return ApiResponse(code=404, message=f"商品 {task['product_sku']} 不存在", data=None)
+
+    from src.agents.listing_compliance_checker import ComplianceCheckerAgent
+    from src.graph.listing_state import ListingState
+    from src.models.listing import Platform
+
+    platforms = [Platform(p) for p in task["target_platforms"]]
+    state = ListingState(
+        product=product,
+        target_platforms=platforms,
+    )
+    # 为每个平台创建空的文案包以触发检查
+    for platform in platforms:
+        from src.models.listing import CopywritingPackage
+
+        state.copywriting_packages[platform] = CopywritingPackage(
+            listing_task_id=task_id,
+            platform=platform,
+            language="en",
+            title=product.title,
+            bullet_points=[],
+            description=product.description or "",
+        )
+
+    agent = ComplianceCheckerAgent()
+    result = agent.execute_sync(state)
+
+    _compliance_reports[task_id] = result["compliance_reports"]
+
+    reports = {
+        platform.value: _report_to_response(report)
+        for platform, report in result["compliance_reports"].items()
+    }
+
+    return ApiResponse(code=200, message="合规检查完成", data=reports)
+
+
+@router.get(
+    "/compliance/{task_id}",
+    response_model=ApiResponse[dict[str, ComplianceReportResponse]],
+    summary="查询合规报告",
+)
+async def get_compliance_report(task_id: int) -> ApiResponse[dict[str, ComplianceReportResponse]]:
+    """获取指定任务的合规报告。
+
+    Args:
+        task_id: 任务ID。
+
+    Returns:
+        各平台合规报告。
+    """
+    reports = _compliance_reports.get(task_id)
+    if not reports:
+        return ApiResponse(code=404, message=f"任务 {task_id} 无合规报告", data=None)
+
+    return ApiResponse(
+        code=200,
+        message="成功",
+        data={platform.value: _report_to_response(report) for platform, report in reports.items()},
     )

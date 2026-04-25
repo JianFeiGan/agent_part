@@ -12,7 +12,27 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from src.models.listing import Platform
+from src.models.listing import ComplianceStatus, Platform
+
+
+class ComplianceIssueResponse(BaseModel):
+    """合规问题响应。"""
+
+    severity: ComplianceStatus
+    rule: str
+    field: str
+    message: str
+    suggestion: str | None
+
+
+class ComplianceReportResponse(BaseModel):
+    """合规报告响应。"""
+
+    platform: str
+    overall: ComplianceStatus
+    image_issues: list[ComplianceIssueResponse]
+    text_issues: list[ComplianceIssueResponse]
+    forbidden_words: list[str]
 
 
 class ProductImportRequest(BaseModel):
