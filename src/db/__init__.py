@@ -8,6 +8,15 @@ Description:
 2026-04-05
 """
 
+from src.db.listing_models import (
+    AdapterConfigPO,
+    AssetPackagePO,
+    ComplianceReportPO,
+    CopywritingPackagePO,
+    ListingProductPO,
+    ListingTaskPO,
+    TaskResultPO,
+)
 from src.db.models import (
     GenerationTask,
     KnowledgeChunk,
@@ -16,6 +25,7 @@ from src.db.models import (
     RAGUsageLog,
 )
 from src.db.postgres import get_db, init_db
+from src.db.repository import BaseRepository
 from src.db.vector_store import VectorStore
 
 __all__ = [
@@ -27,4 +37,13 @@ __all__ = [
     "RAGUsageLog",
     "Product",
     "GenerationTask",
+    # Listing models
+    "ListingProductPO",
+    "ListingTaskPO",
+    "AssetPackagePO",
+    "CopywritingPackagePO",
+    "ComplianceReportPO",
+    "TaskResultPO",
+    "AdapterConfigPO",
+    "BaseRepository",
 ]

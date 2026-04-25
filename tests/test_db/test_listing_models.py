@@ -99,13 +99,13 @@ class TestListingModels:
             platform="amazon",
             shop_id="shop-001",
             credentials={
-                "client_id": "amzn1.xxx",
-                "client_secret": "secret",
-                "refresh_token": "Atzr|xxx",
-                "marketplace_id": "ATVPDKIKX0DER",
+                "client_id": "REDACTED_CLIENT_ID",
+                "client_secret": "REDACTED_SECRET",
+                "refresh_token": "REDACTED_TOKEN",
+                "marketplace_id": "TEST_MARKETPLACE",
             },
             is_active=True,
         )
         assert po.platform == "amazon"
         assert po.shop_id == "shop-001"
-        assert po.credentials["marketplace_id"] == "ATVPDKIKX0DER"
+        assert po.credentials["marketplace_id"] == "TEST_MARKETPLACE"
