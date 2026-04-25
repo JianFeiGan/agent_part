@@ -14,7 +14,9 @@ class TestAdapterConfigManager:
     @pytest.fixture
     def manager(self) -> AdapterConfigManager:
         """创建配置管理器实例。"""
-        return AdapterConfigManager()
+        mgr = AdapterConfigManager()
+        mgr._cache.clear()
+        return mgr
 
     def test_singleton(self) -> None:
         """测试管理器是单例。"""
@@ -55,6 +57,7 @@ class TestAdapterConfigManager:
 
         result = await manager.get_config(Platform.AMAZON, "shop-1")
         assert result == cached
+        assert result is not cached  # 返回副本，不是同一对象
 
     @pytest.mark.asyncio
     async def test_cache_expired(self, manager: AdapterConfigManager) -> None:
@@ -90,6 +93,16 @@ class TestAdapterConfigManager:
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
             result = await manager.get_config(Platform.EBAY, "nonexistent")
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_db_error_returns_none(self, manager: AdapterConfigManager) -> None:
+        """测试数据库异常时返回 None。"""
+        with patch("src.agents.adapter_config.get_db") as mock_get_db:
+            mock_get_db.return_value.__aenter__ = AsyncMock(side_effect=ConnectionError("DB down"))
+            mock_get_db.return_value.__aexit__ = AsyncMock(return_value=None)
+
+            result = await manager.get_config(Platform.AMAZON, "error-shop")
             assert result is None
 
     @pytest.mark.asyncio

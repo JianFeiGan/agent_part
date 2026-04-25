@@ -61,7 +61,7 @@ class AdapterConfigManager:
         if cache_key in self._cache:
             cached, expiry = self._cache[cache_key]
             if time.time() < expiry:
-                return cached
+                return cached.copy()
             else:
                 del self._cache[cache_key]
 
