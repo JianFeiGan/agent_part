@@ -75,3 +75,29 @@ class ListingTaskResponse(BaseModel):
     product_sku: str
     target_platforms: list[str]
     status: str
+
+
+class PushListingRequest(BaseModel):
+    """刊登推送请求。"""
+
+    platforms: list[Platform] = Field(
+        default_factory=list, description="指定推送平台，空则全部推送"
+    )
+
+
+class PushResultResponse(BaseModel):
+    """单个平台推送结果。"""
+
+    platform: str
+    success: bool
+    listing_id: str | None = None
+    url: str | None = None
+    error: str | None = None
+
+
+class PushResponse(BaseModel):
+    """刊登推送响应。"""
+
+    task_id: int
+    results: list[PushResultResponse]
+    status: str
