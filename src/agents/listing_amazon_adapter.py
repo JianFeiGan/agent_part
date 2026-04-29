@@ -75,8 +75,7 @@ class AmazonAdapter(BasePlatformAdapter):
 
         if response.status_code != 200:
             error_msg = (
-                f"LWA authentication failed: status={response.status_code}, "
-                f"body={response.text}"
+                f"LWA authentication failed: status={response.status_code}, body={response.text}"
             )
             logger.error(error_msg)
             raise RuntimeError(error_msg)
@@ -138,9 +137,7 @@ class AmazonAdapter(BasePlatformAdapter):
         bullet_points = copywriting.bullet_points[:5]
 
         # 限制 search_terms 到 249 bytes
-        search_terms = self._limit_search_terms(
-            copywriting.search_terms, max_bytes=249
-        )
+        search_terms = self._limit_search_terms(copywriting.search_terms, max_bytes=249)
 
         return {
             "title": title,
@@ -201,14 +198,9 @@ class AmazonAdapter(BasePlatformAdapter):
             if not self._auth_token:
                 self.authenticate()
 
-            marketplace_id = self._config.get(
-                "marketplace_id", DEFAULT_MARKETPLACE_ID
-            )
+            marketplace_id = self._config.get("marketplace_id", DEFAULT_MARKETPLACE_ID)
             sku = product.sku
-            url = (
-                f"{SP_API_BASE_URL}/listings/{LISTINGS_API_VERSION}"
-                f"/items/{marketplace_id}/{sku}"
-            )
+            url = f"{SP_API_BASE_URL}/listings/{LISTINGS_API_VERSION}/items/{marketplace_id}/{sku}"
 
             # 构建 payload
             assets = self.transform_assets(product, asset_package)
@@ -217,8 +209,7 @@ class AmazonAdapter(BasePlatformAdapter):
                 "attributes": {
                     "item_name": [{"value": copy["title"], "language_tag": "en_US"}],
                     "bullet_point": [
-                        {"value": bp, "language_tag": "en_US"}
-                        for bp in copy["bullet_points"]
+                        {"value": bp, "language_tag": "en_US"} for bp in copy["bullet_points"]
                     ],
                     "product_description": [
                         {"value": copy["description"], "language_tag": "en_US"}
@@ -227,8 +218,7 @@ class AmazonAdapter(BasePlatformAdapter):
                         {"value": " ".join(copy["search_terms"]), "language_tag": "en_US"}
                     ],
                     "main_image": [
-                        {"value": img, "language_tag": "en_US"}
-                        for img in assets["images"][:1]
+                        {"value": img, "language_tag": "en_US"} for img in assets["images"][:1]
                     ],
                 },
             }
@@ -253,8 +243,7 @@ class AmazonAdapter(BasePlatformAdapter):
                 )
 
             error_msg = (
-                f"Amazon push_listing failed: status={response.status_code}, "
-                f"body={response.text}"
+                f"Amazon push_listing failed: status={response.status_code}, body={response.text}"
             )
             logger.error(error_msg)
             return PushResult(
@@ -297,14 +286,9 @@ class AmazonAdapter(BasePlatformAdapter):
             if not self._auth_token:
                 self.authenticate()
 
-            marketplace_id = self._config.get(
-                "marketplace_id", DEFAULT_MARKETPLACE_ID
-            )
+            marketplace_id = self._config.get("marketplace_id", DEFAULT_MARKETPLACE_ID)
             sku = product.sku
-            url = (
-                f"{SP_API_BASE_URL}/listings/{LISTINGS_API_VERSION}"
-                f"/items/{marketplace_id}/{sku}"
-            )
+            url = f"{SP_API_BASE_URL}/listings/{LISTINGS_API_VERSION}/items/{marketplace_id}/{sku}"
 
             assets = self.transform_assets(product, asset_package)
             copy = self.transform_copywriting(copywriting)
@@ -312,8 +296,7 @@ class AmazonAdapter(BasePlatformAdapter):
                 "attributes": {
                     "item_name": [{"value": copy["title"], "language_tag": "en_US"}],
                     "bullet_point": [
-                        {"value": bp, "language_tag": "en_US"}
-                        for bp in copy["bullet_points"]
+                        {"value": bp, "language_tag": "en_US"} for bp in copy["bullet_points"]
                     ],
                     "product_description": [
                         {"value": copy["description"], "language_tag": "en_US"}
@@ -339,8 +322,7 @@ class AmazonAdapter(BasePlatformAdapter):
                 )
 
             error_msg = (
-                f"Amazon update_listing failed: status={response.status_code}, "
-                f"body={response.text}"
+                f"Amazon update_listing failed: status={response.status_code}, body={response.text}"
             )
             logger.error(error_msg)
             return PushResult(
@@ -374,9 +356,7 @@ class AmazonAdapter(BasePlatformAdapter):
             if not self._auth_token:
                 self.authenticate()
 
-            marketplace_id = self._config.get(
-                "marketplace_id", DEFAULT_MARKETPLACE_ID
-            )
+            marketplace_id = self._config.get("marketplace_id", DEFAULT_MARKETPLACE_ID)
             url = (
                 f"{SP_API_BASE_URL}/listings/{LISTINGS_API_VERSION}"
                 f"/items/{marketplace_id}/{listing_id}"
@@ -398,8 +378,7 @@ class AmazonAdapter(BasePlatformAdapter):
                 )
 
             error_msg = (
-                f"Amazon delete_listing failed: status={response.status_code}, "
-                f"body={response.text}"
+                f"Amazon delete_listing failed: status={response.status_code}, body={response.text}"
             )
             logger.error(error_msg)
             return PushResult(

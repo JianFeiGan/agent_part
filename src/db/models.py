@@ -173,9 +173,7 @@ class Product(Base):
     )
 
     # 关系
-    tasks: Mapped[list["GenerationTask"]] = relationship(
-        "GenerationTask", back_populates="product"
-    )
+    tasks: Mapped[list["GenerationTask"]] = relationship("GenerationTask", back_populates="product")
 
     def __repr__(self) -> str:
         return f"<Product(id={self.id}, name='{self.name}')>"

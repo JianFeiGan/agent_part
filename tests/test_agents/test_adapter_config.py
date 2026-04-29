@@ -68,8 +68,10 @@ class TestAdapterConfigManager:
         mock_session = AsyncMock()
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = MagicMock(
-            platform="amazon", shop_id="shop-2",
-            credentials={"client_id": "fresh"}, is_active=True,
+            platform="amazon",
+            shop_id="shop-2",
+            credentials={"client_id": "fresh"},
+            is_active=True,
         )
         mock_session.execute.return_value = mock_result
 

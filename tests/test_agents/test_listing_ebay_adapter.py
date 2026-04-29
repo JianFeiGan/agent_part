@@ -159,9 +159,7 @@ class TestEbayAdapterTransformCopywriting:
         for bp in copywriting.bullet_points:
             assert f"<li>{bp}</li>" in result["bullet_points_html"]
 
-    def test_transform_copywriting_empty_bullets(
-        self, adapter: EbayAdapter
-    ) -> None:
+    def test_transform_copywriting_empty_bullets(self, adapter: EbayAdapter) -> None:
         """测试空 bullet points 返回空字符串。"""
         copy = CopywritingPackage(
             listing_task_id=1,
@@ -173,9 +171,7 @@ class TestEbayAdapterTransformCopywriting:
         result = adapter.transform_copywriting(copy)
         assert result["bullet_points_html"] == ""
 
-    def test_transform_copywriting_title_shorter_than_limit(
-        self, adapter: EbayAdapter
-    ) -> None:
+    def test_transform_copywriting_title_shorter_than_limit(self, adapter: EbayAdapter) -> None:
         """测试短标题不被截断。"""
         copy = CopywritingPackage(
             listing_task_id=1,
@@ -233,9 +229,7 @@ class TestEbayAdapterTransformAssets:
             listing_task_id=1,
             platform=Platform.EBAY,
             main_image="https://cdn.example.com/main.jpg",
-            variant_images=[
-                f"https://cdn.example.com/v{i}.jpg" for i in range(20)
-            ],
+            variant_images=[f"https://cdn.example.com/v{i}.jpg" for i in range(20)],
         )
         result = adapter.transform_assets(product, many_variants)
         assert len(result["pictures"]) == 12
@@ -285,9 +279,7 @@ class TestEbayAdapterPushListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.push_listing(
-                product, asset_package, copywriting, task
-            )
+            result = adapter.push_listing(product, asset_package, copywriting, task)
 
         assert result.success is True
         assert result.platform == Platform.EBAY
@@ -311,9 +303,7 @@ class TestEbayAdapterPushListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.push_listing(
-                product, asset_package, copywriting, task
-            )
+            result = adapter.push_listing(product, asset_package, copywriting, task)
 
         assert result.success is False
         assert result.platform == Platform.EBAY
@@ -340,9 +330,7 @@ class TestEbayAdapterPushListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.side_effect = [mock_token_response, mock_api_response]
-            result = adapter.push_listing(
-                product, asset_package, copywriting, task
-            )
+            result = adapter.push_listing(product, asset_package, copywriting, task)
 
         assert mock_post.call_count == 2
         assert result.success is True
@@ -375,9 +363,7 @@ class TestEbayAdapterUpdateListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.update_listing(
-                "987654321", product, asset_package, copywriting
-            )
+            result = adapter.update_listing("987654321", product, asset_package, copywriting)
 
         assert result.success is True
         assert result.platform == Platform.EBAY
@@ -407,9 +393,7 @@ class TestEbayAdapterUpdateListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.update_listing(
-                "nonexistent", product, asset_package, copywriting
-            )
+            result = adapter.update_listing("nonexistent", product, asset_package, copywriting)
 
         assert result.success is False
         assert "Item not found" in result.error

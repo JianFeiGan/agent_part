@@ -129,10 +129,7 @@ class ShopifyAdapter(BasePlatformAdapter):
         # 构建 body_html：bullet points 包装为 HTML features section
         features_html = ""
         if copywriting.bullet_points:
-            items = "".join(
-                f"<li>{self._escape_html(bp)}</li>"
-                for bp in copywriting.bullet_points
-            )
+            items = "".join(f"<li>{self._escape_html(bp)}</li>" for bp in copywriting.bullet_points)
             features_html = f"<h3>Features</h3><ul>{items}</ul>"
 
         body_html = f"{copywriting.description}\n{features_html}".strip()
@@ -169,17 +166,11 @@ class ShopifyAdapter(BasePlatformAdapter):
             copy = self.transform_copywriting(copywriting)
 
             # 构建 product input
-            shopify_input = self._build_product_input(
-                product, assets, copy
-            )
+            shopify_input = self._build_product_input(product, assets, copy)
 
-            response = self._execute_graphql(
-                CREATE_PRODUCT_MUTATION, {"input": shopify_input}
-            )
+            response = self._execute_graphql(CREATE_PRODUCT_MUTATION, {"input": shopify_input})
 
-            return self._parse_product_response(
-                response, "productCreate", Platform.SHOPIFY
-            )
+            return self._parse_product_response(response, "productCreate", Platform.SHOPIFY)
 
         except Exception as e:
             error_msg = f"Shopify push_listing error: {e}"
@@ -215,16 +206,14 @@ class ShopifyAdapter(BasePlatformAdapter):
             assets = self.transform_assets(product, asset_package)
             copy = self.transform_copywriting(copywriting)
 
-            shopify_input = self._build_product_input(
-                product, assets, copy, product_id=listing_id
-            )
+            shopify_input = self._build_product_input(product, assets, copy, product_id=listing_id)
 
-            response = self._execute_graphql(
-                UPDATE_PRODUCT_MUTATION, {"input": shopify_input}
-            )
+            response = self._execute_graphql(UPDATE_PRODUCT_MUTATION, {"input": shopify_input})
 
             return self._parse_product_response(
-                response, "productUpdate", Platform.SHOPIFY,
+                response,
+                "productUpdate",
+                Platform.SHOPIFY,
                 existing_id=listing_id,
             )
 
@@ -250,21 +239,15 @@ class ShopifyAdapter(BasePlatformAdapter):
             if not self._auth_token:
                 self.authenticate()
 
-            response = self._execute_graphql(
-                DELETE_PRODUCT_MUTATION, {"id": listing_id}
-            )
+            response = self._execute_graphql(DELETE_PRODUCT_MUTATION, {"id": listing_id})
 
             data = response.get("data", {})
             result_data = data.get("productDelete", {})
             user_errors = result_data.get("userErrors", [])
 
             if user_errors:
-                error_msg = "; ".join(
-                    err.get("message", "Unknown error") for err in user_errors
-                )
-                logger.error(
-                    f"Shopify delete_listing failed: {error_msg}"
-                )
+                error_msg = "; ".join(err.get("message", "Unknown error") for err in user_errors)
+                logger.error(f"Shopify delete_listing failed: {error_msg}")
                 return PushResult(
                     success=False,
                     platform=Platform.SHOPIFY,
@@ -419,12 +402,8 @@ class ShopifyAdapter(BasePlatformAdapter):
         user_errors = result_data.get("userErrors", [])
 
         if user_errors:
-            error_msg = "; ".join(
-                err.get("message", "Unknown error") for err in user_errors
-            )
-            logger.error(
-                f"Shopify {mutation_key} failed: {error_msg}"
-            )
+            error_msg = "; ".join(err.get("message", "Unknown error") for err in user_errors)
+            logger.error(f"Shopify {mutation_key} failed: {error_msg}")
             return PushResult(
                 success=False,
                 platform=platform,

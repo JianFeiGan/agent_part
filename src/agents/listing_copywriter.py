@@ -87,10 +87,15 @@ class AICopywritingAgent:
         try:
             from langchain_core.prompts import ChatPromptTemplate
 
-            prompt = ChatPromptTemplate.from_messages([
-                ("system", "你是一个专业的电商文案优化师。请润色以下商品文案，使其更具吸引力，同时保持核心信息不变。直接返回润色后的文本，不要添加任何解释。"),
-                ("human", f"{prompt_template}\n\n待润色文案：{{draft}}"),
-            ])
+            prompt = ChatPromptTemplate.from_messages(
+                [
+                    (
+                        "system",
+                        "你是一个专业的电商文案优化师。请润色以下商品文案，使其更具吸引力，同时保持核心信息不变。直接返回润色后的文本，不要添加任何解释。",
+                    ),
+                    ("human", f"{prompt_template}\n\n待润色文案：{{draft}}"),
+                ]
+            )
 
             chain = prompt | self.llm
             response = await chain.ainvoke({"draft": draft})

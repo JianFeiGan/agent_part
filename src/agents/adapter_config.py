@@ -79,14 +79,11 @@ class AdapterConfigManager:
                 if config_po:
                     creds = config_po.credentials.copy()
                     self._cache[cache_key] = (creds, time.time() + CACHE_TTL)
-                    logger.info(
-                        f"Adapter config loaded: platform={platform.value}, shop={shop_id}"
-                    )
+                    logger.info(f"Adapter config loaded: platform={platform.value}, shop={shop_id}")
                     return creds
                 else:
                     logger.warning(
-                        f"No active adapter config found: "
-                        f"platform={platform.value}, shop={shop_id}"
+                        f"No active adapter config found: platform={platform.value}, shop={shop_id}"
                     )
                     return None
 
@@ -94,9 +91,7 @@ class AdapterConfigManager:
             logger.exception(f"Failed to load adapter config for {platform.value}/{shop_id}")
             return None
 
-    async def invalidate_cache(
-        self, platform: Platform, shop_id: str | None = None
-    ) -> None:
+    async def invalidate_cache(self, platform: Platform, shop_id: str | None = None) -> None:
         """清除缓存。
 
         Args:

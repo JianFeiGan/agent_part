@@ -15,7 +15,7 @@ def product() -> ListingProduct:
         sku="LLM-TEST-001",
         title="Wireless Bluetooth Headphones",
         description="Premium wireless headphones with noise cancellation. "
-                    "Long battery life up to 30 hours. Comfortable over-ear design.",
+        "Long battery life up to 30 hours. Comfortable over-ear design.",
         category="Electronics",
         brand="SoundMax",
     )
@@ -61,7 +61,9 @@ class TestAICopywritingAgent:
         assert amazon_copy.title != ""
 
     @pytest.mark.asyncio
-    async def test_llm_fallback_to_rules(self, agent: AICopywritingAgent, state: ListingState) -> None:
+    async def test_llm_fallback_to_rules(
+        self, agent: AICopywritingAgent, state: ListingState
+    ) -> None:
         """测试 LLM 调用失败时降级到规则模式。"""
         agent._llm = AsyncMock()
         agent._llm.ainvoke = AsyncMock(side_effect=Exception("LLM API error"))
@@ -72,7 +74,9 @@ class TestAICopywritingAgent:
         assert len(result["copywriting_packages"]) == 2  # Amazon + eBay
 
     @pytest.mark.asyncio
-    async def test_generate_title_truncation(self, agent: AICopywritingAgent, product: ListingProduct) -> None:
+    async def test_generate_title_truncation(
+        self, agent: AICopywritingAgent, product: ListingProduct
+    ) -> None:
         """测试标题截断。"""
         from src.agents.listing_platform_specs import get_platform_spec
 
@@ -81,7 +85,9 @@ class TestAICopywritingAgent:
         assert len(title) <= amazon_spec.max_title_length
 
     @pytest.mark.asyncio
-    async def test_generate_bullet_points_limit(self, agent: AICopywritingAgent, product: ListingProduct) -> None:
+    async def test_generate_bullet_points_limit(
+        self, agent: AICopywritingAgent, product: ListingProduct
+    ) -> None:
         """测试五点描述数量限制。"""
         bullets = agent._generate_bullet_points(product, Platform.AMAZON)
         assert len(bullets) <= 5

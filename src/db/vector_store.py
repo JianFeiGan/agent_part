@@ -149,7 +149,7 @@ class VectorStore:
                 "doc_type": doc_type,
                 "category": category,
                 "top_k": top_k,
-            }
+            },
         )
 
         rows = result.fetchall()

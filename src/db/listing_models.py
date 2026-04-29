@@ -43,9 +43,13 @@ class ListingProductPO(Base):
     dimensions: Mapped[dict | None] = mapped_column(JSONB)
     source_images: Mapped[list[dict]] = mapped_column(JSONB, default=list)
     attributes: Mapped[dict] = mapped_column(JSONB, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     tasks: Mapped[list["ListingTaskPO"]] = relationship("ListingTaskPO", back_populates="product")
@@ -67,13 +71,19 @@ class ListingTaskPO(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     workflow_state: Mapped[str | None] = mapped_column(String(50))
     auto_execute: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     product: Mapped["ListingProductPO"] = relationship("ListingProductPO", back_populates="tasks")
-    asset_packages: Mapped[list["AssetPackagePO"]] = relationship("AssetPackagePO", back_populates="task")
+    asset_packages: Mapped[list["AssetPackagePO"]] = relationship(
+        "AssetPackagePO", back_populates="task"
+    )
     copywriting_packages: Mapped[list["CopywritingPackagePO"]] = relationship(
         "CopywritingPackagePO", back_populates="task"
     )
@@ -100,7 +110,9 @@ class AssetPackagePO(Base):
     variant_images: Mapped[list[str]] = mapped_column(JSONB, default=list)
     video_url: Mapped[str | None] = mapped_column(String(1000))
     a_plus_images: Mapped[list[str]] = mapped_column(JSONB, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
 
     task: Mapped["ListingTaskPO"] = relationship("ListingTaskPO", back_populates="asset_packages")
 
@@ -123,9 +135,13 @@ class CopywritingPackagePO(Base):
     bullet_points: Mapped[list[str]] = mapped_column(JSONB, default=list)
     description: Mapped[str] = mapped_column(Text, default="")
     search_terms: Mapped[list[str]] = mapped_column(JSONB, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
 
-    task: Mapped["ListingTaskPO"] = relationship("ListingTaskPO", back_populates="copywriting_packages")
+    task: Mapped["ListingTaskPO"] = relationship(
+        "ListingTaskPO", back_populates="copywriting_packages"
+    )
 
     def __repr__(self) -> str:
         return f"<CopywritingPackagePO(id={self.id}, task_id={self.task_id}, platform='{self.platform}')>"
@@ -142,9 +158,13 @@ class ComplianceReportPO(Base):
     )
     platform: Mapped[str] = mapped_column(String(20), nullable=False)
     report_data: Mapped[dict] = mapped_column(JSONB, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
 
-    task: Mapped["ListingTaskPO"] = relationship("ListingTaskPO", back_populates="compliance_reports")
+    task: Mapped["ListingTaskPO"] = relationship(
+        "ListingTaskPO", back_populates="compliance_reports"
+    )
 
     def __repr__(self) -> str:
         return f"<ComplianceReportPO(id={self.id}, task_id={self.task_id}, platform='{self.platform}')>"
@@ -162,7 +182,9 @@ class TaskResultPO(Base):
     platform: Mapped[str] = mapped_column(String(20), nullable=False)
     success: Mapped[bool] = mapped_column(Boolean, default=False)
     result_data: Mapped[dict] = mapped_column(JSONB, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
 
     task: Mapped["ListingTaskPO"] = relationship("ListingTaskPO", back_populates="push_results")
 
@@ -185,9 +207,9 @@ class AdapterConfigPO(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    __table_args__ = (
-        Index("ix_adapter_config_platform_shop", "platform", "shop_id", unique=True),
-    )
+    __table_args__ = (Index("ix_adapter_config_platform_shop", "platform", "shop_id", unique=True),)
 
     def __repr__(self) -> str:
-        return f"<AdapterConfigPO(id={self.id}, platform='{self.platform}', shop_id='{self.shop_id}')>"
+        return (
+            f"<AdapterConfigPO(id={self.id}, platform='{self.platform}', shop_id='{self.shop_id}')>"
+        )

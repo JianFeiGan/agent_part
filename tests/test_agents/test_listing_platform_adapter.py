@@ -85,6 +85,7 @@ class TestAdapterRegistry:
 
     def test_get_unregistered_raises(self) -> None:
         """测试获取未注册的适配器会报错。"""
+
         # 使用一个不可能存在的 Platform 值
         class FakeRegistry:
             _adapters = {}

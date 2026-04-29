@@ -51,23 +51,17 @@ class TaskCreateRequest(BaseModel):
     """
 
     product_id: str = Field(..., description="商品ID")
-    task_type: TaskType = Field(
-        default=TaskType.IMAGE_AND_VIDEO, description="任务类型"
-    )
+    task_type: TaskType = Field(default=TaskType.IMAGE_AND_VIDEO, description="任务类型")
 
     # 图片生成配置
     image_types: list[str] = Field(
         default_factory=lambda: ["main", "scene", "selling_point"],
         description="图片类型列表",
     )
-    image_count_per_type: int = Field(
-        default=1, ge=1, le=10, description="每种类型的图片数量"
-    )
+    image_count_per_type: int = Field(default=1, ge=1, le=10, description="每种类型的图片数量")
 
     # 视频生成配置
-    video_duration: float = Field(
-        default=30.0, ge=5.0, le=300.0, description="视频时长(秒)"
-    )
+    video_duration: float = Field(default=30.0, ge=5.0, le=300.0, description="视频时长(秒)")
     video_style: str = Field(default="professional", description="视频风格")
 
     # 风格配置
@@ -115,9 +109,7 @@ class TaskStatusResponse(BaseModel):
     status: TaskStatus = Field(..., description="任务状态")
     progress: float = Field(default=0.0, ge=0, le=100, description="完成进度(%)")
     current_step: str = Field(..., description="当前步骤")
-    completed_steps: list[str] = Field(
-        default_factory=list, description="已完成步骤列表"
-    )
+    completed_steps: list[str] = Field(default_factory=list, description="已完成步骤列表")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 
@@ -166,17 +158,11 @@ class TaskDetailResponse(BaseModel):
     status: TaskStatus = Field(..., description="任务状态")
     progress: float = Field(default=0.0, ge=0, le=100, description="完成进度(%)")
     current_step: str = Field(..., description="当前步骤")
-    completed_steps: list[str] = Field(
-        default_factory=list, description="已完成步骤列表"
-    )
-    agent_logs: list[dict] = Field(
-        default_factory=list, description="Agent执行日志"
-    )
+    completed_steps: list[str] = Field(default_factory=list, description="已完成步骤列表")
+    agent_logs: list[dict] = Field(default_factory=list, description="Agent执行日志")
 
     # 生成结果
-    images: list[ImageResponse] = Field(
-        default_factory=list, description="生成的图片列表"
-    )
+    images: list[ImageResponse] = Field(default_factory=list, description="生成的图片列表")
     video: VideoResponse | None = Field(default=None, description="生成的视频")
     quality_reports: list[QualityReportResponse] = Field(
         default_factory=list, description="质量报告列表"

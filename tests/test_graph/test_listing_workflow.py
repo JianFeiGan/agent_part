@@ -43,15 +43,17 @@ class TestListingWorkflow:
         """测试素材优化节点调用真实 Agent。"""
         with patch("src.graph.listing_workflow.AssetOptimizerAgent") as mock_agent_cls:
             mock_agent = MagicMock()
-            mock_agent.execute_sync = MagicMock(return_value={
-                "asset_packages": {
-                    Platform.AMAZON: AssetPackage(
-                        listing_task_id=1,
-                        platform=Platform.AMAZON,
-                        main_image="https://example.com/test.jpg",
-                    )
-                },
-            })
+            mock_agent.execute_sync = MagicMock(
+                return_value={
+                    "asset_packages": {
+                        Platform.AMAZON: AssetPackage(
+                            listing_task_id=1,
+                            platform=Platform.AMAZON,
+                            main_image="https://example.com/test.jpg",
+                        )
+                    },
+                }
+            )
             mock_agent_cls.return_value = mock_agent
 
             workflow = ListingWorkflow()

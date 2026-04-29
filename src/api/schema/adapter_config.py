@@ -20,7 +20,9 @@ class AdapterConfigCreate(BaseModel):
 
     platform: Platform
     shop_id: str = Field(default="default", max_length=100, description="店铺ID")
-    credentials: dict[str, Any] = Field(..., min_length=1, description="凭证（含 API Key、Token 等）")
+    credentials: dict[str, Any] = Field(
+        ..., min_length=1, description="凭证（含 API Key、Token 等）"
+    )
     is_active: bool = Field(default=True, description="是否启用")
 
 

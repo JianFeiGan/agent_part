@@ -102,9 +102,7 @@ def task() -> ListingTask:
 class TestShopifyAdapterAuthenticate:
     """ShopifyAdapter 认证测试。"""
 
-    def test_authenticate_returns_api_key(
-        self, adapter: ShopifyAdapter
-    ) -> None:
+    def test_authenticate_returns_api_key(self, adapter: ShopifyAdapter) -> None:
         """测试认证成功返回 API Key。"""
         token = adapter.authenticate()
 
@@ -143,9 +141,7 @@ class TestShopifyAdapterTransformCopywriting:
         for bp in copywriting.bullet_points:
             assert bp in result["body_html"]
 
-    def test_transform_copywriting_empty_bullets(
-        self, adapter: ShopifyAdapter
-    ) -> None:
+    def test_transform_copywriting_empty_bullets(self, adapter: ShopifyAdapter) -> None:
         """测试空 bullet points 不包含 Features section。"""
         copy = CopywritingPackage(
             listing_task_id=1,
@@ -183,10 +179,7 @@ class TestShopifyAdapterTransformAssets:
         """测试素材包含主图。"""
         result = adapter.transform_assets(product, asset_package)
 
-        assert any(
-            img["src"] == asset_package.main_image
-            for img in result["images"]
-        )
+        assert any(img["src"] == asset_package.main_image for img in result["images"])
 
     def test_transform_assets_includes_variant_images(
         self,
@@ -201,9 +194,7 @@ class TestShopifyAdapterTransformAssets:
         for variant in asset_package.variant_images:
             assert variant in urls
 
-    def test_transform_assets_empty(
-        self, adapter: ShopifyAdapter, product: ListingProduct
-    ) -> None:
+    def test_transform_assets_empty(self, adapter: ShopifyAdapter, product: ListingProduct) -> None:
         """测试空素材包返回空 images 列表。"""
         empty_pkg = AssetPackage(
             listing_task_id=1,
@@ -242,9 +233,7 @@ class TestShopifyAdapterPushListing:
         "data": {
             "productCreate": {
                 "product": None,
-                "userErrors": [
-                    {"field": ["title"], "message": "Title is too long"}
-                ],
+                "userErrors": [{"field": ["title"], "message": "Title is too long"}],
             }
         }
     }
@@ -264,13 +253,9 @@ class TestShopifyAdapterPushListing:
         mock_response.status_code = 200
         mock_response.json.return_value = self.SUCCESS_GRAPHQL_RESPONSE
 
-        with patch(
-            "src.agents.listing_shopify_adapter.requests.post"
-        ) as mock_post:
+        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.push_listing(
-                product, asset_package, copywriting, task
-            )
+            result = adapter.push_listing(product, asset_package, copywriting, task)
 
         assert result.success is True
         assert result.platform == Platform.SHOPIFY
@@ -293,13 +278,9 @@ class TestShopifyAdapterPushListing:
         mock_response.status_code = 200
         mock_response.json.return_value = self.ERROR_GRAPHQL_RESPONSE
 
-        with patch(
-            "src.agents.listing_shopify_adapter.requests.post"
-        ) as mock_post:
+        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.push_listing(
-                product, asset_package, copywriting, task
-            )
+            result = adapter.push_listing(product, asset_package, copywriting, task)
 
         assert result.success is False
         assert result.platform == Platform.SHOPIFY
@@ -320,13 +301,9 @@ class TestShopifyAdapterPushListing:
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
 
-        with patch(
-            "src.agents.listing_shopify_adapter.requests.post"
-        ) as mock_post:
+        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.push_listing(
-                product, asset_package, copywriting, task
-            )
+            result = adapter.push_listing(product, asset_package, copywriting, task)
 
         assert result.success is False
         assert "error" in result.error.lower()
@@ -361,9 +338,7 @@ class TestShopifyAdapterUpdateListing:
         mock_response.status_code = 200
         mock_response.json.return_value = self.SUCCESS_UPDATE_RESPONSE
 
-        with patch(
-            "src.agents.listing_shopify_adapter.requests.post"
-        ) as mock_post:
+        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
             result = adapter.update_listing(
                 "gid://shopify/Product/987654321",
@@ -392,16 +367,12 @@ class TestShopifyAdapterUpdateListing:
             "data": {
                 "productUpdate": {
                     "product": None,
-                    "userErrors": [
-                        {"field": ["id"], "message": "Product not found"}
-                    ],
+                    "userErrors": [{"field": ["id"], "message": "Product not found"}],
                 }
             }
         }
 
-        with patch(
-            "src.agents.listing_shopify_adapter.requests.post"
-        ) as mock_post:
+        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
             result = adapter.update_listing(
                 "gid://shopify/Product/nonexistent",
@@ -434,9 +405,7 @@ class TestShopifyAdapterDeleteListing:
         mock_response.status_code = 200
         mock_response.json.return_value = self.SUCCESS_DELETE_RESPONSE
 
-        with patch(
-            "src.agents.listing_shopify_adapter.requests.post"
-        ) as mock_post:
+        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
             result = adapter.delete_listing("gid://shopify/Product/123456789")
 
@@ -444,9 +413,7 @@ class TestShopifyAdapterDeleteListing:
         assert result.platform == Platform.SHOPIFY
         assert result.listing_id == "gid://shopify/Product/123456789"
 
-    def test_delete_listing_with_errors(
-        self, adapter: ShopifyAdapter
-    ) -> None:
+    def test_delete_listing_with_errors(self, adapter: ShopifyAdapter) -> None:
         """测试刊登删除失败。"""
         adapter._auth_token = "shpat_test_token"
 
@@ -456,16 +423,12 @@ class TestShopifyAdapterDeleteListing:
             "data": {
                 "productDelete": {
                     "deletedProductId": None,
-                    "userErrors": [
-                        {"field": ["id"], "message": "Product not found"}
-                    ],
+                    "userErrors": [{"field": ["id"], "message": "Product not found"}],
                 }
             }
         }
 
-        with patch(
-            "src.agents.listing_shopify_adapter.requests.post"
-        ) as mock_post:
+        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
             result = adapter.delete_listing("gid://shopify/Product/nonexistent")
 
@@ -478,17 +441,13 @@ class TestShopifyAdapterHelpers:
 
     def test_generate_handle_basic(self, adapter: ShopifyAdapter) -> None:
         """测试 handle 生成：空格转连字符。"""
-        product = ListingProduct(
-            sku="SKU", title="My Cool Product"
-        )
+        product = ListingProduct(sku="SKU", title="My Cool Product")
         handle = adapter._generate_handle(product)
         assert handle == "my-cool-product"
 
     def test_generate_handle_special_chars(self, adapter: ShopifyAdapter) -> None:
         """测试 handle 生成：移除特殊字符。"""
-        product = ListingProduct(
-            sku="SKU", title="Product <with> special & chars!"
-        )
+        product = ListingProduct(sku="SKU", title="Product <with> special & chars!")
         handle = adapter._generate_handle(product)
         assert handle == "product-with-special-chars"
 

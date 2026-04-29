@@ -133,10 +133,7 @@ class EbayAdapter(BasePlatformAdapter):
         # 将 bullet points 包装为 HTML 列表
         bullet_html = ""
         if copywriting.bullet_points:
-            items = "".join(
-                f"<li>{self._escape_xml(bp)}</li>"
-                for bp in copywriting.bullet_points
-            )
+            items = "".join(f"<li>{self._escape_xml(bp)}</li>" for bp in copywriting.bullet_points)
             bullet_html = f"<ul>{items}</ul>"
 
         return {
@@ -171,9 +168,7 @@ class EbayAdapter(BasePlatformAdapter):
             assets = self.transform_assets(product, asset_package)
             copy = self.transform_copywriting(copywriting)
 
-            xml_body = self._build_add_item_xml(
-                product, assets, copy, task
-            )
+            xml_body = self._build_add_item_xml(product, assets, copy, task)
 
             headers = self._build_trading_headers("AddItem")
 
@@ -239,9 +234,7 @@ class EbayAdapter(BasePlatformAdapter):
             assets = self.transform_assets(product, asset_package)
             copy = self.transform_copywriting(copywriting)
 
-            xml_body = self._build_revise_item_xml(
-                product, assets, copy, listing_id
-            )
+            xml_body = self._build_revise_item_xml(product, assets, copy, listing_id)
 
             headers = self._build_trading_headers("ReviseItem")
 
@@ -478,8 +471,7 @@ class EbayAdapter(BasePlatformAdapter):
             return ""
 
         items = "".join(
-            f"<GalleryType>Gallery</GalleryType>"
-            f"<PictureURL>{self._escape_xml(url)}</PictureURL>"
+            f"<GalleryType>Gallery</GalleryType><PictureURL>{self._escape_xml(url)}</PictureURL>"
             for url in pictures
         )
         return items
