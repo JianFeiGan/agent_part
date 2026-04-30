@@ -23,11 +23,12 @@ console = Console()
 
 async def run_demo() -> None:
     """运行演示工作流。"""
-    console.print(Panel.fit(
-        "[bold blue]商品视觉生成系统[/bold blue]\n"
-        "多Agent协作的图片/视频自动生成",
-        title="🚀 Welcome",
-    ))
+    console.print(
+        Panel.fit(
+            "[bold blue]商品视觉生成系统[/bold blue]\n多Agent协作的图片/视频自动生成",
+            title="🚀 Welcome",
+        )
+    )
 
     # ========== 步骤 1: 创建商品信息 ==========
     console.print("\n[bold green]步骤 1:[/bold green] 创建商品信息")
@@ -128,7 +129,9 @@ async def run_demo() -> None:
         summary_table.add_row("已完成步骤", str(result.completed_steps))
         summary_table.add_row("生成图片数", str(len(result.generated_images)))
         summary_table.add_row("生成视频", "是" if result.generated_video else "否")
-        summary_table.add_row("质量评分", f"{result.quality_score:.2f}" if result.quality_score else "N/A")
+        summary_table.add_row(
+            "质量评分", f"{result.quality_score:.2f}" if result.quality_score else "N/A"
+        )
         summary_table.add_row("发现问题", f"{len(result.issues)} 个")
         console.print(summary_table)
 
@@ -161,12 +164,14 @@ async def run_demo() -> None:
         # 显示最终结果
         if result.final_results:
             console.print("\n" + "─" * 40)
-            console.print(Panel(
-                f"[bold]{result.final_results.get('recommendation', 'N/A')}[/bold]\n\n"
-                f"完成时间: {result.final_results.get('completed_at', 'N/A')}",
-                title="📊 最终报告",
-                border_style="blue",
-            ))
+            console.print(
+                Panel(
+                    f"[bold]{result.final_results.get('recommendation', 'N/A')}[/bold]\n\n"
+                    f"完成时间: {result.final_results.get('completed_at', 'N/A')}",
+                    title="📊 最终报告",
+                    border_style="blue",
+                )
+            )
 
     except Exception as e:
         console.print(f"\n[bold red]❌ 执行失败: {e}[/bold red]")

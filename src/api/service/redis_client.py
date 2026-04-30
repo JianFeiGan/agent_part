@@ -49,9 +49,7 @@ class RedisClient:
             redis.ConnectionError: 连接失败时抛出。
         """
         self._client = redis.from_url(
-            self.settings.redis_url,
-            encoding="utf-8",
-            decode_responses=True
+            self.settings.redis_url, encoding="utf-8", decode_responses=True
         )
 
     async def disconnect(self) -> None:
@@ -150,10 +148,7 @@ class RedisClient:
             return None
 
     async def list_products(
-        self,
-        page: int = 1,
-        page_size: int = 10,
-        category: str | None = None
+        self, page: int = 1, page_size: int = 10, category: str | None = None
     ) -> tuple[list[Product], int]:
         """获取商品列表（分页）。
 
@@ -221,7 +216,9 @@ class RedisClient:
 
         # 更新商品数据
         product_data = product.model_dump(mode="json")
-        await client.hset(product_key, mapping={"data": json.dumps(product_data, ensure_ascii=False)})
+        await client.hset(
+            product_key, mapping={"data": json.dumps(product_data, ensure_ascii=False)}
+        )
 
         return True
 
@@ -251,12 +248,7 @@ class RedisClient:
 
     # ==================== 任务相关操作 ====================
 
-    async def create_task(
-        self,
-        task_id: str,
-        product_id: str,
-        request: GenerationRequest
-    ) -> None:
+    async def create_task(self, task_id: str, product_id: str, request: GenerationRequest) -> None:
         """创建任务元数据。
 
         Args:
@@ -285,9 +277,7 @@ class RedisClient:
 
         # 使用事务保存
         async with client.pipeline() as pipe:
-            pipe.hset(task_key, mapping={
-                "metadata": json.dumps(metadata, ensure_ascii=False)
-            })
+            pipe.hset(task_key, mapping={"metadata": json.dumps(metadata, ensure_ascii=False)})
             pipe.zadd(list_key, {task_id: timestamp})
             await pipe.execute()
 
@@ -368,11 +358,7 @@ class RedisClient:
             return None
 
     async def update_task_progress(
-        self,
-        task_id: str,
-        status: str,
-        progress: float,
-        current_step: str
+        self, task_id: str, status: str, progress: float, current_step: str
     ) -> None:
         """更新任务进度。
 
@@ -400,10 +386,7 @@ class RedisClient:
         await client.hset(task_key, "metadata", json.dumps(metadata, ensure_ascii=False))
 
     async def list_tasks(
-        self,
-        page: int = 1,
-        page_size: int = 10,
-        status: str | None = None
+        self, page: int = 1, page_size: int = 10, status: str | None = None
     ) -> tuple[list[dict[str, Any]], int]:
         """获取任务列表。
 

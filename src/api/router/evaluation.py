@@ -96,8 +96,9 @@ async def get_hit_rate(
 
     # 获取唯一文档数
     result = await session.execute(
-        select(func.count(func.distinct(RAGUsageLog.task_id)))
-        .where(RAGUsageLog.created_at >= start_date)
+        select(func.count(func.distinct(RAGUsageLog.task_id))).where(
+            RAGUsageLog.created_at >= start_date
+        )
     )
     unique_tasks = result.scalar() or 0
 
@@ -112,7 +113,9 @@ async def get_hit_rate(
             period=f"{start_date.date()} ~ {end_date.date()}",
             total_retrievals=stats["total_retrievals"],
             unique_chunks_hit=chunk_stats["unique_chunks_hit"],
-            unique_docs_hit=len(set(c["chunk_id"] // 100 for c in chunk_stats.get("top_chunks", []))),
+            unique_docs_hit=len(
+                set(c["chunk_id"] // 100 for c in chunk_stats.get("top_chunks", []))
+            ),
             avg_results_per_query=round(avg_results, 2),
             top_hit_chunks=chunk_stats.get("top_chunks", []),
         )
@@ -151,8 +154,7 @@ async def compare_rag_vs_non_rag(
         select(
             func.count().label("count"),
             func.avg(GenerationTask.quality_score).label("avg_score"),
-        )
-        .where(
+        ).where(
             GenerationTask.created_at >= start_date,
             GenerationTask.created_at <= end_date,
             GenerationTask.rag_enabled == True,
@@ -166,8 +168,7 @@ async def compare_rag_vs_non_rag(
         select(
             func.count().label("count"),
             func.avg(GenerationTask.quality_score).label("avg_score"),
-        )
-        .where(
+        ).where(
             GenerationTask.created_at >= start_date,
             GenerationTask.created_at <= end_date,
             GenerationTask.rag_enabled == False,
@@ -183,7 +184,9 @@ async def compare_rag_vs_non_rag(
 
     non_rag_stats = {
         "task_count": non_rag_row.count if non_rag_row else 0,
-        "avg_quality_score": float(non_rag_row.avg_score) if non_rag_row and non_rag_row.avg_score else 0.0,
+        "avg_quality_score": float(non_rag_row.avg_score)
+        if non_rag_row and non_rag_row.avg_score
+        else 0.0,
     }
 
     # 计算改进百分比
@@ -265,7 +268,9 @@ async def get_evaluation_report(
             },
             quality_metrics={
                 "hit_rate": round(
-                    chunk_stats["unique_chunks_hit"] / max(usage_stats["total_retrievals"], 1) * 100,
+                    chunk_stats["unique_chunks_hit"]
+                    / max(usage_stats["total_retrievals"], 1)
+                    * 100,
                     2,
                 ),
             },

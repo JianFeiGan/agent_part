@@ -47,24 +47,16 @@ class ProductCreateRequest(BaseModel):
     short_description: str | None = Field(
         default=None, description="短描述，用于图片文案", max_length=100
     )
-    selling_points: list[SellingPoint] = Field(
-        default_factory=list, description="卖点列表"
-    )
-    specifications: list[ProductSpec] = Field(
-        default_factory=list, description="规格列表"
-    )
+    selling_points: list[SellingPoint] = Field(default_factory=list, description="卖点列表")
+    specifications: list[ProductSpec] = Field(default_factory=list, description="规格列表")
     target_audience: list[str] = Field(
         default_factory=list, description="目标人群标签", max_length=20
     )
     price_range: tuple[float, float] | None = Field(
         default=None, description="价格区间 (最低价, 最高价)"
     )
-    existing_images: list[str] = Field(
-        default_factory=list, description="已有图片URL列表"
-    )
-    existing_videos: list[str] = Field(
-        default_factory=list, description="已有视频URL列表"
-    )
+    existing_images: list[str] = Field(default_factory=list, description="已有图片URL列表")
+    existing_videos: list[str] = Field(default_factory=list, description="已有视频URL列表")
     tags: list[str] = Field(default_factory=list, description="标签列表")
 
     model_config = {
@@ -123,24 +115,14 @@ class ProductUpdateRequest(BaseModel):
     short_description: str | None = Field(
         default=None, description="短描述，用于图片文案", max_length=100
     )
-    selling_points: list[SellingPoint] | None = Field(
-        default=None, description="卖点列表"
-    )
-    specifications: list[ProductSpec] | None = Field(
-        default=None, description="规格列表"
-    )
-    target_audience: list[str] | None = Field(
-        default=None, description="目标人群标签"
-    )
+    selling_points: list[SellingPoint] | None = Field(default=None, description="卖点列表")
+    specifications: list[ProductSpec] | None = Field(default=None, description="规格列表")
+    target_audience: list[str] | None = Field(default=None, description="目标人群标签")
     price_range: tuple[float, float] | None = Field(
         default=None, description="价格区间 (最低价, 最高价)"
     )
-    existing_images: list[str] | None = Field(
-        default=None, description="已有图片URL列表"
-    )
-    existing_videos: list[str] | None = Field(
-        default=None, description="已有视频URL列表"
-    )
+    existing_images: list[str] | None = Field(default=None, description="已有图片URL列表")
+    existing_videos: list[str] | None = Field(default=None, description="已有视频URL列表")
     tags: list[str] | None = Field(default=None, description="标签列表")
 
     model_config = {
@@ -184,24 +166,14 @@ class ProductResponse(BaseModel):
     subcategory: str | None = Field(default=None, description="子类目")
     description: str = Field(..., description="商品描述")
     short_description: str | None = Field(default=None, description="短描述")
-    selling_points: list[SellingPoint] = Field(
-        default_factory=list, description="卖点列表"
-    )
-    specifications: list[ProductSpec] = Field(
-        default_factory=list, description="规格列表"
-    )
-    target_audience: list[str] = Field(
-        default_factory=list, description="目标人群标签"
-    )
+    selling_points: list[SellingPoint] = Field(default_factory=list, description="卖点列表")
+    specifications: list[ProductSpec] = Field(default_factory=list, description="规格列表")
+    target_audience: list[str] = Field(default_factory=list, description="目标人群标签")
     price_range: tuple[float, float] | None = Field(
         default=None, description="价格区间 (最低价, 最高价)"
     )
-    existing_images: list[str] = Field(
-        default_factory=list, description="已有图片URL列表"
-    )
-    existing_videos: list[str] = Field(
-        default_factory=list, description="已有视频URL列表"
-    )
+    existing_images: list[str] = Field(default_factory=list, description="已有图片URL列表")
+    existing_videos: list[str] = Field(default_factory=list, description="已有视频URL列表")
     tags: list[str] = Field(default_factory=list, description="标签列表")
 
     model_config = {
@@ -253,8 +225,6 @@ class ProductListQuery(BaseModel):
 
     model_config = {
         "json_schema_extra": {
-            "examples": [
-                {"name": "手表", "category": "digital", "page": 1, "page_size": 10}
-            ]
+            "examples": [{"name": "手表", "category": "digital", "page": 1, "page_size": 10}]
         }
     }

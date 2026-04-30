@@ -287,6 +287,7 @@ async def task_websocket(
 
             # 等待一段时间后再次查询
             import asyncio
+
             await asyncio.sleep(1)
 
     except WebSocketDisconnect:
@@ -302,4 +303,5 @@ async def get_redis_client() -> RedisClient:
         Redis 客户端实例。
     """
     from src.api.service.redis_client import get_redis
+
     return await get_redis()

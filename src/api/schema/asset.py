@@ -228,9 +228,7 @@ class QualityReportResponse(BaseModel):
     score: QualityScoreResponse = Field(..., description="质量评分")
 
     # 问题列表
-    issues: list[QualityIssueResponse] = Field(
-        default_factory=list, description="问题列表"
-    )
+    issues: list[QualityIssueResponse] = Field(default_factory=list, description="问题列表")
 
     # 审核结果
     passed: bool = Field(..., description="是否通过")

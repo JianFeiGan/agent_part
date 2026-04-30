@@ -113,9 +113,7 @@ class TestSearchResult:
 
     def test_search_result_creation(self) -> None:
         """测试搜索结果创建。"""
-        result = _create_search_result(
-            1, 1, "测试文档", "brand_guide", "测试内容", 0.85
-        )
+        result = _create_search_result(1, 1, "测试文档", "brand_guide", "测试内容", 0.85)
 
         assert result.chunk_id == 1
         assert result.doc_id == 1
@@ -126,12 +124,11 @@ class TestSearchResult:
 
     def test_search_result_to_dict(self) -> None:
         """测试搜索结果转字典。"""
-        result = _create_search_result(
-            1, 1, "测试文档", "brand_guide", "测试内容", 0.85
-        )
+        result = _create_search_result(1, 1, "测试文档", "brand_guide", "测试内容", 0.85)
 
         # SearchResult 是 dataclass，可以用 dataclasses.asdict
         from dataclasses import asdict
+
         result_dict = asdict(result)
 
         assert result_dict["chunk_id"] == 1

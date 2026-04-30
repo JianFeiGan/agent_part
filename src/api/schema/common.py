@@ -143,8 +143,6 @@ class HealthResponse(BaseModel):
 
     model_config = {
         "json_schema_extra": {
-            "examples": [
-                {"status": "ok", "version": "0.1.0", "redis": "connected"}
-            ]
+            "examples": [{"status": "ok", "version": "0.1.0", "redis": "connected"}]
         }
     }
