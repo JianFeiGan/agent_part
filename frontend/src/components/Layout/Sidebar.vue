@@ -65,6 +65,25 @@
           <template #title>检索测试</template>
         </el-menu-item>
       </el-sub-menu>
+
+      <el-sub-menu index="listing">
+        <template #title>
+          <el-icon><Promotion /></el-icon>
+          <span>刊登工具</span>
+        </template>
+        <el-menu-item index="/listing/import">
+          <el-icon><Upload /></el-icon>
+          <template #title>商品导入</template>
+        </el-menu-item>
+        <el-menu-item index="/listing/tasks">
+          <el-icon><List /></el-icon>
+          <template #title>刊登任务</template>
+        </el-menu-item>
+        <el-menu-item index="/listing/configs">
+          <el-icon><Setting /></el-icon>
+          <template #title>适配器配置</template>
+        </el-menu-item>
+      </el-sub-menu>
     </el-menu>
   </div>
 </template>

@@ -101,7 +101,10 @@ class TestRAGWorkflowE2E:
             query="TechBrand 品牌规范",
             results=[
                 _create_search_result(
-                    1, 1, "TechBrand 品牌手册", "brand_guide",
+                    1,
+                    1,
+                    "TechBrand 品牌手册",
+                    "brand_guide",
                     "品牌调性：科技感、简约、专业。配色：深蓝 #1A365D，白色 #FFFFFF。",
                     0.92,
                 )
@@ -116,7 +119,10 @@ class TestRAGWorkflowE2E:
             query="禁止词",
             results=[
                 _create_search_result(
-                    3, 3, "电商合规规则", "compliance_rule",
+                    3,
+                    3,
+                    "电商合规规则",
+                    "compliance_rule",
                     "禁止词：第一、最好、独家、国家级。",
                     0.95,
                 )
@@ -159,7 +165,10 @@ class TestRAGWorkflowE2E:
             query="智能手表 产品分析",
             results=[
                 _create_search_result(
-                    1, 1, "数码类目知识", "category_knowledge",
+                    1,
+                    1,
+                    "数码类目知识",
+                    "category_knowledge",
                     "智能手表核心卖点：健康监测、运动追踪。",
                     0.90,
                 )
@@ -207,7 +216,10 @@ class TestRAGWorkflowE2E:
             query="创意策划",
             results=[
                 _create_search_result(
-                    1, 1, "TechBrand 视觉规范", "brand_guide",
+                    1,
+                    1,
+                    "TechBrand 视觉规范",
+                    "brand_guide",
                     "配色：深蓝 #1A365D，科技感风格。",
                     0.88,
                 )
@@ -251,7 +263,10 @@ class TestRAGWorkflowE2E:
             query="合规规则",
             results=[
                 _create_search_result(
-                    1, 1, "电商合规规则", "compliance_rule",
+                    1,
+                    1,
+                    "电商合规规则",
+                    "compliance_rule",
                     "禁止词列表：第一、最好、独家。",
                     0.95,
                 )
@@ -313,9 +328,7 @@ class TestRAGFallback:
     ) -> None:
         """测试检索器失败时的降级处理。"""
         # 配置检索器抛出异常
-        mock_retriever.retrieve_for_product_analysis.side_effect = Exception(
-            "检索服务不可用"
-        )
+        mock_retriever.retrieve_for_product_analysis.side_effect = Exception("检索服务不可用")
 
         # 创建 Agent
         agent = RAGEnhancedRequirementAnalyzer(

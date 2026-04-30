@@ -107,9 +107,7 @@ class TaskManager:
             raise ValueError(f"商品不存在: {product_id}")
 
         # 启动后台任务执行工作流
-        task = asyncio.create_task(
-            self._execute_workflow(task_id, product, generation_request)
-        )
+        task = asyncio.create_task(self._execute_workflow(task_id, product, generation_request))
         self._running_tasks[task_id] = task
 
         return task_id
@@ -131,9 +129,7 @@ class TaskManager:
 
         try:
             # 更新状态为运行中
-            await redis.update_task_progress(
-                task_id, TaskStatus.RUNNING.value, 0, "init"
-            )
+            await redis.update_task_progress(task_id, TaskStatus.RUNNING.value, 0, "init")
 
             # 创建工作流并执行
             workflow = ProductVisualWorkflow()
@@ -207,9 +203,7 @@ class TaskManager:
             # 清理运行中的任务引用
             self._running_tasks.pop(task_id, None)
 
-    async def get_task_status(
-        self, task_id: str, redis: RedisClient
-    ) -> dict[str, Any]:
+    async def get_task_status(self, task_id: str, redis: RedisClient) -> dict[str, Any]:
         """获取任务状态。
 
         Args:
@@ -235,9 +229,7 @@ class TaskManager:
             "updated_at": metadata.get("updated_at"),
         }
 
-    async def get_task_detail(
-        self, task_id: str, redis: RedisClient
-    ) -> dict[str, Any]:
+    async def get_task_detail(self, task_id: str, redis: RedisClient) -> dict[str, Any]:
         """获取任务详情。
 
         Args:
@@ -311,9 +303,7 @@ class TaskManager:
                 pass
 
         # 更新状态为取消（使用 failed 状态）
-        await redis.update_task_progress(
-            task_id, TaskStatus.FAILED.value, 0, "cancelled"
-        )
+        await redis.update_task_progress(task_id, TaskStatus.FAILED.value, 0, "cancelled")
 
         return True
 

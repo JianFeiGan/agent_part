@@ -159,15 +159,10 @@ class RAGLogger:
             .group_by(RAGUsageLog.agent_name)
             .order_by(func.count().desc())
         )
-        agent_stats = [
-            {"agent": row.agent_name, "count": row.count}
-            for row in agent_stats_result
-        ]
+        agent_stats = [{"agent": row.agent_name, "count": row.count} for row in agent_stats_result]
 
         # 平均相似度
-        avg_score_result = await session.execute(
-            select(func.avg(RAGUsageLog.similarity_scores[1]))
-        )
+        avg_score_result = await session.execute(select(func.avg(RAGUsageLog.similarity_scores[1])))
         avg_score = avg_score_result.scalar()
 
         return {
@@ -224,8 +219,7 @@ class RAGLogger:
             "total_retrievals": len(all_chunk_ids),
             "unique_chunks_hit": len(chunk_hit_count),
             "top_chunks": [
-                {"chunk_id": chunk_id, "hits": count}
-                for chunk_id, count in sorted_chunks[:10]
+                {"chunk_id": chunk_id, "hits": count} for chunk_id, count in sorted_chunks[:10]
             ],
         }
 

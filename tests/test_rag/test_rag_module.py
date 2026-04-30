@@ -47,6 +47,7 @@ class TestEmbeddingService:
             mock_settings.return_value.embedding_device = "cpu"
 
             from src.rag.embeddings import EmbeddingService
+
             service = EmbeddingService()
 
             assert service.settings is not None
@@ -118,12 +119,8 @@ class TestKnowledgeRetriever:
     def test_build_context(self, retriever: KnowledgeRetriever) -> None:
         """测试上下文构建。"""
         results = [
-            _create_search_result(
-                1, 1, "品牌规范", "brand_guide", "品牌调性说明", 0.85
-            ),
-            _create_search_result(
-                2, 2, "类目知识", "category_knowledge", "商品特点", 0.75
-            ),
+            _create_search_result(1, 1, "品牌规范", "brand_guide", "品牌调性说明", 0.85),
+            _create_search_result(2, 2, "类目知识", "category_knowledge", "商品特点", 0.75),
         ]
 
         context = retriever._build_context(results)
@@ -184,9 +181,7 @@ class TestRetrievalResult:
 
     def test_result_with_data(self) -> None:
         """测试带数据的结果。"""
-        search_result = _create_search_result(
-            1, 1, "测试文档", "brand_guide", "测试内容", 0.85
-        )
+        search_result = _create_search_result(1, 1, "测试文档", "brand_guide", "测试内容", 0.85)
 
         result = RetrievalResult(
             query="测试查询",
