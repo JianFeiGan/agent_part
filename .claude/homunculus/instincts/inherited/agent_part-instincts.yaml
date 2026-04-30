@@ -1,0 +1,696 @@
+# Instincts generated from https://github.com/JianFeiGan/agent_part
+# Generated: 2026-04-30T01:45:25.624Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: agent_part-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: feat, chore, docs, fix, refactor
+
+## Evidence
+
+- 21 commits analyzed
+- Detected conventional commit pattern
+- Examples: feat(listing): 新增刊登工具 Pydantic 数据模型, chore: add pillow dependency for image processing
+
+---
+id: agent_part-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Commit Length
+
+## Action
+
+Write moderate-length commit messages (~59 characters)
+
+## Evidence
+
+- Average commit message length: 59 chars
+- Based on 21 commits
+
+---
+id: agent_part-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Naming Files
+
+## Action
+
+Use snake_case naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: snake_case
+
+---
+id: agent_part-import-alias
+trigger: "when importing modules"
+confidence: 0.85
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Import Alias
+
+## Action
+
+Use path aliases (@/, ~/) instead of relative imports
+
+## Evidence
+
+- Import analysis shows alias pattern
+- Example: import { x } from '@/lib/x'
+
+---
+id: agent_part-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: agent_part-arch-type-based
+trigger: "when adding new code"
+confidence: 0.8
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Arch Type Based
+
+## Action
+
+Place code in the appropriate type folder (components/, services/, utils/, etc.)
+
+## Evidence
+
+- Type-based module organization detected
+- Folders: agents, api, db, graph, models
+
+---
+id: agent_part-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: agent_part-test-naming
+trigger: "when creating a test file"
+confidence: 0.85
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Test Naming
+
+## Action
+
+Name test files using the pattern: *.test.ts
+
+## Evidence
+
+- File pattern: *.test.ts
+- Consistent across test files
+
+---
+id: agent_part-test-types
+trigger: "when planning tests for a feature"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Test Types
+
+## Action
+
+Write unit, e2e tests to match project standards
+
+## Evidence
+
+- Test types detected: unit, e2e
+- Coverage config: no
+
+---
+id: agent_part-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~26x per month
+- Files: frontend/src/api/*, frontend/src/components/layout/*, frontend/src/router/*
+
+---
+id: agent_part-workflow-add-new-agent-or-service-class
+trigger: "when doing add new agent or service class"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Workflow Add New Agent Or Service Class
+
+## Action
+
+Follow the add-new-agent-or-service-class workflow:
+1. Create new agent/service class file in src/agents/
+2. If needed, add supporting files (e.g., platform specs, rules, config)
+3. Add or update test file in tests/test_agents/
+4. Export or register the new agent if required
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: src/agents/*.py, tests/test_agents/*.py
+
+---
+id: agent_part-workflow-add-or-update-api-endpoint
+trigger: "when doing add or update api endpoint"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Workflow Add Or Update Api Endpoint
+
+## Action
+
+Follow the add-or-update-api-endpoint workflow:
+1. Create or update API route file in src/api/router/
+2. Update or add schema in src/api/schema/
+3. Add or update API test in tests/test_api/
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: src/api/router/*.py, src/api/schema/*.py, tests/test_api/*.py
+
+---
+id: agent_part-workflow-add-or-update-data-model
+trigger: "when doing add or update data model"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Workflow Add Or Update Data Model
+
+## Action
+
+Follow the add-or-update-data-model workflow:
+1. Create or update model file in src/models/ or src/db/
+2. Update __init__.py to export new models
+3. Add or update model test in tests/test_models/ or tests/test_db/
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: src/models/*.py, src/models/__init__.py, src/db/*.py
+
+---
+id: agent_part-workflow-implement-or-extend-workflow-logic
+trigger: "when doing implement or extend workflow logic"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Workflow Implement Or Extend Workflow Logic
+
+## Action
+
+Follow the implement-or-extend-workflow-logic workflow:
+1. Create or update workflow/state file in src/graph/
+2. Export new workflow/state in src/graph/__init__.py
+3. Add or update workflow test in tests/test_graph/
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/graph/*.py, src/graph/__init__.py, tests/test_graph/*.py
+
+---
+id: agent_part-workflow-add-or-update-frontend-page-or-types
+trigger: "when doing add or update frontend page or types"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Workflow Add Or Update Frontend Page Or Types
+
+## Action
+
+Follow the add-or-update-frontend-page-or-types workflow:
+1. Create or update Vue component in frontend/src/views/listing/
+2. Update TypeScript types in frontend/src/types/
+3. Update or add API function in frontend/src/api/
+4. Update router or sidebar if needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: frontend/src/views/listing/*.vue, frontend/src/types/listing.ts, frontend/src/api/listing.ts
+
+---
+id: agent_part-workflow-add-or-update-adapter-config-manager
+trigger: "when doing add or update adapter config manager"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Workflow Add Or Update Adapter Config Manager
+
+## Action
+
+Follow the add-or-update-adapter-config-manager workflow:
+1. Create or update AdapterConfigManager in src/agents/adapter_config.py
+2. Update or add schema in src/api/schema/adapter_config.py
+3. Add or update test in tests/test_agents/test_adapter_config.py
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: src/agents/adapter_config.py, src/api/schema/adapter_config.py, tests/test_agents/test_adapter_config.py
+
+---
+id: agent_part-instinct-file-naming
+trigger: "When creating a new Python file"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct File Naming
+
+## Action
+
+Name the file using snake_case
+
+## Evidence
+
+- Pattern in src/agents/*.py
+- Pattern in src/models/*.py
+
+---
+id: agent_part-instinct-function-naming
+trigger: "When defining a new function in Python"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Function Naming
+
+## Action
+
+Name the function using camelCase
+
+## Evidence
+
+- Pattern in src/agents/*.py
+- Pattern in src/models/*.py
+
+---
+id: agent_part-instinct-class-naming
+trigger: "When defining a new class in Python"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Class Naming
+
+## Action
+
+Name the class using PascalCase
+
+## Evidence
+
+- Pattern in src/agents/*.py
+- Pattern in src/models/*.py
+
+---
+id: agent_part-instinct-constant-naming
+trigger: "When defining a constant in Python"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Constant Naming
+
+## Action
+
+Name the constant using SCREAMING_SNAKE_CASE
+
+## Evidence
+
+- Pattern in src/models/*.py
+
+---
+id: agent_part-instinct-import-alias
+trigger: "When importing modules in Python"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Import Alias
+
+## Action
+
+Use alias style imports
+
+## Evidence
+
+- Pattern in src/agents/*.py
+- Pattern in src/models/*.py
+
+---
+id: agent_part-instinct-export-named
+trigger: "When exporting modules or objects in Python"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Export Named
+
+## Action
+
+Use named exports (e.g., via __init__.py)
+
+## Evidence
+
+- Pattern in src/models/__init__.py
+- Pattern in src/db/__init__.py
+
+---
+id: agent_part-instinct-test-location
+trigger: "When adding or updating tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Test Location
+
+## Action
+
+Place tests in the separate 'tests' directory, mirroring the src structure
+
+## Evidence
+
+- Pattern in tests/test_models/*.py
+- Pattern in tests/test_agents/*.py
+
+---
+id: agent_part-instinct-test-type
+trigger: "When writing tests"
+confidence: 0.7
+domain: testing
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Test Type
+
+## Action
+
+Write both unit and e2e tests as appropriate
+
+## Evidence
+
+- Pattern in tests/test_models/*.py
+- Pattern in tests/test_api/*.py
+
+---
+id: agent_part-instinct-test-pattern
+trigger: "When adding a new feature or model"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Test Pattern
+
+## Action
+
+Add or update corresponding test files in the 'tests' directory
+
+## Evidence
+
+- Seen in commit 'feat(listing): 新增刊登工具 Pydantic 数据模型'
+- Pattern in workflow commit sequences
+
+---
+id: agent_part-instinct-git-commit-format
+trigger: "When making a git commit"
+confidence: 0.95
+domain: git
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Git Commit Format
+
+## Action
+
+Use conventional commit format: <type>(<scope>): <description>
+
+## Evidence
+
+- Seen in commit 'feat(listing): 新增刊登工具 Pydantic 数据模型'
+- Pattern in all commit examples
+
+---
+id: agent_part-instinct-git-commit-types
+trigger: "When categorizing a commit"
+confidence: 0.95
+domain: git
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Git Commit Types
+
+## Action
+
+Use one of the following prefixes: feat, fix, chore, docs, refactor
+
+## Evidence
+
+- Pattern in commit prefixes
+- Seen in commit examples
+
+---
+id: agent_part-instinct-add-new-agent
+trigger: "When introducing a new agent or service class for a workflow step or platform"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Add New Agent
+
+## Action
+
+Create a new file in src/agents/, add supporting files if needed, add or update tests in tests/test_agents/, and export/register the new agent if required
+
+## Evidence
+
+- Workflow: add-new-agent-or-service-class
+- Pattern in src/agents/*.py and tests/test_agents/*.py
+
+---
+id: agent_part-instinct-add-or-update-api-endpoint
+trigger: "When exposing new functionality or data via the API"
+confidence: 0.95
+domain: workflow
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Add Or Update Api Endpoint
+
+## Action
+
+Create or update API route in src/api/router/, update or add schema in src/api/schema/, and add or update tests in tests/test_api/
+
+## Evidence
+
+- Workflow: add-or-update-api-endpoint
+- Pattern in src/api/router/*.py and tests/test_api/*.py
+
+---
+id: agent_part-instinct-add-or-update-data-model
+trigger: "When introducing or modifying data structures for listings, compliance, or config"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Add Or Update Data Model
+
+## Action
+
+Create or update model in src/models/ or src/db/, update __init__.py to export new models, and add or update tests in tests/test_models/ or tests/test_db/
+
+## Evidence
+
+- Workflow: add-or-update-data-model
+- Pattern in src/models/*.py, src/db/*.py, and tests/test_models/*.py
+
+---
+id: agent_part-instinct-implement-or-extend-workflow-logic
+trigger: "When adding steps, nodes, or logic to the listing workflow engine"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Implement Or Extend Workflow Logic
+
+## Action
+
+Create or update workflow/state file in src/graph/, export in src/graph/__init__.py, and add or update tests in tests/test_graph/
+
+## Evidence
+
+- Workflow: implement-or-extend-workflow-logic
+- Pattern in src/graph/*.py and tests/test_graph/*.py
+
+---
+id: agent_part-instinct-add-or-update-frontend-page-or-types
+trigger: "When exposing new features or data to the frontend UI"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Add Or Update Frontend Page Or Types
+
+## Action
+
+Create or update Vue component in frontend/src/views/listing/, update TypeScript types in frontend/src/types/, update or add API function in frontend/src/api/, update router or sidebar if needed
+
+## Evidence
+
+- Workflow: add-or-update-frontend-page-or-types
+- Pattern in frontend/src/views/listing/*.vue and related files
+
+---
+id: agent_part-instinct-add-or-update-adapter-config-manager
+trigger: "When managing or exposing adapter configuration (credentials, caching, multi-shop)"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Add Or Update Adapter Config Manager
+
+## Action
+
+Create or update AdapterConfigManager in src/agents/adapter_config.py, update or add schema in src/api/schema/adapter_config.py, and add or update test in tests/test_agents/test_adapter_config.py
+
+## Evidence
+
+- Workflow: add-or-update-adapter-config-manager
+- Pattern in src/agents/adapter_config.py and related files
+
