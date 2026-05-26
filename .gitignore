@@ -153,6 +153,13 @@ venv.bak/
 
 # mkdocs documentation
 /site
+site/
+
+# Docker
+docker-compose.override.yml
+
+# Backup files
+*.bak
 
 # mypy
 .mypy_cache/
