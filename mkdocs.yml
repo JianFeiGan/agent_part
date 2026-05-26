@@ -1,0 +1,48 @@
+site_name: Agent Part
+site_description: 多Agent协作商品视觉生成系统
+site_url: https://jianfeigan.github.io/agent_part/
+repo_url: https://github.com/JianFeiGan/agent_part
+repo_name: JianFeiGan/agent_part
+
+theme:
+  name: material
+  language: zh
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换到暗色模式
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换到亮色模式
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+nav:
+  - 首页: index.md
+  - 快速开始:
+    - 安装指南: getting-started/installation.md
+    - 5分钟上手: getting-started/quickstart.md
+  - 核心概念:
+    - 系统架构: concepts/architecture.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - attr_list
+  - md_in_html
