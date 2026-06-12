@@ -125,13 +125,13 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
     async def _generate_images(
         self,
         prompt_data: dict[str, Any],
-        state: AgentState,
+        _state: AgentState,
     ) -> list[GeneratedImage]:
         """生成图片。
 
         Args:
             prompt_data: 提示词数据。
-            state: 当前状态。
+            _state: 当前状态。
 
         Returns:
             生成的图片列表。
