@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from src.db.models import CategoryMemory, GraphRAGEdge, GraphRAGEntity
 
@@ -139,15 +140,23 @@ class GraphMemoryService:
         Returns:
             边关系字典列表，包含源/目标实体名称。
         """
+        source_entity = aliased(GraphRAGEntity)
+        target_entity = aliased(GraphRAGEntity)
         stmt = (
             select(
                 GraphRAGEdge,
-                GraphRAGEntity.name.label("source_name"),
-                GraphRAGEntity.entity_type.label("source_type"),
+                source_entity.name.label("source_name"),
+                source_entity.entity_type.label("source_type"),
+                target_entity.name.label("target_name"),
+                target_entity.entity_type.label("target_type"),
             )
             .join(
-                GraphRAGEntity,
-                GraphRAGEdge.source_entity_id == GraphRAGEntity.id,
+                source_entity,
+                GraphRAGEdge.source_entity_id == source_entity.id,
+            )
+            .join(
+                target_entity,
+                GraphRAGEdge.target_entity_id == target_entity.id,
             )
             .where(GraphRAGEdge.category == category)
         )
@@ -172,6 +181,8 @@ class GraphMemoryService:
                 "evidence": edge.evidence,
                 "source_name": row.source_name,
                 "source_type": row.source_type,
+                "target_name": row.target_name,
+                "target_type": row.target_type,
             })
 
         logger.debug(
@@ -292,9 +303,10 @@ class GraphMemoryService:
             parts.append("【关系线索】")
             for i, edge in enumerate(context.edges, 1):
                 source = edge.get("source_name", f"Entity#{edge['source_entity_id']}")
+                target = edge.get("target_name", f"Entity#{edge['target_entity_id']}")
                 parts.append(
                     f"{i}. {source} --[{edge['relationship_type']}]--> "
-                    f"Entity#{edge['target_entity_id']} "
+                    f"{target} "
                     f"(权重: {edge['weight']:.2f})"
                 )
                 if edge.get("evidence"):

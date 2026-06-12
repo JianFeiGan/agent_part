@@ -404,33 +404,27 @@ class RedisClient:
         client = await self._ensure_connected()
         list_key = self._key("task", "list")
 
-        # 获取总数
-        total = await client.zcard(list_key)
+        task_ids = await client.zrevrange(list_key, 0, -1)
 
-        # 计算分页偏移
-        start = (page - 1) * page_size
-        end = start + page_size - 1
-
-        # 按时间倒序获取任务 ID 列表
-        task_ids = await client.zrevrange(list_key, start, end)
-
-        # 批量获取任务元数据
-        tasks: list[dict[str, Any]] = []
+        filtered_tasks: list[dict[str, Any]] = []
         for task_id in task_ids:
             metadata = await self.get_task_metadata(task_id)
-            if metadata:
-                # 状态过滤
-                if status and metadata.get("status") != status:
-                    continue
+            if metadata is None:
+                continue
+            if status and metadata.get("status") != status:
+                continue
 
-                # 获取任务状态以提取错误信息
-                task_state = await self.get_task_state(task_id)
-                if task_state and task_state.error:
-                    metadata["error_message"] = task_state.error
+            task_state = await self.get_task_state(task_id)
+            if task_state and task_state.error:
+                metadata["error_message"] = task_state.error
 
-                tasks.append(metadata)
+            filtered_tasks.append(metadata)
 
-        return tasks, total
+        total = len(filtered_tasks)
+        start = (page - 1) * page_size
+        end = start + page_size
+
+        return filtered_tasks[start:end], total
 
     async def delete_task(self, task_id: str) -> bool:
         """删除任务。

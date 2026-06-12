@@ -9,6 +9,7 @@ Description:
 """
 
 import asyncio
+from types import MethodType
 
 import pytest
 
@@ -226,5 +227,50 @@ class TestDashboardAPI:
             )
             assert result.data is not None
             assert result.data.recent_tasks[0].product_id is None
+
+        asyncio.run(_run())
+
+
+class FakeRedisListClient:
+    """模拟 Redis sorted set 客户端。"""
+
+    async def zrevrange(self, key: str, start: int, end: int) -> list[str]:  # noqa: ARG002
+        return ["task_004", "task_003", "task_002", "task_001"]
+
+
+class TestRedisClientTaskListing:
+    """RedisClient 任务列表过滤语义测试。"""
+
+    def test_list_tasks_filters_before_pagination(self) -> None:
+        """测试状态过滤先于分页，并返回过滤后的总数。"""
+        from src.api.service.redis_client import RedisClient
+
+        redis_client = RedisClient()
+        metadata_by_id = {
+            "task_004": {"task_id": "task_004", "status": "completed"},
+            "task_003": {"task_id": "task_003", "status": "running"},
+            "task_002": {"task_id": "task_002", "status": "failed"},
+            "task_001": {"task_id": "task_001", "status": "running"},
+        }
+
+        async def _ensure_connected(self) -> FakeRedisListClient:  # noqa: ANN001
+            return FakeRedisListClient()
+
+        async def _get_task_metadata(self, task_id: str) -> dict:
+            return metadata_by_id[task_id]
+
+        async def _get_task_state(self, task_id: str):  # noqa: ANN001, ARG001
+            return None
+
+        redis_client._ensure_connected = MethodType(_ensure_connected, redis_client)  # type: ignore[method-assign]
+        redis_client.get_task_metadata = MethodType(_get_task_metadata, redis_client)  # type: ignore[method-assign]
+        redis_client.get_task_state = MethodType(_get_task_state, redis_client)  # type: ignore[method-assign]
+
+        async def _run() -> None:
+            tasks, total = await redis_client.list_tasks(page=1, page_size=1, status="running")
+
+            assert total == 2
+            assert len(tasks) == 1
+            assert tasks[0]["task_id"] == "task_003"
 
         asyncio.run(_run())

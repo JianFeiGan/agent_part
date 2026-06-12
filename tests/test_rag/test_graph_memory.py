@@ -259,9 +259,11 @@ class TestGraphMemoryService:
         edge = _create_edge(1, 1, 2, "has_attribute", "digital", 0.9, evidence="属性推断")
 
         row_mock = MagicMock()
-        row_mock.__getitem__ = MagicMock(side_effect=[edge, "智能手表", "concept"])
+        row_mock.__getitem__ = MagicMock(side_effect=[edge, "智能手表", "concept", "长续航", "attribute"])
         row_mock.source_name = "智能手表"
         row_mock.source_type = "concept"
+        row_mock.target_name = "长续航"
+        row_mock.target_type = "attribute"
 
         exec_result = MagicMock()
         exec_result.all.return_value = [row_mock]
@@ -275,6 +277,8 @@ class TestGraphMemoryService:
         assert result[0]["evidence"] == "属性推断"
         assert result[0]["source_name"] == "智能手表"
         assert result[0]["source_type"] == "concept"
+        assert result[0]["target_name"] == "长续航"
+        assert result[0]["target_type"] == "attribute"
 
     @pytest.mark.asyncio
     async def test_list_edges_with_type_filter(
@@ -284,9 +288,11 @@ class TestGraphMemoryService:
         edge = _create_edge(1, 1, 2, "has_attribute", "digital", 0.9)
 
         row_mock = MagicMock()
-        row_mock.__getitem__ = MagicMock(side_effect=[edge, "智能手表", "concept"])
+        row_mock.__getitem__ = MagicMock(side_effect=[edge, "智能手表", "concept", "长续航", "attribute"])
         row_mock.source_name = "智能手表"
         row_mock.source_type = "concept"
+        row_mock.target_name = "长续航"
+        row_mock.target_type = "attribute"
 
         exec_result = MagicMock()
         exec_result.all.return_value = [row_mock]
@@ -349,6 +355,8 @@ class TestGraphMemoryService:
                 "evidence": "属性推断",
                 "source_name": "智能手表",
                 "source_type": "concept",
+                "target_name": "长续航",
+                "target_type": "attribute",
             }]
             mock_mem.return_value = cm
 
@@ -443,6 +451,8 @@ class TestGraphMemoryServiceFormatContext:
                     "evidence": "属性推断",
                     "source_name": "智能手表",
                     "source_type": "concept",
+                    "target_name": "长续航",
+                    "target_type": "attribute",
                 },
             ],
         )
@@ -451,6 +461,8 @@ class TestGraphMemoryServiceFormatContext:
         assert "【关系线索】" in formatted
         assert "has_attribute" in formatted
         assert "智能手表" in formatted
+        assert "长续航" in formatted
+        assert "Entity#2" not in formatted
         assert "0.85" in formatted
         assert "依据: 属性推断" in formatted
 
@@ -472,7 +484,8 @@ class TestGraphMemoryServiceFormatContext:
             edges=[
                 {"id": 1, "source_entity_id": 1, "target_entity_id": 2,
                  "relationship_type": "has_attribute", "weight": 1.0,
-                 "evidence": None, "source_name": "智能手表", "source_type": "concept"},
+                 "evidence": None, "source_name": "智能手表", "source_type": "concept",
+                 "target_name": "长续航", "target_type": "attribute"},
             ],
         )
         formatted = service.format_context(ctx)
