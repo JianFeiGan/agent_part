@@ -26,9 +26,12 @@ curl -X POST http://localhost:8000/api/v1/tasks \
   -d '{
     "product_id": "prod_001",
     "task_type": "image_and_video",
-    "platform": "amazon"
+    "image_types": ["main", "scene"],
+    "image_count_per_type": 1
   }'
 ```
+
+> **注意**：当前图片/视频生成使用 Mock Provider，返回 `mock://images/...` 和 `mock://videos/...` 占位 URL，不代表真实公网可访问的图片/视频文件。
 
 ## 4. 查看任务状态
 
