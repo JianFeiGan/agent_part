@@ -11,6 +11,7 @@ Description:
 from fastapi import APIRouter
 
 from src.api.router.adapter_config import router as adapter_config_router
+from src.api.router.dashboard import router as dashboard_router
 from src.api.router.evaluation import router as evaluation_router
 from src.api.router.health import router as health_router
 from src.api.router.knowledge import router as knowledge_router
@@ -31,6 +32,7 @@ api_router.include_router(evaluation_router, prefix="/evaluation", tags=["RAG评
 api_router.include_router(listing_router, prefix="/listing", tags=["刊登工具"])
 api_router.include_router(listing_push_router, prefix="/listing", tags=["刊登推送"])
 api_router.include_router(adapter_config_router, prefix="/listing", tags=["适配器配置"])
+api_router.include_router(dashboard_router, prefix="/dashboard", tags=["仪表盘"])
 
 __all__ = [
     "api_router",
@@ -40,4 +42,5 @@ __all__ = [
     "knowledge_router",
     "evaluation_router",
     "listing_router",
+    "dashboard_router",
 ]
