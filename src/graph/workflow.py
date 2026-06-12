@@ -35,6 +35,95 @@ AGENT_NAMES = {
 }
 
 
+# ==================== 模块级路由函数 ====================
+
+
+def route_after_orchestrator(
+    state: AgentState,
+) -> Literal["requirement_analyzer", "end"]:
+    """编排器后的路由。
+
+    Args:
+        state: 当前 Agent 状态。
+
+    Returns:
+        下一个节点名称。
+    """
+    if state.has_error():
+        return "end"
+    return "requirement_analyzer"
+
+
+def route_after_design(
+    state: AgentState,
+) -> Literal["image_generator", "video_generator", "end"]:
+    """设计后的路由，根据任务类型决定生成方向。
+
+    Args:
+        state: 当前 Agent 状态。
+
+    Returns:
+        下一个节点名称。
+    """
+    if state.has_error():
+        return "end"
+
+    request = state.generation_request
+    if request is None:
+        return "end"
+
+    task_type = request.task_type
+    if task_type == "image_only":
+        return "image_generator"
+    elif task_type == "video_only":
+        return "video_generator"
+    else:
+        return "image_generator"
+
+
+def route_after_image_generation(
+    state: AgentState,
+) -> Literal["video_generator", "quality_reviewer", "end"]:
+    """图片生成后的路由。
+
+    image_only: 直接到质量审核。
+    image_and_video: 必须到视频生成，不能跳过。
+
+    Args:
+        state: 当前 Agent 状态。
+
+    Returns:
+        下一个节点名称。
+    """
+    if state.has_error():
+        return "end"
+
+    request = state.generation_request
+    if request is None:
+        return "quality_reviewer"
+
+    task_type = request.task_type
+    if task_type == "image_and_video":
+        return "video_generator"
+    return "quality_reviewer"
+
+
+def route_after_video_generation(
+    state: AgentState,
+) -> Literal["quality_reviewer", "end"]:
+    """视频生成后的路由。
+
+    Args:
+        state: 当前 Agent 状态。
+
+    Returns:
+        下一个节点名称。
+    """
+    if state.has_error():
+        return "end"
+    return "quality_reviewer"
+
+
 def create_agent_log(agent_key: str, status: str = "running") -> AgentLog:
     """创建 Agent 执行日志。
 
@@ -375,43 +464,7 @@ class WorkflowBuilder:
         # 设置入口点
         self.graph.set_entry_point("orchestrator")
 
-        # 条件路由函数
-        def route_after_orchestrator(
-            state: AgentState,
-        ) -> Literal["requirement_analyzer", "end"]:
-            """编排器后的路由。"""
-            if state.has_error():
-                return "end"
-            return "requirement_analyzer"
-
-        def route_after_design(
-            state: AgentState,
-        ) -> Literal["image_generator", "video_generator", "both", "end"]:
-            """设计后的路由，根据任务类型决定生成方向。"""
-            if state.has_error():
-                return "end"
-
-            request = state.generation_request
-            if request is None:
-                return "end"
-
-            task_type = request.task_type
-            if task_type == "image_only":
-                return "image_generator"
-            elif task_type == "video_only":
-                return "video_generator"
-            else:
-                return "both"
-
-        def route_after_generation(
-            state: AgentState,
-        ) -> Literal["quality_reviewer", "end"]:
-            """生成后的路由。"""
-            if state.has_error():
-                return "end"
-            return "quality_reviewer"
-
-        # 添加条件边
+        # 添加条件边（使用模块级路由函数）
         self.graph.add_conditional_edges(
             "orchestrator",
             route_after_orchestrator,
@@ -432,16 +485,16 @@ class WorkflowBuilder:
             {
                 "image_generator": "image_generator",
                 "video_generator": "video_generator",
-                "both": "image_generator",  # 先走图片，再走视频
                 "end": END,
             },
         )
 
-        # 图片生成后到质量审核
+        # 图片生成后路由：image_and_video 到 video_generator，其他到 quality_reviewer
         self.graph.add_conditional_edges(
             "image_generator",
-            route_after_generation,
+            route_after_image_generation,
             {
+                "video_generator": "video_generator",
                 "quality_reviewer": "quality_reviewer",
                 "end": END,
             },
@@ -450,7 +503,7 @@ class WorkflowBuilder:
         # 视频生成后到质量审核
         self.graph.add_conditional_edges(
             "video_generator",
-            route_after_generation,
+            route_after_video_generation,
             {
                 "quality_reviewer": "quality_reviewer",
                 "end": END,

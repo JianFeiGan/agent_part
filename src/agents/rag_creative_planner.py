@@ -160,7 +160,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
         )
         self.register_prompt("rag_color", color_prompt)
 
-    async def execute(self, AgentState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行RAG增强的创意策划。
 
         Args:
