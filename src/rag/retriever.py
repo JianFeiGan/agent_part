@@ -263,6 +263,40 @@ class KnowledgeRetriever:
         )
         return result
 
+    async def retrieve_category_memory_context(
+        self,
+        session: AsyncSession,
+        category: str,
+        limit: int = 20,
+    ) -> str:
+        """检索类目记忆上下文。
+
+        从 Graph RAG 实体/边和 CategoryMemory 表获取类目知识上下文，
+        并格式化为可读字符串。空上下文返回空字符串 ""。
+
+        Args:
+            session: 数据库会话。
+            category: 商品类目。
+            limit: 实体返回数量限制。
+
+        Returns:
+            格式化后的上下文字符串，无数据时返回空字符串。
+        """
+        try:
+            from src.rag.graph_memory import GraphMemoryService
+
+            service = GraphMemoryService()
+            context = await service.build_category_context(session, category, limit=limit)
+
+            # 如果没有任何数据则返回空字符串
+            if not context.entities and not context.edges and context.category_memory is None:
+                return ""
+
+            return service.format_context(context)
+        except ImportError as e:
+            logger.warning(f"GraphMemoryService not available: {e}")
+            return ""
+
     def _build_context(self, results: list[SearchResult]) -> str:
         """构建上下文文本。
 

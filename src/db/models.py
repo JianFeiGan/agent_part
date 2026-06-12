@@ -218,3 +218,144 @@ class GenerationTask(Base):
 
     def __repr__(self) -> str:
         return f"<GenerationTask(id={self.id}, task_id='{self.task_id}', status='{self.status}')>"
+
+
+class GraphRAGEntity(Base):
+    """Graph RAG 实体模型。
+
+    知识图谱中的节点，表示类目下的概念、属性、品牌等实体。
+
+    Attributes:
+        id: 主键。
+        name: 实体名称。
+        entity_type: 实体类型 (concept, attribute, brand, style, etc.)。
+        category: 商品类目。
+        description: 实体描述。
+        aliases: 实体别名列表 (JSON)。
+        extra_data: 额外元数据。
+        embedding: 向量嵌入 (BGE-large-zh 1024维)。
+        created_at: 创建时间。
+        updated_at: 更新时间。
+    """
+
+    __tablename__ = "graph_rag_entities"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, comment="实体名称")
+    entity_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, index=True, comment="实体类型"
+    )
+    category: Mapped[str] = mapped_column(String(100), nullable=False, index=True, comment="商品类目")
+    description: Mapped[str | None] = mapped_column(Text, comment="实体描述")
+    aliases: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), comment="BGE-large-zh 向量")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<GraphRAGEntity(id={self.id}, name='{self.name}', "
+            f"type='{self.entity_type}', category='{self.category}')>"
+        )
+
+
+class GraphRAGEdge(Base):
+    """Graph RAG 边模型。
+
+    知识图谱中的边，表示实体之间的语义关系。
+
+    Attributes:
+        id: 主键。
+        source_entity_id: 源实体 ID。
+        target_entity_id: 目标实体 ID。
+        relationship_type: 关系类型 (related_to, has_attribute, belongs_to, etc.)。
+        category: 商品类目。
+        weight: 关系权重。
+        evidence: 关系依据 (来源文本或推理依据)。
+        extra_data: 额外元数据。
+        created_at: 创建时间。
+        updated_at: 更新时间。
+        source_entity: 源实体关系。
+        target_entity: 目标实体关系。
+    """
+
+    __tablename__ = "graph_rag_edges"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source_entity_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("graph_rag_entities.id"), nullable=False, index=True
+    )
+    target_entity_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("graph_rag_entities.id"), nullable=False, index=True
+    )
+    relationship_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, index=True, comment="关系类型"
+    )
+    category: Mapped[str] = mapped_column(String(100), nullable=False, index=True, comment="商品类目")
+    weight: Mapped[float] = mapped_column(Float, default=1.0)
+    evidence: Mapped[str | None] = mapped_column(Text, comment="关系依据")
+    extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # 关系
+    source_entity: Mapped["GraphRAGEntity"] = relationship(
+        "GraphRAGEntity", foreign_keys=[source_entity_id]
+    )
+    target_entity: Mapped["GraphRAGEntity"] = relationship(
+        "GraphRAGEntity", foreign_keys=[target_entity_id]
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<GraphRAGEdge(id={self.id}, {self.source_entity_id} "
+            f"-[{self.relationship_type}]-> {self.target_entity_id})>"
+        )
+
+
+class CategoryMemory(Base):
+    """类目记忆模型。
+
+    存储特定类目下的累积知识和经验，使用扁平化字段设计。
+
+    Attributes:
+        id: 主键。
+        category: 商品类目 (unique+index)。
+        summary: 类目摘要概述。
+        best_practices: 最佳实践列表 (JSONB)。
+        negative_patterns: 避坑/负面模式列表 (JSONB)。
+        style_guidelines: 风格指南字典 (JSONB)。
+        performance_hints: 性能/效果提示字典 (JSONB)。
+        extra_data: 额外元数据。
+        embedding: 向量嵌入 (BGE-large-zh 1024维)。
+        created_at: 创建时间。
+        updated_at: 更新时间。
+    """
+
+    __tablename__ = "category_memories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    category: Mapped[str] = mapped_column(
+        String(100), nullable=False, unique=True, index=True, comment="商品类目"
+    )
+    summary: Mapped[str | None] = mapped_column(Text, comment="类目摘要")
+    best_practices: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="最佳实践")
+    negative_patterns: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="避坑/负面模式")
+    style_guidelines: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, comment="风格指南")
+    performance_hints: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, comment="性能提示")
+    extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), comment="BGE-large-zh 向量")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<CategoryMemory(id={self.id}, category='{self.category}')>"
+        )
