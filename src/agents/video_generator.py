@@ -128,13 +128,13 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
     async def _generate_video(
         self,
         storyboard: Any,
-        state: AgentState,
+        _state: AgentState,
     ) -> GeneratedVideo:
         """生成视频。
 
         Args:
             storyboard: 分镜脚本。
-            state: 当前状态。
+            _state: 当前状态。
 
         Returns:
             生成的视频。

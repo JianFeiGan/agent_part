@@ -9,16 +9,14 @@
   - error 分支: 各路由在 has_error() 时返回 "end"
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
 
 from src.graph.state import AgentState, GenerationRequest
 from src.graph.workflow import (
     WorkflowBuilder,
-    route_after_orchestrator,
     route_after_design,
     route_after_image_generation,
+    route_after_orchestrator,
     route_after_video_generation,
 )
 from src.models.product import Product, ProductCategory
