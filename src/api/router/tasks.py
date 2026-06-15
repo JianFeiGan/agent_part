@@ -20,8 +20,29 @@ from src.api.schema.task import (
 )
 from src.api.service.redis_client import RedisClient
 from src.api.service.task_manager import TaskManager, get_task_manager
+from src.auth import authenticate_websocket
+from src.auth.context import AuthContext
 
 router = APIRouter()
+
+
+def _require_scope(auth: AuthContext, *scopes: str) -> None:
+    """检查 auth 是否拥有指定 scope 之一，否则 raise 403。
+
+    遍历 scopes，只要任一 scope 满足 auth.has_scope(scope) 即通过。
+    若全部不满足，抛出 HTTPException(status_code=403, detail="Forbidden")。
+
+    Args:
+        auth: 认证上下文。
+        *scopes: 一个或多个 scope 名称。
+
+    Raises:
+        HTTPException: 403 当 scope 不足时。
+    """
+    for scope in scopes:
+        if auth.has_scope(scope):
+            return
+    raise HTTPException(status_code=403, detail="Forbidden")
 
 
 def get_task_manager_dep() -> TaskManager:
@@ -62,6 +83,8 @@ async def create_task(
     Raises:
         HTTPException: 商品不存在时抛出 404 错误。
     """
+    _require_scope(auth, "tasks:write")
+
     # 检查商品是否存在
     product = await redis.get_product(request.product_id, tenant_id=auth.tenant_id)
     if not product:
@@ -104,6 +127,8 @@ async def list_tasks(
     Returns:
         任务分页列表。
     """
+    _require_scope(auth, "tasks:read", "tasks:write")
+
     tasks, total = await task_manager.list_tasks(
         redis=redis,
         tenant_id=auth.tenant_id,
@@ -150,6 +175,8 @@ async def get_task_detail(
     Raises:
         HTTPException: 任务不存在时抛出 404 错误。
     """
+    _require_scope(auth, "tasks:read", "tasks:write")
+
     try:
         detail = await task_manager.get_task_detail(task_id, redis, tenant_id=auth.tenant_id)
         return ApiResponse(
@@ -186,6 +213,8 @@ async def get_task_status(
     Raises:
         HTTPException: 任务不存在时抛出 404 错误。
     """
+    _require_scope(auth, "tasks:read", "tasks:write")
+
     try:
         status_data = await task_manager.get_task_status(task_id, redis, tenant_id=auth.tenant_id)
         return ApiResponse(
@@ -222,6 +251,8 @@ async def cancel_task(
     Raises:
         HTTPException: 任务不存在时抛出 404 错误。
     """
+    _require_scope(auth, "tasks:write")
+
     success = await task_manager.cancel_task(task_id, redis, tenant_id=auth.tenant_id)
     if not success:
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -256,6 +287,8 @@ async def delete_task(
     Raises:
         HTTPException: 任务不存在时抛出 404 错误。
     """
+    _require_scope(auth, "tasks:write")
+
     success = await redis.delete_task(task_id, tenant_id=auth.tenant_id)
     if not success:
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -274,27 +307,38 @@ async def task_websocket(
 ) -> None:
     """任务状态实时推送 WebSocket。
 
-    Note:
-        WebSocket 鉴权由 Task 5 统一实现，当前使用 dev tenant 最小兼容。
+    WebSocket 鉴权在 accept 之前执行，鉴权失败关闭连接并返回。
+    Scope 不足时以 WS_1008_POLICY_VIOLATION 关闭连接。
 
     Args:
         websocket: WebSocket 连接。
         task_id: 任务 ID。
     """
+    # WebSocket 鉴权 — 必须在 accept() 之前
+    try:
+        auth = authenticate_websocket(websocket)
+    except HTTPException:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="鉴权失败")
+        return
+
+    # Scope 检查 — 需要 tasks:read 或 tasks:write
+    try:
+        _require_scope(auth, "tasks:read", "tasks:write")
+    except HTTPException:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Forbidden")
+        return
+
     await websocket.accept()
 
     redis = await get_redis_client()
     task_manager = get_task_manager()
-
-    # TODO: Task 5 将实现 authenticate_websocket 获取真实 tenant_id
-    _ws_tenant_id = "dev"
 
     try:
         while True:
             # 获取任务状态
             try:
                 status_data = await task_manager.get_task_status(
-                    task_id, redis, tenant_id=_ws_tenant_id
+                    task_id, redis, tenant_id=auth.tenant_id
                 )
                 await websocket.send_json(status_data)
 

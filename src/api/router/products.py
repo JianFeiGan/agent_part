@@ -20,9 +20,29 @@ from src.api.schema.product import (
     ProductResponse,
     ProductUpdateRequest,
 )
+from src.auth.context import AuthContext
 from src.models.product import Product
 
 router = APIRouter()
+
+
+def _require_scope(auth: AuthContext, *scopes: str) -> None:
+    """检查 auth 是否拥有指定 scope 之一，否则 raise 403。
+
+    遍历 scopes，只要任一 scope 满足 auth.has_scope(scope) 即通过。
+    若全部不满足，抛出 HTTPException(status_code=403, detail="Forbidden")。
+
+    Args:
+        auth: 认证上下文。
+        *scopes: 一个或多个 scope 名称。
+
+    Raises:
+        HTTPException: 403 当 scope 不足时。
+    """
+    for scope in scopes:
+        if auth.has_scope(scope):
+            return
+    raise HTTPException(status_code=403, detail="Forbidden")
 
 
 @router.post(
@@ -46,6 +66,8 @@ async def create_product(
     Returns:
         创建成功的商品信息。
     """
+    _require_scope(auth, "products:write")
+
     # 生成商品 ID
     product_id = f"prod_{uuid4().hex[:12]}"
 
@@ -83,6 +105,8 @@ async def list_products(
     Returns:
         商品分页列表。
     """
+    _require_scope(auth, "products:read", "products:write")
+
     products, total = await redis.list_products(
         tenant_id=auth.tenant_id,
         page=query.page,
@@ -129,6 +153,8 @@ async def get_product(
     Raises:
         HTTPException: 商品不存在时抛出 404 错误。
     """
+    _require_scope(auth, "products:read", "products:write")
+
     product = await redis.get_product(product_id, tenant_id=auth.tenant_id)
     if not product:
         raise HTTPException(status_code=404, detail="商品不存在")
@@ -165,6 +191,8 @@ async def update_product(
     Raises:
         HTTPException: 商品不存在时抛出 404 错误。
     """
+    _require_scope(auth, "products:write")
+
     # 获取现有商品
     product = await redis.get_product(product_id, tenant_id=auth.tenant_id)
     if not product:
@@ -208,6 +236,8 @@ async def delete_product(
     Raises:
         HTTPException: 商品不存在时抛出 404 错误。
     """
+    _require_scope(auth, "products:write")
+
     success = await redis.delete_product(product_id, tenant_id=auth.tenant_id)
     if not success:
         raise HTTPException(status_code=404, detail="商品不存在")
@@ -240,6 +270,8 @@ async def upload_product_image(
     Raises:
         HTTPException: 商品不存在时抛出 404 错误。
     """
+    _require_scope(auth, "products:write")
+
     # 检查商品是否存在
     product = await redis.get_product(product_id, tenant_id=auth.tenant_id)
     if not product:
