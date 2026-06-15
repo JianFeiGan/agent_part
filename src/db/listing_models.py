@@ -9,7 +9,7 @@ Description:
 2026-04-25
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import (
     Boolean,
@@ -33,7 +33,10 @@ class ListingProductPO(Base):
     __tablename__ = "listing_products"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    sku: Mapped[str] = mapped_column(String(100), unique=True, nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
+    sku: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     category: Mapped[str | None] = mapped_column(String(200))
@@ -44,15 +47,17 @@ class ListingProductPO(Base):
     source_images: Mapped[list[dict]] = mapped_column(JSONB, default=list)
     attributes: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, default=lambda: datetime.now(UTC)
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     tasks: Mapped[list["ListingTaskPO"]] = relationship("ListingTaskPO", back_populates="product")
+
+    __table_args__ = (Index("uq_listing_products_tenant_sku", "tenant_id", "sku", unique=True),)
 
     def __repr__(self) -> str:
         return f"<ListingProductPO(id={self.id}, sku='{self.sku}')>"
@@ -64,6 +69,9 @@ class ListingTaskPO(Base):
     __tablename__ = "listing_tasks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
     product_sku: Mapped[str] = mapped_column(
         String(100), ForeignKey("listing_products.sku"), nullable=False, index=True
     )
@@ -72,12 +80,12 @@ class ListingTaskPO(Base):
     workflow_state: Mapped[str | None] = mapped_column(String(50))
     auto_execute: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, default=lambda: datetime.now(UTC)
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
     )
 
     product: Mapped["ListingProductPO"] = relationship("ListingProductPO", back_populates="tasks")
@@ -102,6 +110,9 @@ class AssetPackagePO(Base):
     __tablename__ = "asset_packages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
     task_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("listing_tasks.id"), nullable=False, index=True
     )
@@ -111,7 +122,7 @@ class AssetPackagePO(Base):
     video_url: Mapped[str | None] = mapped_column(String(1000))
     a_plus_images: Mapped[list[str]] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, default=lambda: datetime.now(UTC)
     )
 
     task: Mapped["ListingTaskPO"] = relationship("ListingTaskPO", back_populates="asset_packages")
@@ -126,6 +137,9 @@ class CopywritingPackagePO(Base):
     __tablename__ = "copywriting_packages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
     task_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("listing_tasks.id"), nullable=False, index=True
     )
@@ -136,7 +150,7 @@ class CopywritingPackagePO(Base):
     description: Mapped[str] = mapped_column(Text, default="")
     search_terms: Mapped[list[str]] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, default=lambda: datetime.now(UTC)
     )
 
     task: Mapped["ListingTaskPO"] = relationship(
@@ -153,13 +167,16 @@ class ComplianceReportPO(Base):
     __tablename__ = "compliance_reports"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
     task_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("listing_tasks.id"), nullable=False, index=True
     )
     platform: Mapped[str] = mapped_column(String(20), nullable=False)
     report_data: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, default=lambda: datetime.now(UTC)
     )
 
     task: Mapped["ListingTaskPO"] = relationship(
@@ -176,6 +193,9 @@ class TaskResultPO(Base):
     __tablename__ = "task_results"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
     task_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("listing_tasks.id"), nullable=False, index=True
     )
@@ -183,7 +203,7 @@ class TaskResultPO(Base):
     success: Mapped[bool] = mapped_column(Boolean, default=False)
     result_data: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc)
+        DateTime, default=lambda: datetime.now(UTC)
     )
 
     task: Mapped["ListingTaskPO"] = relationship("ListingTaskPO", back_populates="push_results")
@@ -198,6 +218,9 @@ class AdapterConfigPO(Base):
     __tablename__ = "adapter_configs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
     platform: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     shop_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     credentials: Mapped[dict] = mapped_column(JSONB, default=dict)
@@ -207,7 +230,9 @@ class AdapterConfigPO(Base):
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
 
-    __table_args__ = (Index("ix_adapter_config_platform_shop", "platform", "shop_id", unique=True),)
+    __table_args__ = (
+        Index("uq_adapter_config_tenant_platform_shop", "tenant_id", "platform", "shop_id", unique=True),
+    )
 
     def __repr__(self) -> str:
         return (

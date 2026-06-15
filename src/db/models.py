@@ -35,6 +35,7 @@ class KnowledgeDoc(Base):
 
     Attributes:
         id: 主键。
+        tenant_id: 租户 ID。
         title: 文档标题。
         doc_type: 文档类型 (brand_guide, category_knowledge, case_study, compliance_rule)。
         category: 商品类目 (可选)。
@@ -50,6 +51,9 @@ class KnowledgeDoc(Base):
     __tablename__ = "knowledge_docs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     doc_type: Mapped[str] = mapped_column(
         String(50), nullable=False, index=True, comment="文档类型"
@@ -80,6 +84,7 @@ class KnowledgeChunk(Base):
 
     Attributes:
         id: 主键。
+        tenant_id: 租户 ID。
         doc_id: 关联文档 ID。
         chunk_index: 分块索引。
         content: 分块内容。
@@ -92,6 +97,9 @@ class KnowledgeChunk(Base):
     __tablename__ = "knowledge_chunks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
     doc_id: Mapped[int] = mapped_column(Integer, ForeignKey("knowledge_docs.id"), index=True)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -113,6 +121,7 @@ class RAGUsageLog(Base):
 
     Attributes:
         id: 主键。
+        tenant_id: 租户 ID。
         task_id: 任务 ID。
         agent_name: Agent 名称。
         query: 检索查询。
@@ -125,6 +134,9 @@ class RAGUsageLog(Base):
     __tablename__ = "rag_usage_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
     task_id: Mapped[str | None] = mapped_column(String(100), index=True)
     agent_name: Mapped[str | None] = mapped_column(String(50), index=True)
     query: Mapped[str | None] = mapped_column(Text)
@@ -144,6 +156,7 @@ class Product(Base):
 
     Attributes:
         id: 主键。
+        tenant_id: 租户 ID。
         product_id: 商品 ID (业务标识)。
         name: 商品名称。
         brand: 品牌。
@@ -159,6 +172,9 @@ class Product(Base):
     __tablename__ = "products"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
     product_id: Mapped[str | None] = mapped_column(String(100), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     brand: Mapped[str | None] = mapped_column(String(100))
@@ -186,6 +202,7 @@ class GenerationTask(Base):
 
     Attributes:
         id: 主键。
+        tenant_id: 租户 ID。
         task_id: 任务 ID (业务标识)。
         product_id: 关联商品 ID。
         task_type: 任务类型 (image_only, video_only, image_and_video)。
@@ -202,6 +219,9 @@ class GenerationTask(Base):
     __tablename__ = "generation_tasks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
     task_id: Mapped[str | None] = mapped_column(String(100), unique=True, index=True)
     product_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("products.id"))
     task_type: Mapped[str | None] = mapped_column(String(50))
@@ -227,6 +247,7 @@ class GraphRAGEntity(Base):
 
     Attributes:
         id: 主键。
+        tenant_id: 租户 ID (可选)。
         name: 实体名称。
         entity_type: 实体类型 (concept, attribute, brand, style, etc.)。
         category: 商品类目。
@@ -241,6 +262,9 @@ class GraphRAGEntity(Base):
     __tablename__ = "graph_rag_entities"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True, comment="租户 ID"
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False, comment="实体名称")
     entity_type: Mapped[str] = mapped_column(
         String(50), nullable=False, index=True, comment="实体类型"
@@ -269,6 +293,7 @@ class GraphRAGEdge(Base):
 
     Attributes:
         id: 主键。
+        tenant_id: 租户 ID (可选)。
         source_entity_id: 源实体 ID。
         target_entity_id: 目标实体 ID。
         relationship_type: 关系类型 (related_to, has_attribute, belongs_to, etc.)。
@@ -285,6 +310,9 @@ class GraphRAGEdge(Base):
     __tablename__ = "graph_rag_edges"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True, comment="租户 ID"
+    )
     source_entity_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("graph_rag_entities.id"), nullable=False, index=True
     )
@@ -325,6 +353,7 @@ class CategoryMemory(Base):
 
     Attributes:
         id: 主键。
+        tenant_id: 租户 ID (可选)。
         category: 商品类目 (unique+index)。
         summary: 类目摘要概述。
         best_practices: 最佳实践列表 (JSONB)。
@@ -340,6 +369,9 @@ class CategoryMemory(Base):
     __tablename__ = "category_memories"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True, comment="租户 ID"
+    )
     category: Mapped[str] = mapped_column(
         String(100), nullable=False, unique=True, index=True, comment="商品类目"
     )
