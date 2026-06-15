@@ -32,8 +32,8 @@ class RedisClient:
     Example:
         >>> client = RedisClient()
         >>> await client.connect()
-        >>> await client.save_product(product)
-        >>> product = await client.get_product("prod_001")
+        >>> await client.save_product(product, tenant_id="tenant_001")
+        >>> product = await client.get_product("prod_001", tenant_id="tenant_001")
     """
 
     def __init__(self) -> None:
@@ -69,6 +69,27 @@ class RedisClient:
         """
         return f"{self._prefix}{':'.join(parts)}"
 
+    def _tenant_key(self, tenant_id: str, *parts: str) -> str:
+        """生成带租户命名空间的 key。
+
+        Args:
+            tenant_id: 租户 ID。
+            *parts: Key 的各个部分（在租户命名空间之后）。
+
+        Returns:
+            租户隔离的完整 Redis Key。
+
+        Raises:
+            ValueError: tenant_id 为空时抛出。
+
+        Example:
+            >>> client._tenant_key("tenant_001", "product", "prod_001")
+            'pvg:tenant:tenant_001:product:prod_001'
+        """
+        if not tenant_id:
+            raise ValueError("tenant_id is required")
+        return self._key("tenant", tenant_id, *parts)
+
     async def _ensure_connected(self) -> redis.Redis:
         """确保 Redis 连接已建立。
 
@@ -84,18 +105,19 @@ class RedisClient:
 
     # ==================== 商品相关操作 ====================
 
-    async def save_product(self, product: Product) -> str:
+    async def save_product(self, product: Product, *, tenant_id: str) -> str:
         """保存商品数据。
 
         Args:
             product: 商品信息模型。
+            tenant_id: 租户 ID。
 
         Returns:
             商品 ID。
 
         Raises:
             RuntimeError: Redis 未连接。
-            ValueError: 商品 ID 为空。
+            ValueError: 商品 ID 为空或 tenant_id 为空。
         """
         client = await self._ensure_connected()
 
@@ -103,8 +125,8 @@ class RedisClient:
             raise ValueError("商品 ID 不能为空")
 
         product_id = product.product_id
-        product_key = self._key("product", product_id)
-        list_key = self._key("product", "list")
+        product_key = self._tenant_key(tenant_id, "product", product_id)
+        list_key = self._tenant_key(tenant_id, "product", "list")
 
         # 获取当前时间戳作为排序分数
         timestamp = datetime.now().timestamp()
@@ -122,11 +144,12 @@ class RedisClient:
 
         return product_id
 
-    async def get_product(self, product_id: str) -> Product | None:
+    async def get_product(self, product_id: str, *, tenant_id: str) -> Product | None:
         """获取商品数据。
 
         Args:
             product_id: 商品 ID。
+            tenant_id: 租户 ID。
 
         Returns:
             商品信息模型，不存在则返回 None。
@@ -135,7 +158,7 @@ class RedisClient:
             RuntimeError: Redis 未连接。
         """
         client = await self._ensure_connected()
-        product_key = self._key("product", product_id)
+        product_key = self._tenant_key(tenant_id, "product", product_id)
 
         data = await client.hget(product_key, "data")
         if not data:
@@ -148,11 +171,12 @@ class RedisClient:
             return None
 
     async def list_products(
-        self, page: int = 1, page_size: int = 10, category: str | None = None
+        self, *, tenant_id: str, page: int = 1, page_size: int = 10, category: str | None = None
     ) -> tuple[list[Product], int]:
         """获取商品列表（分页）。
 
         Args:
+            tenant_id: 租户 ID。
             page: 页码，从 1 开始。
             page_size: 每页数量。
             category: 商品类目过滤（可选）。
@@ -164,7 +188,7 @@ class RedisClient:
             RuntimeError: Redis 未连接。
         """
         client = await self._ensure_connected()
-        list_key = self._key("product", "list")
+        list_key = self._tenant_key(tenant_id, "product", "list")
 
         # 获取总数
         total = await client.zcard(list_key)
@@ -179,7 +203,7 @@ class RedisClient:
         # 批量获取商品数据
         products: list[Product] = []
         for product_id in product_ids:
-            product = await self.get_product(product_id)
+            product = await self.get_product(product_id, tenant_id=tenant_id)
             if product:
                 # 类目过滤
                 if category and product.category.value != category:
@@ -188,11 +212,12 @@ class RedisClient:
 
         return products, total
 
-    async def update_product(self, product: Product) -> bool:
+    async def update_product(self, product: Product, *, tenant_id: str) -> bool:
         """更新商品数据。
 
         Args:
             product: 商品信息模型。
+            tenant_id: 租户 ID。
 
         Returns:
             是否更新成功。
@@ -207,7 +232,7 @@ class RedisClient:
             raise ValueError("商品 ID 不能为空")
 
         product_id = product.product_id
-        product_key = self._key("product", product_id)
+        product_key = self._tenant_key(tenant_id, "product", product_id)
 
         # 检查商品是否存在
         exists = await client.exists(product_key)
@@ -222,11 +247,12 @@ class RedisClient:
 
         return True
 
-    async def delete_product(self, product_id: str) -> bool:
+    async def delete_product(self, product_id: str, *, tenant_id: str) -> bool:
         """删除商品。
 
         Args:
             product_id: 商品 ID。
+            tenant_id: 租户 ID。
 
         Returns:
             是否删除成功。
@@ -235,8 +261,8 @@ class RedisClient:
             RuntimeError: Redis 未连接。
         """
         client = await self._ensure_connected()
-        product_key = self._key("product", product_id)
-        list_key = self._key("product", "list")
+        product_key = self._tenant_key(tenant_id, "product", product_id)
+        list_key = self._tenant_key(tenant_id, "product", "list")
 
         # 使用事务删除
         async with client.pipeline() as pipe:
@@ -248,25 +274,29 @@ class RedisClient:
 
     # ==================== 任务相关操作 ====================
 
-    async def create_task(self, task_id: str, product_id: str, request: GenerationRequest) -> None:
+    async def create_task(
+        self, task_id: str, product_id: str, request: GenerationRequest, *, tenant_id: str
+    ) -> None:
         """创建任务元数据。
 
         Args:
             task_id: 任务 ID。
             product_id: 关联的商品 ID。
             request: 生成请求配置。
+            tenant_id: 租户 ID。
 
         Raises:
             RuntimeError: Redis 未连接。
         """
         client = await self._ensure_connected()
-        task_key = self._key("task", task_id)
-        list_key = self._key("task", "list")
+        task_key = self._tenant_key(tenant_id, "task", task_id)
+        list_key = self._tenant_key(tenant_id, "task", "list")
 
         timestamp = datetime.now().timestamp()
         metadata = {
             "task_id": task_id,
             "product_id": product_id,
+            "tenant_id": tenant_id,
             "status": "pending",
             "progress": 0.0,
             "current_step": "init",
@@ -281,11 +311,12 @@ class RedisClient:
             pipe.zadd(list_key, {task_id: timestamp})
             await pipe.execute()
 
-    async def get_task_metadata(self, task_id: str) -> dict[str, Any] | None:
+    async def get_task_metadata(self, task_id: str, *, tenant_id: str) -> dict[str, Any] | None:
         """获取任务元数据。
 
         Args:
             task_id: 任务 ID。
+            tenant_id: 租户 ID。
 
         Returns:
             任务元数据字典，不存在则返回 None。
@@ -294,7 +325,7 @@ class RedisClient:
             RuntimeError: Redis 未连接。
         """
         client = await self._ensure_connected()
-        task_key = self._key("task", task_id)
+        task_key = self._tenant_key(tenant_id, "task", task_id)
 
         data = await client.hget(task_key, "metadata")
         if not data:
@@ -305,19 +336,20 @@ class RedisClient:
         except json.JSONDecodeError:
             return None
 
-    async def save_task_state(self, task_id: str, state: AgentState) -> None:
+    async def save_task_state(self, task_id: str, state: AgentState, *, tenant_id: str) -> None:
         """保存任务状态。
 
         Args:
             task_id: 任务 ID。
             state: Agent 状态模型。
+            tenant_id: 租户 ID。
 
         Raises:
             RuntimeError: Redis 未连接。
         """
         client = await self._ensure_connected()
-        state_key = self._key("task", task_id, "state")
-        task_key = self._key("task", task_id)
+        state_key = self._tenant_key(tenant_id, "task", task_id, "state")
+        task_key = self._tenant_key(tenant_id, "task", task_id)
 
         # 序列化状态数据
         state_data = state.model_dump(mode="json")
@@ -326,17 +358,18 @@ class RedisClient:
             # 保存完整状态
             pipe.set(state_key, json.dumps(state_data, ensure_ascii=False))
             # 更新任务元数据的更新时间
-            metadata = await self.get_task_metadata(task_id)
+            metadata = await self.get_task_metadata(task_id, tenant_id=tenant_id)
             if metadata:
                 metadata["updated_at"] = datetime.now().isoformat()
                 pipe.hset(task_key, "metadata", json.dumps(metadata, ensure_ascii=False))
             await pipe.execute()
 
-    async def get_task_state(self, task_id: str) -> AgentState | None:
+    async def get_task_state(self, task_id: str, *, tenant_id: str) -> AgentState | None:
         """获取任务状态。
 
         Args:
             task_id: 任务 ID。
+            tenant_id: 租户 ID。
 
         Returns:
             Agent 状态模型，不存在则返回 None。
@@ -345,7 +378,7 @@ class RedisClient:
             RuntimeError: Redis 未连接。
         """
         client = await self._ensure_connected()
-        state_key = self._key("task", task_id, "state")
+        state_key = self._tenant_key(tenant_id, "task", task_id, "state")
 
         data = await client.get(state_key)
         if not data:
@@ -358,7 +391,7 @@ class RedisClient:
             return None
 
     async def update_task_progress(
-        self, task_id: str, status: str, progress: float, current_step: str
+        self, task_id: str, status: str, progress: float, current_step: str, *, tenant_id: str
     ) -> None:
         """更新任务进度。
 
@@ -367,14 +400,15 @@ class RedisClient:
             status: 任务状态。
             progress: 进度值 (0-100)。
             current_step: 当前步骤。
+            tenant_id: 租户 ID。
 
         Raises:
             RuntimeError: Redis 未连接。
         """
         client = await self._ensure_connected()
-        task_key = self._key("task", task_id)
+        task_key = self._tenant_key(tenant_id, "task", task_id)
 
-        metadata = await self.get_task_metadata(task_id)
+        metadata = await self.get_task_metadata(task_id, tenant_id=tenant_id)
         if not metadata:
             return
 
@@ -386,11 +420,12 @@ class RedisClient:
         await client.hset(task_key, "metadata", json.dumps(metadata, ensure_ascii=False))
 
     async def list_tasks(
-        self, page: int = 1, page_size: int = 10, status: str | None = None
+        self, *, tenant_id: str, page: int = 1, page_size: int = 10, status: str | None = None
     ) -> tuple[list[dict[str, Any]], int]:
         """获取任务列表。
 
         Args:
+            tenant_id: 租户 ID。
             page: 页码，从 1 开始。
             page_size: 每页数量。
             status: 任务状态过滤（可选）。
@@ -402,19 +437,19 @@ class RedisClient:
             RuntimeError: Redis 未连接。
         """
         client = await self._ensure_connected()
-        list_key = self._key("task", "list")
+        list_key = self._tenant_key(tenant_id, "task", "list")
 
         task_ids = await client.zrevrange(list_key, 0, -1)
 
         filtered_tasks: list[dict[str, Any]] = []
         for task_id in task_ids:
-            metadata = await self.get_task_metadata(task_id)
+            metadata = await self.get_task_metadata(task_id, tenant_id=tenant_id)
             if metadata is None:
                 continue
             if status and metadata.get("status") != status:
                 continue
 
-            task_state = await self.get_task_state(task_id)
+            task_state = await self.get_task_state(task_id, tenant_id=tenant_id)
             if task_state and task_state.error:
                 metadata["error_message"] = task_state.error
 
@@ -426,11 +461,12 @@ class RedisClient:
 
         return filtered_tasks[start:end], total
 
-    async def delete_task(self, task_id: str) -> bool:
+    async def delete_task(self, task_id: str, *, tenant_id: str) -> bool:
         """删除任务。
 
         Args:
             task_id: 任务 ID。
+            tenant_id: 租户 ID。
 
         Returns:
             是否删除成功。
@@ -439,9 +475,9 @@ class RedisClient:
             RuntimeError: Redis 未连接。
         """
         client = await self._ensure_connected()
-        task_key = self._key("task", task_id)
-        state_key = self._key("task", task_id, "state")
-        list_key = self._key("task", "list")
+        task_key = self._tenant_key(tenant_id, "task", task_id)
+        state_key = self._tenant_key(tenant_id, "task", task_id, "state")
+        list_key = self._tenant_key(tenant_id, "task", "list")
 
         # 使用事务删除
         async with client.pipeline() as pipe:
