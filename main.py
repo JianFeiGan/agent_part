@@ -17,7 +17,7 @@ from fastapi.responses import JSONResponse
 
 from src.api.router import api_router
 from src.api.service.redis_client import close_redis, get_redis
-from src.config.settings import get_settings
+from src.config.settings import Settings, get_settings
 
 # 配置日志
 logging.basicConfig(
@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
     # 启动时
     logger.info("正在启动应用...")
     try:
-        redis = await get_redis()
+        await get_redis()
         logger.info("Redis 连接成功")
     except Exception as e:
         logger.warning(f"Redis 连接失败: {e}，将使用内存存储")
@@ -47,6 +47,30 @@ async def lifespan(app: FastAPI):
     logger.info("正在关闭应用...")
     await close_redis()
     logger.info("应用已关闭")
+
+
+def validate_cors_settings(settings: Settings) -> None:
+    """验证 CORS 配置安全性。
+
+    禁止使用通配符 '*' 作为 CORS 来源，禁止空来源列表。
+
+    Args:
+        settings: 应用配置实例。
+
+    Raises:
+        RuntimeError: 当 CORS 配置不安全时抛出。
+    """
+    origins = settings.cors_origins
+    if not origins:
+        raise RuntimeError(
+            "CORS wildcard or empty origins detected: cors_allow_origins 不能为空，"
+            "请配置具体的允许域名列表"
+        )
+    if "*" in origins:
+        raise RuntimeError(
+            "CORS wildcard or empty origins detected: cors_allow_origins 不允许使用通配符 '*'，"
+            "请配置具体的允许域名列表"
+        )
 
 
 # 创建 FastAPI 应用
@@ -61,9 +85,10 @@ app = FastAPI(
 )
 
 # 配置 CORS 中间件
+validate_cors_settings(settings)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应配置具体域名
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
