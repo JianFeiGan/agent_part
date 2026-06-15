@@ -85,6 +85,24 @@ class Settings(BaseSettings):
     image_model: str = Field(default="wanx-v1", description="图像生成模型")
     video_model: str = Field(default="kling-v1", description="视频生成模型")
 
+    # ==================== 认证配置 ====================
+    auth_enabled: bool = Field(default=True, description="是否启用 API Token 鉴权")
+    auth_api_tokens_json: str = Field(
+        default="[]",
+        description=(
+            "API Token 注册表 JSON，格式: "
+            '[{"token_hash":"<sha256-hex>","tenant_id":"...","user_id":"...","scopes":[...]}]'
+        ),
+    )
+    auth_allow_ws_query_token: bool = Field(
+        default=True, description="是否允许 WebSocket 查询参数传递 token"
+    )
+    cors_allow_origins: str = Field(
+        default="http://localhost:5173,http://localhost:3000",
+        description="CORS 允许的来源，逗号分隔",
+    )
+    credentials_encryption_key: str = Field(default="", description="凭证加密密钥")
+
     @property
     def is_langchain_tracing_enabled(self) -> bool:
         """检查是否启用追踪。
@@ -130,6 +148,17 @@ class Settings(BaseSettings):
             同步 PostgreSQL 连接 URL。
         """
         return f"postgresql+psycopg://{self.postgres_user}:{self.postgres_password}@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """获取 CORS 允许的来源列表。
+
+        Returns:
+            CORS 来源列表，按逗号分割。
+        """
+        if not self.cors_allow_origins:
+            return []
+        return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
 
 
 @lru_cache
