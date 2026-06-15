@@ -76,6 +76,18 @@ def settings_no_auth() -> MagicMock:
     return s
 
 
+class TestSettingsDefaults:
+    """认证相关默认配置测试。"""
+
+    def test_ws_query_token_is_disabled_by_default(self) -> None:
+        """测试 WebSocket query token 默认关闭。"""
+        from src.config.settings import Settings
+
+        settings = Settings()
+
+        assert settings.auth_allow_ws_query_token is False
+
+
 # ==================== AuthContext ====================
 
 

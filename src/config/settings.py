@@ -95,7 +95,7 @@ class Settings(BaseSettings):
         ),
     )
     auth_allow_ws_query_token: bool = Field(
-        default=True, description="是否允许 WebSocket 查询参数传递 token"
+        default=False, description="是否允许 WebSocket 查询参数传递 token"
     )
     cors_allow_origins: str = Field(
         default="http://localhost:5173,http://localhost:3000",
