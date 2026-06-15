@@ -1,10 +1,13 @@
 """通用异步 Repository 测试。"""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+from sqlalchemy import Column, Integer, String
+
 from src.db.listing_models import ListingProductPO
-from src.db.repository import BaseRepository
+from src.db.postgres import Base as _Base
+from src.db.repository import BaseRepository, TenantRepository
 
 
 class TestBaseRepository:
@@ -128,3 +131,123 @@ class TestBaseRepository:
 
         assert len(result) == 1
         assert result[0].sku == "A"
+
+
+# ---------------------------------------------------------------------------
+# TenantRepository tests
+# ---------------------------------------------------------------------------
+
+
+class _ModelWithoutTenantId(_Base):
+    """用于测试的模型——没有 tenant_id 列。"""
+
+    __tablename__ = "_test_no_tenant"
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100))
+
+
+class TestTenantRepository:
+    """测试 TenantRepository 租户隔离功能。"""
+
+    @pytest.fixture
+    def mock_session(self) -> AsyncMock:
+        """创建模拟异步会话。"""
+        return AsyncMock()
+
+    @pytest.fixture
+    def tenant_repo(self, mock_session: AsyncMock) -> TenantRepository[ListingProductPO]:
+        """创建 TenantRepository 实例（使用有 tenant_id 的模型）。"""
+        return TenantRepository(ListingProductPO, mock_session)
+
+    # ---- Negative test: model without tenant_id ----
+
+    def test_model_without_tenant_id_raises_typeerror(self, mock_session: AsyncMock) -> None:
+        """测试没有 tenant_id 的模型抛 TypeError。"""
+        repo = TenantRepository(_ModelWithoutTenantId, mock_session)
+
+        with pytest.raises(TypeError, match="tenant_id"):
+            repo._tenant_filter()
+
+    # ---- get_for_tenant ----
+
+    @pytest.mark.asyncio
+    async def test_get_for_tenant_found(
+        self, tenant_repo: TenantRepository, mock_session: AsyncMock
+    ) -> None:
+        """测试按租户获取已存在的记录。"""
+        expected = ListingProductPO(sku="SKU-1", title="Product 1")
+        exec_result = MagicMock()
+        exec_result.scalar_one_or_none.return_value = expected
+        mock_session.execute.return_value = exec_result
+
+        result = await tenant_repo.get_for_tenant(1, "t-123")
+
+        assert result == expected
+        mock_session.execute.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_for_tenant_not_found(
+        self, tenant_repo: TenantRepository, mock_session: AsyncMock
+    ) -> None:
+        """测试按租户获取不存在的记录。"""
+        exec_result = MagicMock()
+        exec_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = exec_result
+
+        result = await tenant_repo.get_for_tenant(999, "t-123")
+
+        assert result is None
+
+    # ---- list_for_tenant ----
+
+    @pytest.mark.asyncio
+    async def test_list_for_tenant_no_extra_filters(
+        self, tenant_repo: TenantRepository, mock_session: AsyncMock
+    ) -> None:
+        """测试按租户查询列表（无额外过滤）。"""
+        scalars_mock = MagicMock()
+        scalars_mock.all.return_value = [
+            ListingProductPO(sku="A", title="A"),
+            ListingProductPO(sku="B", title="B"),
+        ]
+        exec_result = MagicMock()
+        exec_result.scalars.return_value = scalars_mock
+        mock_session.execute.return_value = exec_result
+
+        result = await tenant_repo.list_for_tenant("t-123")
+
+        assert len(result) == 2
+
+    @pytest.mark.asyncio
+    async def test_list_for_tenant_with_filters(
+        self, tenant_repo: TenantRepository, mock_session: AsyncMock
+    ) -> None:
+        """测试按租户查询列表（带额外过滤）。"""
+        scalars_mock = MagicMock()
+        scalars_mock.all.return_value = [ListingProductPO(sku="A", title="A")]
+        exec_result = MagicMock()
+        exec_result.scalars.return_value = scalars_mock
+        mock_session.execute.return_value = exec_result
+
+        result = await tenant_repo.list_for_tenant("t-123", sku="A")
+
+        assert len(result) == 1
+        assert result[0].sku == "A"
+
+    # ---- create_for_tenant ----
+
+    @pytest.mark.asyncio
+    async def test_create_for_tenant(
+        self, tenant_repo: TenantRepository, mock_session: AsyncMock
+    ) -> None:
+        """测试创建带租户的记录。"""
+        mock_session.flush = AsyncMock()
+        mock_session.refresh = AsyncMock()
+
+        result = await tenant_repo.create_for_tenant("t-123", sku="NEW", title="New")
+
+        assert result.sku == "NEW"
+        assert result.tenant_id == "t-123"
+        mock_session.add.assert_called_once()
+        mock_session.flush.assert_called_once()
+        mock_session.refresh.assert_called_once()
