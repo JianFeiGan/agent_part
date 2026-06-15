@@ -9,8 +9,8 @@ Description:
 """
 
 import asyncio
+import contextlib
 from typing import Any
-
 from uuid import uuid4
 
 from src.api.schema.task import TaskStatus, TaskType
@@ -18,7 +18,6 @@ from src.api.service.redis_client import RedisClient, get_redis
 from src.graph.state import AgentState, GenerationRequest
 from src.graph.workflow import ProductVisualWorkflow
 from src.models.product import Product
-
 
 # 工作流步骤配置
 WORKFLOW_STEPS = [
@@ -68,6 +67,8 @@ class TaskManager:
         product_id: str,
         request_data: dict[str, Any],
         redis: RedisClient,
+        *,
+        tenant_id: str,
     ) -> str:
         """创建任务。
 
@@ -75,6 +76,7 @@ class TaskManager:
             product_id: 商品 ID。
             request_data: 任务配置数据。
             redis: Redis 客户端。
+            tenant_id: 租户 ID。
 
         Returns:
             任务 ID。
@@ -99,15 +101,17 @@ class TaskManager:
         )
 
         # 在 Redis 中创建任务记录
-        await redis.create_task(task_id, product_id, generation_request)
+        await redis.create_task(task_id, product_id, generation_request, tenant_id=tenant_id)
 
         # 获取商品信息
-        product = await redis.get_product(product_id)
+        product = await redis.get_product(product_id, tenant_id=tenant_id)
         if not product:
             raise ValueError(f"商品不存在: {product_id}")
 
         # 启动后台任务执行工作流
-        task = asyncio.create_task(self._execute_workflow(task_id, product, generation_request))
+        task = asyncio.create_task(
+            self._execute_workflow(task_id, product, generation_request, tenant_id=tenant_id)
+        )
         self._running_tasks[task_id] = task
 
         return task_id
@@ -117,6 +121,8 @@ class TaskManager:
         task_id: str,
         product: Product,
         request: GenerationRequest,
+        *,
+        tenant_id: str,
     ) -> None:
         """执行工作流（后台任务）。
 
@@ -124,12 +130,15 @@ class TaskManager:
             task_id: 任务 ID。
             product: 商品信息。
             request: 生成请求。
+            tenant_id: 租户 ID。
         """
         redis = await get_redis()
 
         try:
             # 更新状态为运行中
-            await redis.update_task_progress(task_id, TaskStatus.RUNNING.value, 0, "init")
+            await redis.update_task_progress(
+                task_id, TaskStatus.RUNNING.value, 0, "init", tenant_id=tenant_id
+            )
 
             # 创建工作流并执行
             workflow = ProductVisualWorkflow()
@@ -147,8 +156,9 @@ class TaskManager:
                     TaskStatus.RUNNING.value,
                     progress,
                     state.current_step,
+                    tenant_id=tenant_id,
                 )
-                await redis.save_task_state(task_id, state)
+                await redis.save_task_state(task_id, state, tenant_id=tenant_id)
 
             # 执行工作流
             result = await workflow.run(product, request, thread_id=task_id)
@@ -157,7 +167,7 @@ class TaskManager:
             await progress_callback(result)
 
             # 保存最终状态
-            await redis.save_task_state(task_id, result)
+            await redis.save_task_state(task_id, result, tenant_id=tenant_id)
 
             # 更新任务状态为完成
             if result.has_error():
@@ -166,6 +176,7 @@ class TaskManager:
                     TaskStatus.FAILED.value,
                     0,
                     result.current_step,
+                    tenant_id=tenant_id,
                 )
             else:
                 await redis.update_task_progress(
@@ -173,6 +184,7 @@ class TaskManager:
                     TaskStatus.COMPLETED.value,
                     100,
                     "completed",
+                    tenant_id=tenant_id,
                 )
 
         except asyncio.CancelledError:
@@ -182,6 +194,7 @@ class TaskManager:
                 TaskStatus.FAILED.value,
                 0,
                 "cancelled",
+                tenant_id=tenant_id,
             )
             raise
 
@@ -192,23 +205,27 @@ class TaskManager:
                 TaskStatus.FAILED.value,
                 0,
                 "error",
+                tenant_id=tenant_id,
             )
             # 记录错误
-            state = await redis.get_task_state(task_id)
+            state = await redis.get_task_state(task_id, tenant_id=tenant_id)
             if state:
                 state.error = str(e)
-                await redis.save_task_state(task_id, state)
+                await redis.save_task_state(task_id, state, tenant_id=tenant_id)
 
         finally:
             # 清理运行中的任务引用
             self._running_tasks.pop(task_id, None)
 
-    async def get_task_status(self, task_id: str, redis: RedisClient) -> dict[str, Any]:
+    async def get_task_status(
+        self, task_id: str, redis: RedisClient, *, tenant_id: str
+    ) -> dict[str, Any]:
         """获取任务状态。
 
         Args:
             task_id: 任务 ID。
             redis: Redis 客户端。
+            tenant_id: 租户 ID。
 
         Returns:
             任务状态信息。
@@ -216,7 +233,7 @@ class TaskManager:
         Raises:
             ValueError: 任务不存在。
         """
-        metadata = await redis.get_task_metadata(task_id)
+        metadata = await redis.get_task_metadata(task_id, tenant_id=tenant_id)
         if not metadata:
             raise ValueError(f"任务不存在: {task_id}")
 
@@ -229,12 +246,15 @@ class TaskManager:
             "updated_at": metadata.get("updated_at"),
         }
 
-    async def get_task_detail(self, task_id: str, redis: RedisClient) -> dict[str, Any]:
+    async def get_task_detail(
+        self, task_id: str, redis: RedisClient, *, tenant_id: str
+    ) -> dict[str, Any]:
         """获取任务详情。
 
         Args:
             task_id: 任务 ID。
             redis: Redis 客户端。
+            tenant_id: 租户 ID。
 
         Returns:
             任务详细信息。
@@ -242,11 +262,11 @@ class TaskManager:
         Raises:
             ValueError: 任务不存在。
         """
-        metadata = await redis.get_task_metadata(task_id)
+        metadata = await redis.get_task_metadata(task_id, tenant_id=tenant_id)
         if not metadata:
             raise ValueError(f"任务不存在: {task_id}")
 
-        state = await redis.get_task_state(task_id)
+        state = await redis.get_task_state(task_id, tenant_id=tenant_id)
         request_data = metadata.get("request", {})
 
         # 提取 agent_logs
@@ -278,18 +298,21 @@ class TaskManager:
             "state": state.model_dump() if state else None,
         }
 
-    async def cancel_task(self, task_id: str, redis: RedisClient) -> bool:
+    async def cancel_task(
+        self, task_id: str, redis: RedisClient, *, tenant_id: str
+    ) -> bool:
         """取消任务。
 
         Args:
             task_id: 任务 ID。
             redis: Redis 客户端。
+            tenant_id: 租户 ID。
 
         Returns:
             是否取消成功。
         """
         # 检查任务是否存在
-        metadata = await redis.get_task_metadata(task_id)
+        metadata = await redis.get_task_metadata(task_id, tenant_id=tenant_id)
         if not metadata:
             return False
 
@@ -297,13 +320,13 @@ class TaskManager:
         if task_id in self._running_tasks:
             task = self._running_tasks[task_id]
             task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await task
-            except asyncio.CancelledError:
-                pass
 
         # 更新状态为取消（使用 failed 状态）
-        await redis.update_task_progress(task_id, TaskStatus.FAILED.value, 0, "cancelled")
+        await redis.update_task_progress(
+            task_id, TaskStatus.FAILED.value, 0, "cancelled", tenant_id=tenant_id
+        )
 
         return True
 
@@ -313,6 +336,8 @@ class TaskManager:
         page: int = 1,
         page_size: int = 10,
         status: str | None = None,
+        *,
+        tenant_id: str,
     ) -> tuple[list[dict[str, Any]], int]:
         """获取任务列表。
 
@@ -321,11 +346,14 @@ class TaskManager:
             page: 页码。
             page_size: 每页数量。
             status: 状态过滤。
+            tenant_id: 租户 ID。
 
         Returns:
             任务列表和总数。
         """
-        return await redis.list_tasks(page, page_size, status)
+        return await redis.list_tasks(
+            tenant_id=tenant_id, page=page, page_size=page_size, status=status
+        )
 
     def get_running_task_count(self) -> int:
         """获取正在运行的任务数量。

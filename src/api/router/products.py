@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
-from src.api.deps import RedisDep
+from src.api.deps import AuthDep, RedisDep
 from src.api.schema.common import ApiResponse, PageResponse
 from src.api.schema.product import (
     ProductCreateRequest,
@@ -34,12 +34,14 @@ router = APIRouter()
 async def create_product(
     request: ProductCreateRequest,
     redis: RedisDep,
+    auth: AuthDep,
 ) -> ApiResponse[ProductResponse]:
     """创建商品。
 
     Args:
         request: 商品创建请求。
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
 
     Returns:
         创建成功的商品信息。
@@ -51,7 +53,7 @@ async def create_product(
     product = Product(product_id=product_id, **request.model_dump())
 
     # 保存到 Redis
-    await redis.save_product(product)
+    await redis.save_product(product, tenant_id=auth.tenant_id)
 
     # 返回响应
     return ApiResponse(
@@ -68,18 +70,21 @@ async def create_product(
 )
 async def list_products(
     redis: RedisDep,
+    auth: AuthDep,
     query: ProductListQuery = Depends(),
 ) -> ApiResponse[PageResponse[ProductResponse]]:
     """获取商品列表（分页）。
 
     Args:
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
         query: 查询参数。
 
     Returns:
         商品分页列表。
     """
     products, total = await redis.list_products(
+        tenant_id=auth.tenant_id,
         page=query.page,
         page_size=query.page_size,
         category=query.category.value if query.category else None,
@@ -109,12 +114,14 @@ async def list_products(
 async def get_product(
     product_id: str,
     redis: RedisDep,
+    auth: AuthDep,
 ) -> ApiResponse[ProductResponse]:
     """获取商品详情。
 
     Args:
         product_id: 商品 ID。
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
 
     Returns:
         商品详细信息。
@@ -122,7 +129,7 @@ async def get_product(
     Raises:
         HTTPException: 商品不存在时抛出 404 错误。
     """
-    product = await redis.get_product(product_id)
+    product = await redis.get_product(product_id, tenant_id=auth.tenant_id)
     if not product:
         raise HTTPException(status_code=404, detail="商品不存在")
 
@@ -142,6 +149,7 @@ async def update_product(
     product_id: str,
     request: ProductUpdateRequest,
     redis: RedisDep,
+    auth: AuthDep,
 ) -> ApiResponse[ProductResponse]:
     """更新商品。
 
@@ -149,6 +157,7 @@ async def update_product(
         product_id: 商品 ID。
         request: 商品更新请求。
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
 
     Returns:
         更新后的商品信息。
@@ -157,7 +166,7 @@ async def update_product(
         HTTPException: 商品不存在时抛出 404 错误。
     """
     # 获取现有商品
-    product = await redis.get_product(product_id)
+    product = await redis.get_product(product_id, tenant_id=auth.tenant_id)
     if not product:
         raise HTTPException(status_code=404, detail="商品不存在")
 
@@ -167,7 +176,7 @@ async def update_product(
         setattr(product, key, value)
 
     # 保存更新
-    await redis.update_product(product)
+    await redis.update_product(product, tenant_id=auth.tenant_id)
 
     return ApiResponse(
         code=200,
@@ -184,12 +193,14 @@ async def update_product(
 async def delete_product(
     product_id: str,
     redis: RedisDep,
+    auth: AuthDep,
 ) -> ApiResponse[None]:
     """删除商品。
 
     Args:
         product_id: 商品 ID。
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
 
     Returns:
         删除结果。
@@ -197,7 +208,7 @@ async def delete_product(
     Raises:
         HTTPException: 商品不存在时抛出 404 错误。
     """
-    success = await redis.delete_product(product_id)
+    success = await redis.delete_product(product_id, tenant_id=auth.tenant_id)
     if not success:
         raise HTTPException(status_code=404, detail="商品不存在")
 
@@ -212,6 +223,7 @@ async def delete_product(
 async def upload_product_image(
     product_id: str,
     redis: RedisDep,
+    auth: AuthDep,
     file: UploadFile = File(...),
 ) -> ApiResponse[dict]:
     """上传商品图片。
@@ -219,6 +231,7 @@ async def upload_product_image(
     Args:
         product_id: 商品 ID。
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
         file: 上传的图片文件。
 
     Returns:
@@ -228,7 +241,7 @@ async def upload_product_image(
         HTTPException: 商品不存在时抛出 404 错误。
     """
     # 检查商品是否存在
-    product = await redis.get_product(product_id)
+    product = await redis.get_product(product_id, tenant_id=auth.tenant_id)
     if not product:
         raise HTTPException(status_code=404, detail="商品不存在")
 

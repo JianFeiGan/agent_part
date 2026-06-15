@@ -9,9 +9,8 @@ Description:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
-from fastapi.responses import JSONResponse
 
-from src.api.deps import RedisDep
+from src.api.deps import AuthDep, RedisDep
 from src.api.schema.common import ApiResponse, PageResponse
 from src.api.schema.task import (
     TaskCreateRequest,
@@ -46,6 +45,7 @@ TaskManagerDep = Depends(get_task_manager_dep)
 async def create_task(
     request: TaskCreateRequest,
     redis: RedisDep,
+    auth: AuthDep,
     task_manager: TaskManager = TaskManagerDep,
 ) -> ApiResponse[dict]:
     """创建生成任务（异步）。
@@ -53,6 +53,7 @@ async def create_task(
     Args:
         request: 任务创建请求。
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
         task_manager: 任务管理器依赖。
 
     Returns:
@@ -62,7 +63,7 @@ async def create_task(
         HTTPException: 商品不存在时抛出 404 错误。
     """
     # 检查商品是否存在
-    product = await redis.get_product(request.product_id)
+    product = await redis.get_product(request.product_id, tenant_id=auth.tenant_id)
     if not product:
         raise HTTPException(status_code=404, detail="商品不存在")
 
@@ -71,6 +72,7 @@ async def create_task(
         product_id=request.product_id,
         request_data=request.model_dump(),
         redis=redis,
+        tenant_id=auth.tenant_id,
     )
 
     return ApiResponse(
@@ -87,6 +89,7 @@ async def create_task(
 )
 async def list_tasks(
     redis: RedisDep,
+    auth: AuthDep,
     task_manager: TaskManager = TaskManagerDep,
     query: TaskListQuery = Depends(),
 ) -> ApiResponse[PageResponse[dict]]:
@@ -94,6 +97,7 @@ async def list_tasks(
 
     Args:
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
         task_manager: 任务管理器依赖。
         query: 查询参数。
 
@@ -102,6 +106,7 @@ async def list_tasks(
     """
     tasks, total = await task_manager.list_tasks(
         redis=redis,
+        tenant_id=auth.tenant_id,
         page=query.page,
         page_size=query.page_size,
         status=query.status.value if query.status else None,
@@ -128,6 +133,7 @@ async def list_tasks(
 async def get_task_detail(
     task_id: str,
     redis: RedisDep,
+    auth: AuthDep,
     task_manager: TaskManager = TaskManagerDep,
 ) -> ApiResponse[TaskDetailResponse]:
     """获取任务详情。
@@ -135,6 +141,7 @@ async def get_task_detail(
     Args:
         task_id: 任务 ID。
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
         task_manager: 任务管理器依赖。
 
     Returns:
@@ -144,7 +151,7 @@ async def get_task_detail(
         HTTPException: 任务不存在时抛出 404 错误。
     """
     try:
-        detail = await task_manager.get_task_detail(task_id, redis)
+        detail = await task_manager.get_task_detail(task_id, redis, tenant_id=auth.tenant_id)
         return ApiResponse(
             code=200,
             message="获取成功",
@@ -162,6 +169,7 @@ async def get_task_detail(
 async def get_task_status(
     task_id: str,
     redis: RedisDep,
+    auth: AuthDep,
     task_manager: TaskManager = TaskManagerDep,
 ) -> ApiResponse[TaskStatusResponse]:
     """获取任务状态/进度。
@@ -169,6 +177,7 @@ async def get_task_status(
     Args:
         task_id: 任务 ID。
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
         task_manager: 任务管理器依赖。
 
     Returns:
@@ -178,7 +187,7 @@ async def get_task_status(
         HTTPException: 任务不存在时抛出 404 错误。
     """
     try:
-        status_data = await task_manager.get_task_status(task_id, redis)
+        status_data = await task_manager.get_task_status(task_id, redis, tenant_id=auth.tenant_id)
         return ApiResponse(
             code=200,
             message="获取成功",
@@ -196,6 +205,7 @@ async def get_task_status(
 async def cancel_task(
     task_id: str,
     redis: RedisDep,
+    auth: AuthDep,
     task_manager: TaskManager = TaskManagerDep,
 ) -> ApiResponse[dict]:
     """取消任务。
@@ -203,6 +213,7 @@ async def cancel_task(
     Args:
         task_id: 任务 ID。
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
         task_manager: 任务管理器依赖。
 
     Returns:
@@ -211,7 +222,7 @@ async def cancel_task(
     Raises:
         HTTPException: 任务不存在时抛出 404 错误。
     """
-    success = await task_manager.cancel_task(task_id, redis)
+    success = await task_manager.cancel_task(task_id, redis, tenant_id=auth.tenant_id)
     if not success:
         raise HTTPException(status_code=404, detail="任务不存在")
 
@@ -230,12 +241,14 @@ async def cancel_task(
 async def delete_task(
     task_id: str,
     redis: RedisDep,
+    auth: AuthDep,
 ) -> ApiResponse[dict]:
     """删除任务。
 
     Args:
         task_id: 任务 ID。
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
 
     Returns:
         删除结果。
@@ -243,7 +256,7 @@ async def delete_task(
     Raises:
         HTTPException: 任务不存在时抛出 404 错误。
     """
-    success = await redis.delete_task(task_id)
+    success = await redis.delete_task(task_id, tenant_id=auth.tenant_id)
     if not success:
         raise HTTPException(status_code=404, detail="任务不存在")
 
@@ -261,6 +274,9 @@ async def task_websocket(
 ) -> None:
     """任务状态实时推送 WebSocket。
 
+    Note:
+        WebSocket 鉴权由 Task 5 统一实现，当前使用 dev tenant 最小兼容。
+
     Args:
         websocket: WebSocket 连接。
         task_id: 任务 ID。
@@ -270,11 +286,16 @@ async def task_websocket(
     redis = await get_redis_client()
     task_manager = get_task_manager()
 
+    # TODO: Task 5 将实现 authenticate_websocket 获取真实 tenant_id
+    _ws_tenant_id = "dev"
+
     try:
         while True:
             # 获取任务状态
             try:
-                status_data = await task_manager.get_task_status(task_id, redis)
+                status_data = await task_manager.get_task_status(
+                    task_id, redis, tenant_id=_ws_tenant_id
+                )
                 await websocket.send_json(status_data)
 
                 # 如果任务已完成或失败，关闭连接
