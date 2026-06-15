@@ -10,7 +10,7 @@ Description:
 
 from fastapi import APIRouter
 
-from src.api.deps import RedisDep
+from src.api.deps import AuthDep, RedisDep
 from src.api.schema.common import ApiResponse
 from src.api.schema.dashboard import DashboardStatsResponse, RecentTaskItem
 
@@ -40,6 +40,7 @@ def _extract_task_type(task: dict) -> str | None:
 )
 async def get_dashboard_stats(
     redis: RedisDep,
+    auth: AuthDep,
 ) -> ApiResponse[DashboardStatsResponse]:
     """获取仪表盘聚合统计数据。
 
@@ -47,24 +48,35 @@ async def get_dashboard_stats(
 
     Args:
         redis: Redis 客户端依赖。
+        auth: 认证上下文依赖。
 
     Returns:
         仪表盘统计数据。
     """
     # 商品总数
-    _, total_products = await redis.list_products(page=1, page_size=1)
+    _, total_products = await redis.list_products(
+        tenant_id=auth.tenant_id, page=1, page_size=1
+    )
 
     # 任务总数
-    _, total_tasks = await redis.list_tasks(page=1, page_size=1)
+    _, total_tasks = await redis.list_tasks(
+        tenant_id=auth.tenant_id, page=1, page_size=1
+    )
 
     # 运行中任务数（按状态聚合）
-    _, running_tasks = await redis.list_tasks(page=1, page_size=1, status="running")
+    _, running_tasks = await redis.list_tasks(
+        tenant_id=auth.tenant_id, page=1, page_size=1, status="running"
+    )
 
     # 失败任务数
-    _, failed_tasks = await redis.list_tasks(page=1, page_size=1, status="failed")
+    _, failed_tasks = await redis.list_tasks(
+        tenant_id=auth.tenant_id, page=1, page_size=1, status="failed"
+    )
 
     # 最近任务（最新 5 条）
-    recent, _ = await redis.list_tasks(page=1, page_size=5)
+    recent, _ = await redis.list_tasks(
+        tenant_id=auth.tenant_id, page=1, page_size=5
+    )
 
     recent_items = [
         RecentTaskItem(

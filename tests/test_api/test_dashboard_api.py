@@ -13,6 +13,8 @@ from types import MethodType
 
 import pytest
 
+from src.auth.context import AuthContext
+
 
 class FakeRedis:
     """模拟 Redis 客户端，用于测试。"""
@@ -51,11 +53,13 @@ class FakeRedis:
             },
         ]
 
-    async def list_products(self, page: int = 1, page_size: int = 1) -> tuple[list, int]:  # noqa: ARG002
+    async def list_products(
+        self, *, tenant_id: str, page: int = 1, page_size: int = 1, category: str | None = None  # noqa: ARG002
+    ) -> tuple[list, int]:
         return [], 3
 
     async def list_tasks(
-        self, page: int = 1, page_size: int = 10, status: str | None = None
+        self, *, tenant_id: str, page: int = 1, page_size: int = 10, status: str | None = None  # noqa: ARG002
     ) -> tuple[list[dict], int]:
         filtered = [t for t in self._tasks if status is None or t["status"] == status]
         start = (page - 1) * page_size
@@ -69,16 +73,25 @@ def fake_redis() -> FakeRedis:
     return FakeRedis()
 
 
+@pytest.fixture
+def auth_ctx() -> AuthContext:
+    """创建测试用 AuthContext。"""
+    return AuthContext(tenant_id="test_tenant", user_id="test_user", scopes=["*"])
+
+
 class TestDashboardAPI:
     """仪表盘 API 测试。"""
 
-    def test_get_dashboard_stats_success(self, fake_redis: FakeRedis) -> None:
+    def test_get_dashboard_stats_success(
+        self, fake_redis: FakeRedis, auth_ctx: AuthContext
+    ) -> None:
         """测试获取仪表盘统计数据成功。"""
         from src.api.router.dashboard import get_dashboard_stats
 
         async def _run() -> None:
             result = await get_dashboard_stats(
                 redis=fake_redis,  # type: ignore[arg-type]
+                auth=auth_ctx,
             )
             assert result.code == 200
             assert result.message == "获取成功"
@@ -95,7 +108,7 @@ class TestDashboardAPI:
 
         asyncio.run(_run())
 
-    def test_get_dashboard_stats_empty(self) -> None:
+    def test_get_dashboard_stats_empty(self, auth_ctx: AuthContext) -> None:
         """测试空数据时仪表盘统计。"""
         empty_redis = FakeRedis()
         empty_redis._tasks = []  # type: ignore[attr-defined]
@@ -105,6 +118,7 @@ class TestDashboardAPI:
         async def _run() -> None:
             result = await get_dashboard_stats(
                 redis=empty_redis,  # type: ignore[arg-type]
+                auth=auth_ctx,
             )
             assert result.code == 200
             assert result.data is not None
@@ -114,7 +128,7 @@ class TestDashboardAPI:
 
         asyncio.run(_run())
 
-    def test_get_dashboard_stats_all_running(self) -> None:
+    def test_get_dashboard_stats_all_running(self, auth_ctx: AuthContext) -> None:
         """测试所有任务都在运行时的统计。"""
         running_redis = FakeRedis()
         running_redis._tasks = [  # type: ignore[attr-defined]
@@ -145,6 +159,7 @@ class TestDashboardAPI:
         async def _run() -> None:
             result = await get_dashboard_stats(
                 redis=running_redis,  # type: ignore[arg-type]
+                auth=auth_ctx,
             )
             assert result.data is not None
             assert result.data.total_tasks == 2
@@ -155,7 +170,7 @@ class TestDashboardAPI:
 
         asyncio.run(_run())
 
-    def test_get_dashboard_stats_no_running_tasks(self) -> None:
+    def test_get_dashboard_stats_no_running_tasks(self, auth_ctx: AuthContext) -> None:
         """测试没有运行中任务时的统计。"""
         no_running_redis = FakeRedis()
         no_running_redis._tasks = [  # type: ignore[attr-defined]
@@ -176,6 +191,7 @@ class TestDashboardAPI:
         async def _run() -> None:
             result = await get_dashboard_stats(
                 redis=no_running_redis,  # type: ignore[arg-type]
+                auth=auth_ctx,
             )
             assert result.data is not None
             assert result.data.total_tasks == 1
@@ -203,7 +219,7 @@ class TestDashboardAPI:
         # request 中无 task_type
         assert _extract_task_type({"request": {"foo": "bar"}}) is None
 
-    def test_product_id_none_for_empty_string(self) -> None:
+    def test_product_id_none_for_empty_string(self, auth_ctx: AuthContext) -> None:
         """测试 product_id 为空字符串时转换为 None。"""
         empty_prod_redis = FakeRedis()
         empty_prod_redis._tasks = [  # type: ignore[attr-defined]
@@ -224,6 +240,7 @@ class TestDashboardAPI:
         async def _run() -> None:
             result = await get_dashboard_stats(
                 redis=empty_prod_redis,  # type: ignore[arg-type]
+                auth=auth_ctx,
             )
             assert result.data is not None
             assert result.data.recent_tasks[0].product_id is None
@@ -256,10 +273,10 @@ class TestRedisClientTaskListing:
         async def _ensure_connected(self) -> FakeRedisListClient:  # noqa: ANN001
             return FakeRedisListClient()
 
-        async def _get_task_metadata(self, task_id: str) -> dict:
+        async def _get_task_metadata(self, task_id: str, *, tenant_id: str) -> dict:  # noqa: ARG002
             return metadata_by_id[task_id]
 
-        async def _get_task_state(self, task_id: str):  # noqa: ANN001, ARG001
+        async def _get_task_state(self, task_id: str, *, tenant_id: str):  # noqa: ANN001, ARG002
             return None
 
         redis_client._ensure_connected = MethodType(_ensure_connected, redis_client)  # type: ignore[method-assign]
@@ -267,7 +284,9 @@ class TestRedisClientTaskListing:
         redis_client.get_task_state = MethodType(_get_task_state, redis_client)  # type: ignore[method-assign]
 
         async def _run() -> None:
-            tasks, total = await redis_client.list_tasks(page=1, page_size=1, status="running")
+            tasks, total = await redis_client.list_tasks(
+                tenant_id="test_tenant", page=1, page_size=1, status="running"
+            )
 
             assert total == 2
             assert len(tasks) == 1
