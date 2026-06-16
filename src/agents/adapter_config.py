@@ -26,6 +26,9 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 300  # 5 分钟
 
 
+_MISSING: object = object()
+
+
 class AdapterConfigManager:
     """适配器配置管理器（单例）。
 
@@ -46,18 +49,23 @@ class AdapterConfigManager:
         return cls._instance
 
     async def get_config(
-        self, platform: Platform, shop_id: str = "default", tenant_id: str = "dev"
+        self, platform: Platform, shop_id: str = "default", tenant_id: str = _MISSING  # type: ignore[assignment]
     ) -> dict[str, Any] | None:
         """获取平台适配器配置。
 
         Args:
             platform: 平台枚举。
             shop_id: 店铺 ID，默认 "default"。
-            tenant_id: 租户 ID，默认 "dev"。
+            tenant_id: 租户 ID，必填。
 
         Returns:
             凭证字典（含 client_id, client_secret 等），未找到返回 None。
+
+        Raises:
+            ValueError: tenant_id 未提供。
         """
+        if tenant_id is _MISSING:
+            raise ValueError("tenant_id is required — caller must provide authenticated tenant context")
         cache_key = (tenant_id, platform, shop_id)
 
         # 检查缓存
