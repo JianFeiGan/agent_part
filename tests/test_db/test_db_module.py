@@ -65,6 +65,7 @@ class TestVectorStore:
             session=mock_session,
             query_embedding=[0.1] * 1024,
             top_k=5,
+            tenant_id="test_tenant",
         )
 
         assert results == []
@@ -83,6 +84,7 @@ class TestVectorStore:
             query_embedding=[0.1] * 1024,
             top_k=5,
             doc_type="brand_guide",
+            tenant_id="test_tenant",
         )
 
         # 验证 SQL 语句包含 doc_type 过滤
@@ -103,6 +105,7 @@ class TestVectorStore:
             query_embedding=[0.1] * 1024,
             top_k=5,
             similarity_threshold=0.7,
+            tenant_id="test_tenant",
         )
 
         mock_session.execute.assert_called_once()
