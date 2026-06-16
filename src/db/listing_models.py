@@ -24,6 +24,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from src.db.encrypted_json import EncryptedJSONB
 from src.db.postgres import Base
 
 
@@ -223,7 +224,7 @@ class AdapterConfigPO(Base):
     )
     platform: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     shop_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    credentials: Mapped[dict] = mapped_column(JSONB, default=dict)
+    credentials: Mapped[dict] = mapped_column(EncryptedJSONB, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

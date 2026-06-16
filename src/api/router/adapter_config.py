@@ -4,6 +4,7 @@
 Description:
     提供适配器配置的 CRUD REST 接口。
     写操作自动刷新 AdapterConfigManager 缓存。
+    所有端点需要认证，按 tenant_id 隔离数据。
 @author ganjianfei
 @version 1.0.0
 2026-04-25
@@ -11,7 +12,7 @@ Description:
 
 import logging
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 
 from src.agents.adapter_config import AdapterConfigManager
@@ -21,6 +22,8 @@ from src.api.schema.adapter_config import (
     AdapterConfigUpdate,
 )
 from src.api.schema.common import ApiResponse
+from src.auth.api_key import require_auth
+from src.auth.context import AuthContext
 from src.db.listing_models import AdapterConfigPO
 from src.db.postgres import get_db
 from src.models.listing import Platform
@@ -38,7 +41,7 @@ def _po_to_response(po: AdapterConfigPO) -> AdapterConfigResponse:
         id=po.id,
         platform=po.platform,
         shop_id=po.shop_id,
-        credentials_masked={k: "***" for k in po.credentials},
+        credentials_masked=dict.fromkeys(po.credentials, "***"),
         is_active=po.is_active,
         created_at=po.created_at.isoformat() if po.created_at else None,
         updated_at=po.updated_at.isoformat() if po.updated_at else None,
@@ -51,17 +54,22 @@ def _po_to_response(po: AdapterConfigPO) -> AdapterConfigResponse:
     status_code=status.HTTP_201_CREATED,
     summary="创建适配器配置",
 )
-async def create_adapter_config(request: AdapterConfigCreate) -> ApiResponse[AdapterConfigResponse]:
+async def create_adapter_config(
+    request: AdapterConfigCreate,
+    auth: AuthContext = Depends(require_auth),
+) -> ApiResponse[AdapterConfigResponse]:
     """创建新的适配器配置。
 
     Args:
         request: 配置创建请求。
+        auth: 认证上下文。
 
     Returns:
         新创建的配置（脱敏）。
     """
     async with get_db() as session:
         po = AdapterConfigPO(
+            tenant_id=auth.tenant_id,
             platform=request.platform.value,
             shop_id=request.shop_id,
             credentials=request.credentials,
@@ -70,7 +78,9 @@ async def create_adapter_config(request: AdapterConfigCreate) -> ApiResponse[Ada
         session.add(po)
         await session.flush()
         await session.refresh(po)
-        await _config_manager.invalidate_cache(request.platform, request.shop_id)
+        await _config_manager.invalidate_cache(
+            request.platform, request.shop_id, tenant_id=auth.tenant_id
+        )
         return ApiResponse(
             code=200,
             message="创建成功",
@@ -85,17 +95,21 @@ async def create_adapter_config(request: AdapterConfigCreate) -> ApiResponse[Ada
 )
 async def list_adapter_configs(
     platform: Platform | None = None,
+    auth: AuthContext = Depends(require_auth),
 ) -> ApiResponse[list[AdapterConfigResponse]]:
-    """获取适配器配置列表。
+    """获取适配器配置列表（仅当前租户）。
 
     Args:
         platform: 可选的平台过滤。
+        auth: 认证上下文。
 
     Returns:
         配置列表（脱敏）。
     """
     async with get_db() as session:
-        stmt = select(AdapterConfigPO)
+        stmt = select(AdapterConfigPO).where(
+            AdapterConfigPO.tenant_id == auth.tenant_id
+        )
         if platform:
             stmt = stmt.where(AdapterConfigPO.platform == platform.value)
         stmt = stmt.order_by(AdapterConfigPO.created_at.desc())
@@ -113,18 +127,22 @@ async def list_adapter_configs(
     response_model=ApiResponse[AdapterConfigResponse],
     summary="适配器配置详情",
 )
-async def get_adapter_config(config_id: int) -> ApiResponse[AdapterConfigResponse]:
-    """获取单个适配器配置详情（脱敏）。
+async def get_adapter_config(
+    config_id: int,
+    auth: AuthContext = Depends(require_auth),
+) -> ApiResponse[AdapterConfigResponse]:
+    """获取单个适配器配置详情（脱敏，仅当前租户）。
 
     Args:
         config_id: 配置 ID。
+        auth: 认证上下文。
 
     Returns:
         配置详情（脱敏）。
     """
     async with get_db() as session:
         po = await session.get(AdapterConfigPO, config_id)
-        if not po:
+        if not po or po.tenant_id != auth.tenant_id:
             return ApiResponse(code=404, message="配置不存在", data=None)
         return ApiResponse(
             code=200,
@@ -141,19 +159,21 @@ async def get_adapter_config(config_id: int) -> ApiResponse[AdapterConfigRespons
 async def update_adapter_config(
     config_id: int,
     request: AdapterConfigUpdate,
+    auth: AuthContext = Depends(require_auth),
 ) -> ApiResponse[AdapterConfigResponse]:
-    """更新适配器配置。
+    """更新适配器配置（仅当前租户）。
 
     Args:
         config_id: 配置 ID。
         request: 更新请求。
+        auth: 认证上下文。
 
     Returns:
         更新后的配置（脱敏）。
     """
     async with get_db() as session:
         po = await session.get(AdapterConfigPO, config_id)
-        if not po:
+        if not po or po.tenant_id != auth.tenant_id:
             return ApiResponse(code=404, message="配置不存在", data=None)
 
         if request.credentials is not None:
@@ -163,7 +183,9 @@ async def update_adapter_config(
 
         await session.flush()
         await session.refresh(po)
-        await _config_manager.invalidate_cache(Platform(po.platform))
+        await _config_manager.invalidate_cache(
+            Platform(po.platform), tenant_id=auth.tenant_id
+        )
         return ApiResponse(
             code=200,
             message="更新成功",
@@ -176,22 +198,26 @@ async def update_adapter_config(
     response_model=ApiResponse[None],
     summary="删除适配器配置",
 )
-async def delete_adapter_config(config_id: int) -> ApiResponse[None]:
-    """删除适配器配置。
+async def delete_adapter_config(
+    config_id: int,
+    auth: AuthContext = Depends(require_auth),
+) -> ApiResponse[None]:
+    """删除适配器配置（仅当前租户）。
 
     Args:
         config_id: 配置 ID。
+        auth: 认证上下文。
 
     Returns:
         操作结果。
     """
     async with get_db() as session:
         po = await session.get(AdapterConfigPO, config_id)
-        if not po:
+        if not po or po.tenant_id != auth.tenant_id:
             return ApiResponse(code=404, message="配置不存在", data=None)
 
         platform = Platform(po.platform)
         await session.delete(po)
         await session.flush()
-        await _config_manager.invalidate_cache(platform)
+        await _config_manager.invalidate_cache(platform, tenant_id=auth.tenant_id)
         return ApiResponse(code=200, message="删除成功", data=None)
