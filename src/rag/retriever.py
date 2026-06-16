@@ -77,6 +77,8 @@ class KnowledgeRetriever:
         category: str | None = None,
         top_k: int | None = None,
         similarity_threshold: float | None = None,
+        *,
+        tenant_id: str,
     ) -> RetrievalResult:
         """检索相关知识。
 
@@ -87,6 +89,7 @@ class KnowledgeRetriever:
             category: 商品类目过滤。
             top_k: 返回结果数量。
             similarity_threshold: 相似度阈值。
+            tenant_id: 租户 ID。
 
         Returns:
             检索结果。
@@ -102,6 +105,7 @@ class KnowledgeRetriever:
             doc_type=doc_type,
             category=category,
             similarity_threshold=similarity_threshold,
+            tenant_id=tenant_id,
         )
 
         # 构建上下文
@@ -128,6 +132,8 @@ class KnowledgeRetriever:
         product_name: str,
         category: str,
         brand: str | None = None,
+        *,
+        tenant_id: str,
     ) -> RetrievalResult:
         """为商品分析检索知识。
 
@@ -138,6 +144,7 @@ class KnowledgeRetriever:
             product_name: 商品名称。
             category: 商品类目。
             brand: 品牌名称。
+            tenant_id: 租户 ID。
 
         Returns:
             检索结果。
@@ -151,6 +158,7 @@ class KnowledgeRetriever:
             doc_type="category_knowledge",
             category=category,
             top_k=3,
+            tenant_id=tenant_id,
         )
         results_list.extend(category_result.results)
 
@@ -161,6 +169,7 @@ class KnowledgeRetriever:
                 query=f"{brand} 品牌规范 术语",
                 doc_type="brand_guide",
                 top_k=2,
+                tenant_id=tenant_id,
             )
             results_list.extend(brand_result.results)
 
@@ -171,6 +180,7 @@ class KnowledgeRetriever:
             doc_type="case_study",
             category=category,
             top_k=3,
+            tenant_id=tenant_id,
         )
         results_list.extend(case_result.results)
 
@@ -192,6 +202,8 @@ class KnowledgeRetriever:
         category: str,
         brand: str | None = None,
         style_preference: str | None = None,
+        *,
+        tenant_id: str,
     ) -> RetrievalResult:
         """为创意策划检索知识。
 
@@ -202,6 +214,7 @@ class KnowledgeRetriever:
             category: 商品类目。
             brand: 品牌名称。
             style_preference: 风格偏好。
+            tenant_id: 租户 ID。
 
         Returns:
             检索结果。
@@ -215,6 +228,7 @@ class KnowledgeRetriever:
                 query=f"{brand} 视觉规范 配色",
                 doc_type="brand_guide",
                 top_k=3,
+                tenant_id=tenant_id,
             )
             results_list.extend(brand_result.results)
 
@@ -226,6 +240,7 @@ class KnowledgeRetriever:
             doc_type="case_study",
             category=category,
             top_k=5,
+            tenant_id=tenant_id,
         )
         results_list.extend(style_result.results)
 
@@ -244,12 +259,15 @@ class KnowledgeRetriever:
         self,
         session: AsyncSession,
         content: str | None = None,
+        *,
+        tenant_id: str,
     ) -> RetrievalResult:
         """检索合规规则。
 
         Args:
             session: 数据库会话。
             content: 待检查的内容（用于关键词匹配）。
+            tenant_id: 租户 ID。
 
         Returns:
             检索结果。
@@ -260,6 +278,7 @@ class KnowledgeRetriever:
             query=query,
             doc_type="compliance_rule",
             top_k=5,
+            tenant_id=tenant_id,
         )
         return result
 
@@ -268,6 +287,8 @@ class KnowledgeRetriever:
         session: AsyncSession,
         category: str,
         limit: int = 20,
+        *,
+        tenant_id: str | None = None,
     ) -> str:
         """检索类目记忆上下文。
 
@@ -278,6 +299,7 @@ class KnowledgeRetriever:
             session: 数据库会话。
             category: 商品类目。
             limit: 实体返回数量限制。
+            tenant_id: 租户 ID（可选）。
 
         Returns:
             格式化后的上下文字符串，无数据时返回空字符串。
@@ -286,7 +308,9 @@ class KnowledgeRetriever:
             from src.rag.graph_memory import GraphMemoryService
 
             service = GraphMemoryService()
-            context = await service.build_category_context(session, category, limit=limit)
+            context = await service.build_category_context(
+                session, category, limit=limit, tenant_id=tenant_id
+            )
 
             # 如果没有任何数据则返回空字符串
             if not context.entities and not context.edges and context.category_memory is None:

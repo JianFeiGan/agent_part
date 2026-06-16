@@ -12,12 +12,22 @@ from src.db.listing_models import TaskResultPO
 from src.models.listing import ListingProduct, ListingTask, Platform
 
 
+@pytest.fixture(autouse=True)
+def _disable_auth() -> None:
+    """禁用 auth 以便测试。"""
+    from src.config.settings import get_settings
+
+    settings = get_settings()
+    settings.auth_enabled = False
+
+
 def _make_task_po(**kwargs) -> MagicMock:
     """构造模拟 ListingTaskPO。"""
     from src.db.listing_models import ListingTaskPO as _TaskPO
 
     defaults = {
         "id": 1,
+        "tenant_id": "test-tenant",
         "product_sku": "PUSH-001",
         "target_platforms": ["amazon"],
         "status": "pending",

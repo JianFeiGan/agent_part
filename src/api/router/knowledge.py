@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.deps import AuthDep
 from src.api.schema.common import Result
 from src.db import get_db
 from src.db.models import KnowledgeDoc
@@ -109,6 +110,7 @@ class KnowledgeStatsResponse(BaseModel):
 @router.post("/documents", response_model=Result[KnowledgeDocumentResponse])
 async def create_document(
     request: KnowledgeDocumentCreate,
+    auth: AuthDep,
     session: AsyncSession = Depends(get_db),
 ) -> Result[KnowledgeDocumentResponse]:
     """创建知识文档。
@@ -116,12 +118,16 @@ async def create_document(
     Args:
         request: 创建请求。
         session: 数据库会话。
+        auth: 认证上下文。
 
     Returns:
         创建的文档信息。
     """
+    tenant_id = auth.tenant_id if auth else "default"
+
     # 创建文档记录
     doc = KnowledgeDoc(
+        tenant_id=tenant_id,
         title=request.title,
         doc_type=request.doc_type,
         category=request.category,
@@ -152,12 +158,12 @@ async def create_document(
     embeddings = embedding_service.embed_batch(contents)
 
     # 存储向量
-    await vector_store.add_vectors(session, doc.id, chunks, embeddings)
+    await vector_store.add_vectors(session, doc.id, chunks, embeddings, tenant_id=tenant_id)
 
     await session.commit()
     await session.refresh(doc)
 
-    logger.info(f"Created knowledge document: id={doc.id}, title='{doc.title}'")
+    logger.info(f"Created knowledge document: id={doc.id}, title='{doc.title}', tenant_id={tenant_id}")
 
     return Result.success(
         KnowledgeDocumentResponse(
@@ -175,6 +181,7 @@ async def create_document(
 
 @router.post("/documents/upload", response_model=Result[KnowledgeDocumentResponse])
 async def upload_document(
+    auth: AuthDep,
     file: UploadFile = File(...),
     doc_type: str = Query(..., description="文档类型"),
     category: str | None = Query(default=None, description="商品类目"),
@@ -189,10 +196,13 @@ async def upload_document(
         doc_type: 文档类型。
         category: 商品类目。
         session: 数据库会话。
+        auth: 认证上下文。
 
     Returns:
         创建的文档信息。
     """
+    tenant_id = auth.tenant_id if auth else "default"
+
     # 检查文件格式
     allowed_extensions = {".md", ".txt", ".json", ".pdf", ".docx"}
     file_ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
@@ -222,6 +232,7 @@ async def upload_document(
 
         # 创建数据库记录
         doc = KnowledgeDoc(
+            tenant_id=tenant_id,
             title=parsed_doc.title,
             doc_type=parsed_doc.doc_type,
             category=parsed_doc.category,
@@ -240,7 +251,7 @@ async def upload_document(
 
             contents = [chunk["content"] for chunk in chunks]
             embeddings = embedding_service.embed_batch(contents)
-            await vector_store.add_vectors(session, doc.id, chunks, embeddings)
+            await vector_store.add_vectors(session, doc.id, chunks, embeddings, tenant_id=tenant_id)
 
         await session.commit()
         await session.refresh(doc)
@@ -269,6 +280,7 @@ async def upload_document(
 
 @router.get("/documents", response_model=Result[KnowledgeDocumentListResponse])
 async def list_documents(
+    auth: AuthDep,
     doc_type: str | None = Query(default=None, description="文档类型过滤"),
     category: str | None = Query(default=None, description="类目过滤"),
     page: int = Query(default=1, ge=1, description="页码"),
@@ -283,14 +295,17 @@ async def list_documents(
         page: 页码。
         page_size: 每页数量。
         session: 数据库会话。
+        auth: 认证上下文。
 
     Returns:
-        文档列表。
+        文档列表（仅当前租户）。
     """
     from sqlalchemy import func, select
 
+    tenant_id = auth.tenant_id if auth else "default"
+
     # 构建查询
-    query = select(KnowledgeDoc)
+    query = select(KnowledgeDoc).where(KnowledgeDoc.tenant_id == tenant_id)
 
     if doc_type:
         query = query.where(KnowledgeDoc.doc_type == doc_type)
@@ -332,6 +347,7 @@ async def list_documents(
 @router.delete("/documents/{doc_id}", response_model=Result[dict])
 async def delete_document(
     doc_id: int,
+    auth: AuthDep,
     session: AsyncSession = Depends(get_db),
 ) -> Result[dict]:
     """删除知识文档。
@@ -341,13 +357,21 @@ async def delete_document(
     Args:
         doc_id: 文档 ID。
         session: 数据库会话。
+        auth: 认证上下文。
 
     Returns:
         删除结果。
     """
     from sqlalchemy import select
 
-    result = await session.execute(select(KnowledgeDoc).where(KnowledgeDoc.id == doc_id))
+    tenant_id = auth.tenant_id if auth else "default"
+
+    result = await session.execute(
+        select(KnowledgeDoc).where(
+            KnowledgeDoc.id == doc_id,
+            KnowledgeDoc.tenant_id == tenant_id,
+        )
+    )
     doc = result.scalar_one_or_none()
 
     if not doc:
@@ -357,7 +381,7 @@ async def delete_document(
     await session.delete(doc)
     await session.commit()
 
-    logger.info(f"Deleted knowledge document: id={doc_id}")
+    logger.info(f"Deleted knowledge document: id={doc_id}, tenant_id={tenant_id}")
 
     return Result.success({"deleted_id": doc_id})
 
@@ -365,6 +389,7 @@ async def delete_document(
 @router.post("/search", response_model=Result[SearchResponse])
 async def search_knowledge(
     request: SearchRequest,
+    auth: AuthDep,
     session: AsyncSession = Depends(get_db),
 ) -> Result[SearchResponse]:
     """检索测试接口。
@@ -374,11 +399,14 @@ async def search_knowledge(
     Args:
         request: 检索请求。
         session: 数据库会话。
+        auth: 认证上下文。
 
     Returns:
         检索结果。
     """
     from src.rag.retriever import KnowledgeRetriever
+
+    tenant_id = auth.tenant_id if auth else "default"
 
     retriever = KnowledgeRetriever()
     result = await retriever.retrieve(
@@ -387,6 +415,7 @@ async def search_knowledge(
         doc_type=request.doc_type,
         category=request.category,
         top_k=request.top_k,
+        tenant_id=tenant_id,
     )
 
     return Result.success(
@@ -410,18 +439,22 @@ async def search_knowledge(
 
 @router.get("/stats", response_model=Result[KnowledgeStatsResponse])
 async def get_knowledge_stats(
+    auth: AuthDep,
     session: AsyncSession = Depends(get_db),
 ) -> Result[KnowledgeStatsResponse]:
     """获取知识库统计信息。
 
     Args:
         session: 数据库会话。
+        auth: 认证上下文。
 
     Returns:
-        统计信息。
+        统计信息（仅当前租户）。
     """
+    tenant_id = auth.tenant_id if auth else "default"
+
     vector_store = VectorStore()
-    stats = await vector_store.get_stats(session)
+    stats = await vector_store.get_stats(session, tenant_id=tenant_id)
 
     return Result.success(
         KnowledgeStatsResponse(

@@ -15,8 +15,9 @@ Description:
 import logging
 from decimal import Decimal
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
+from src.api.deps import AuthDep
 from src.api.schema.common import ApiResponse
 from src.api.schema.listing import (
     ComplianceIssueResponse,
@@ -26,6 +27,8 @@ from src.api.schema.listing import (
     ProductImportRequest,
     ProductResponse,
 )
+from src.auth.api_key import require_auth
+from src.auth.context import AuthContext
 from src.db.listing_models import (
     ComplianceReportPO,
     ListingProductPO,
@@ -77,11 +80,15 @@ def _po_to_response(po: ListingProductPO) -> ProductResponse:
     status_code=status.HTTP_201_CREATED,
     summary="导入商品",
 )
-async def import_product(request: ProductImportRequest) -> ApiResponse[ProductResponse]:
+async def import_product(
+    request: ProductImportRequest,
+    auth: AuthContext = Depends(require_auth),
+) -> ApiResponse[ProductResponse]:
     """导入商品到刊登系统。
 
     Args:
         request: 商品导入请求。
+        auth: 认证上下文。
 
     Returns:
         导入的商品信息。
@@ -101,6 +108,7 @@ async def import_product(request: ProductImportRequest) -> ApiResponse[ProductRe
         repo = BaseRepository(ListingProductPO, session)
         try:
             po = await repo.create(
+                tenant_id=auth.tenant_id,
                 sku=product.sku,
                 title=product.title,
                 description=product.description,
@@ -132,11 +140,18 @@ async def import_product(request: ProductImportRequest) -> ApiResponse[ProductRe
     response_model=ApiResponse[list[ProductResponse]],
     summary="商品列表",
 )
-async def list_products() -> ApiResponse[list[ProductResponse]]:
-    """获取已导入的商品列表。"""
+async def list_products(auth: AuthDep) -> ApiResponse[list[ProductResponse]]:
+    """获取已导入的商品列表。
+
+    Args:
+        auth: 认证上下文。
+
+    Returns:
+        商品列表（仅当前租户）。
+    """
     async with get_db() as session:
         repo = BaseRepository(ListingProductPO, session)
-        products = await repo.list()
+        products = await repo.list(tenant_id=auth.tenant_id)
         return ApiResponse(
             code=200,
             message="成功",
@@ -150,11 +165,15 @@ async def list_products() -> ApiResponse[list[ProductResponse]]:
     status_code=status.HTTP_201_CREATED,
     summary="创建刊登任务",
 )
-async def create_task(request: CreateListingTaskRequest) -> ApiResponse[ListingTaskResponse]:
+async def create_task(
+    request: CreateListingTaskRequest,
+    auth: AuthContext = Depends(require_auth),
+) -> ApiResponse[ListingTaskResponse]:
     """创建刊登任务，触发生成素材和文案。
 
     Args:
         request: 刊登任务请求。
+        auth: 认证上下文。
 
     Returns:
         创建的任务信息。
@@ -167,6 +186,7 @@ async def create_task(request: CreateListingTaskRequest) -> ApiResponse[ListingT
 
         task_repo = BaseRepository(ListingTaskPO, session)
         task_po = await task_repo.create(
+            tenant_id=auth.tenant_id,
             product_sku=request.product_sku,
             target_platforms=[p.value for p in request.target_platforms],
             status="pending",
@@ -189,11 +209,18 @@ async def create_task(request: CreateListingTaskRequest) -> ApiResponse[ListingT
     response_model=ApiResponse[list[ListingTaskResponse]],
     summary="任务列表",
 )
-async def list_tasks() -> ApiResponse[list[ListingTaskResponse]]:
-    """获取刊登任务列表。"""
+async def list_tasks(auth: AuthDep) -> ApiResponse[list[ListingTaskResponse]]:
+    """获取刊登任务列表。
+
+    Args:
+        auth: 认证上下文。
+
+    Returns:
+        任务列表（仅当前租户）。
+    """
     async with get_db() as session:
         repo = BaseRepository(ListingTaskPO, session)
-        tasks = await repo.list()
+        tasks = await repo.list(tenant_id=auth.tenant_id)
         return ApiResponse(
             code=200,
             message="成功",
@@ -261,11 +288,15 @@ def _po_to_report(po: ComplianceReportPO) -> ComplianceReport:
     status_code=status.HTTP_201_CREATED,
     summary="执行合规检查",
 )
-async def run_compliance_check(task_id: int) -> ApiResponse[dict[str, ComplianceReportResponse]]:
+async def run_compliance_check(
+    task_id: int,
+    auth: AuthContext = Depends(require_auth),
+) -> ApiResponse[dict[str, ComplianceReportResponse]]:
     """对指定任务执行合规检查。
 
     Args:
         task_id: 任务ID。
+        auth: 认证上下文。
 
     Returns:
         各平台合规报告。
@@ -315,6 +346,7 @@ async def run_compliance_check(task_id: int) -> ApiResponse[dict[str, Compliance
                 "forbidden_words": report.forbidden_words,
             }
             po = ComplianceReportPO(
+                tenant_id=auth.tenant_id,
                 task_id=task_id,
                 platform=platform.value,
                 report_data=report_po_data,
@@ -334,18 +366,22 @@ async def run_compliance_check(task_id: int) -> ApiResponse[dict[str, Compliance
     response_model=ApiResponse[dict[str, ComplianceReportResponse]],
     summary="查询合规报告",
 )
-async def get_compliance_report(task_id: int) -> ApiResponse[dict[str, ComplianceReportResponse]]:
+async def get_compliance_report(
+    task_id: int,
+    auth: AuthContext = Depends(require_auth),
+) -> ApiResponse[dict[str, ComplianceReportResponse]]:
     """获取指定任务的合规报告。
 
     Args:
         task_id: 任务ID。
+        auth: 认证上下文。
 
     Returns:
-        各平台合规报告。
+        各平台合规报告（仅当前租户）。
     """
     async with get_db() as session:
         repo = BaseRepository(ComplianceReportPO, session)
-        reports_po = await repo.list(task_id=task_id)
+        reports_po = await repo.list(task_id=task_id, tenant_id=auth.tenant_id)
         if not reports_po:
             return ApiResponse(code=404, message=f"任务 {task_id} 无合规报告", data=None)
 
