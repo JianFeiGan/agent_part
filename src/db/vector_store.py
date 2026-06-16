@@ -67,6 +67,8 @@ class VectorStore:
         doc_id: int,
         chunks: list[dict[str, Any]],
         embeddings: list[list[float]],
+        *,
+        tenant_id: str,
     ) -> list[KnowledgeChunk]:
         """添加向量到存储。
 
@@ -75,15 +77,17 @@ class VectorStore:
             doc_id: 文档 ID。
             chunks: 分块内容列表，每个包含 content, metadata。
             embeddings: 向量嵌入列表。
+            tenant_id: 租户 ID。
 
         Returns:
             创建的分块记录列表。
         """
         created_chunks = []
 
-        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings, strict=True)):
             db_chunk = KnowledgeChunk(
                 doc_id=doc_id,
+                tenant_id=tenant_id,
                 chunk_index=i,
                 content=chunk["content"],
                 embedding=embedding,
@@ -93,13 +97,15 @@ class VectorStore:
             created_chunks.append(db_chunk)
 
         await session.flush()
-        logger.info(f"Added {len(created_chunks)} vectors for doc_id={doc_id}")
+        logger.info(f"Added {len(created_chunks)} vectors for doc_id={doc_id}, tenant_id={tenant_id}")
         return created_chunks
 
     async def search(
         self,
         session: AsyncSession,
         query_embedding: list[float],
+        *,
+        tenant_id: str,
         top_k: int | None = None,
         doc_type: str | None = None,
         category: str | None = None,
@@ -110,6 +116,7 @@ class VectorStore:
         Args:
             session: 数据库会话。
             query_embedding: 查询向量。
+            tenant_id: 租户 ID。
             top_k: 返回结果数量，默认使用配置值。
             doc_type: 文档类型过滤。
             category: 商品类目过滤。
@@ -135,6 +142,7 @@ class VectorStore:
             FROM knowledge_chunks kc
             JOIN knowledge_docs kd ON kc.doc_id = kd.id
             WHERE 1 - (kc.embedding <=> :embedding::vector) >= :threshold
+                AND kc.tenant_id = :tenant_id
                 AND (:doc_type IS NULL OR kd.doc_type = :doc_type)
                 AND (:category IS NULL OR kd.category = :category)
             ORDER BY kc.embedding <=> :embedding::vector
@@ -146,6 +154,7 @@ class VectorStore:
             {
                 "embedding": str(query_embedding),
                 "threshold": similarity_threshold,
+                "tenant_id": tenant_id,
                 "doc_type": doc_type,
                 "category": category,
                 "top_k": top_k,
@@ -168,22 +177,28 @@ class VectorStore:
 
         logger.info(
             f"Vector search returned {len(results)} results "
-            f"(doc_type={doc_type}, category={category})"
+            f"(doc_type={doc_type}, category={category}, tenant_id={tenant_id})"
         )
         return results
 
-    async def delete_by_doc_id(self, session: AsyncSession, doc_id: int) -> int:
+    async def delete_by_doc_id(
+        self, session: AsyncSession, doc_id: int, *, tenant_id: str
+    ) -> int:
         """删除指定文档的所有向量。
 
         Args:
             session: 数据库会话。
             doc_id: 文档 ID。
+            tenant_id: 租户 ID。
 
         Returns:
             删除的分块数量。
         """
         result = await session.execute(
-            select(KnowledgeChunk).where(KnowledgeChunk.doc_id == doc_id)
+            select(KnowledgeChunk).where(
+                KnowledgeChunk.doc_id == doc_id,
+                KnowledgeChunk.tenant_id == tenant_id,
+            )
         )
         chunks = result.scalars().all()
         count = len(chunks)
@@ -192,14 +207,17 @@ class VectorStore:
             await session.delete(chunk)
 
         await session.flush()
-        logger.info(f"Deleted {count} vectors for doc_id={doc_id}")
+        logger.info(f"Deleted {count} vectors for doc_id={doc_id}, tenant_id={tenant_id}")
         return count
 
-    async def get_stats(self, session: AsyncSession) -> dict[str, Any]:
+    async def get_stats(
+        self, session: AsyncSession, *, tenant_id: str
+    ) -> dict[str, Any]:
         """获取向量存储统计信息。
 
         Args:
             session: 数据库会话。
+            tenant_id: 租户 ID。
 
         Returns:
             统计信息字典。
@@ -209,20 +227,24 @@ class VectorStore:
             text("""
                 SELECT doc_type, COUNT(*) as count
                 FROM knowledge_docs
+                WHERE tenant_id = :tenant_id
                 GROUP BY doc_type
-            """)
+            """),
+            {"tenant_id": tenant_id},
         )
         docs_by_type = {row.doc_type: row.count for row in docs_result.fetchall()}
 
         # 分块统计
         chunks_result = await session.execute(
-            text("SELECT COUNT(*) as total FROM knowledge_chunks")
+            text("SELECT COUNT(*) as total FROM knowledge_chunks WHERE tenant_id = :tenant_id"),
+            {"tenant_id": tenant_id},
         )
         total_chunks = chunks_result.scalar() or 0
 
         # 文档总数
         total_docs_result = await session.execute(
-            text("SELECT COUNT(*) as total FROM knowledge_docs")
+            text("SELECT COUNT(*) as total FROM knowledge_docs WHERE tenant_id = :tenant_id"),
+            {"tenant_id": tenant_id},
         )
         total_docs = total_docs_result.scalar() or 0
 

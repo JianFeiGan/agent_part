@@ -59,19 +59,44 @@ class GraphMemoryService:
         self,
         session: AsyncSession,
         category: str,
+        *,
+        tenant_id: str | None = None,
     ) -> CategoryMemory | None:
         """查询指定类目的记忆记录。
 
         由于 category 字段是 unique 的，每个类目只有一条记忆记录。
+        支持租户隔离：优先返回 tenant-specific 记忆，否则返回全局记忆（tenant_id IS NULL）。
 
         Args:
             session: 数据库会话。
             category: 商品类目。
+            tenant_id: 租户 ID（可选）。
 
         Returns:
             类目记忆记录，如果不存在则返回 None。
         """
-        stmt = select(CategoryMemory).where(CategoryMemory.category == category)
+        if tenant_id:
+            # 优先返回 tenant-specific 记忆
+            stmt = (
+                select(CategoryMemory)
+                .where(CategoryMemory.category == category)
+                .where(CategoryMemory.tenant_id == tenant_id)
+            )
+            result = await session.execute(stmt)
+            memory = result.scalars().first()
+            if memory:
+                logger.debug(
+                    f"Retrieved tenant-specific category memory for '{category}', "
+                    f"tenant_id={tenant_id}"
+                )
+                return memory
+
+        # 回退到全局记忆
+        stmt = (
+            select(CategoryMemory)
+            .where(CategoryMemory.category == category)
+            .where(CategoryMemory.tenant_id.is_(None))
+        )
 
         result = await session.execute(stmt)
         memory = result.scalars().first()
@@ -88,27 +113,51 @@ class GraphMemoryService:
         category: str,
         entity_type: str | None = None,
         limit: int = 20,
+        *,
+        tenant_id: str | None = None,
     ) -> list[GraphRAGEntity]:
         """查询指定类目下的实体列表。
+
+        支持租户隔离：优先返回 tenant-specific 实体，然后返回全局实体（tenant_id IS NULL）。
 
         Args:
             session: 数据库会话。
             category: 商品类目。
             entity_type: 实体类型过滤（可选）。
             limit: 最大返回数量。
+            tenant_id: 租户 ID（可选）。
 
         Returns:
             实体列表。
         """
+        if tenant_id:
+            # 查询条件: (tenant_id == current OR tenant_id IS NULL)，优先 tenant-specific
+            tenant_condition = (
+                (GraphRAGEntity.tenant_id == tenant_id)
+                | (GraphRAGEntity.tenant_id.is_(None))
+            )
+        else:
+            tenant_condition = GraphRAGEntity.tenant_id.is_(None)
+
         stmt = (
             select(GraphRAGEntity)
             .where(GraphRAGEntity.category == category)
+            .where(tenant_condition)
         )
 
         if entity_type:
             stmt = stmt.where(GraphRAGEntity.entity_type == entity_type)
 
-        stmt = stmt.order_by(GraphRAGEntity.updated_at.desc()).limit(limit)
+        # 排序：tenant-specific 优先
+        if tenant_id:
+            stmt = stmt.order_by(
+                GraphRAGEntity.tenant_id.is_(None),  # False(0) before True(1)
+                GraphRAGEntity.updated_at.desc(),
+            )
+        else:
+            stmt = stmt.order_by(GraphRAGEntity.updated_at.desc())
+
+        stmt = stmt.limit(limit)
 
         result = await session.execute(stmt)
         entities = result.scalars().all()
@@ -126,22 +175,35 @@ class GraphMemoryService:
         category: str,
         relationship_type: str | None = None,
         limit: int = 50,
+        *,
+        tenant_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """查询指定类目下的边关系。
 
         优先通过 edge 自身的 category 字段过滤；同时 JOIN 实体表获取实体名称。
+        支持租户隔离：优先返回 tenant-specific 边，然后返回全局边（tenant_id IS NULL）。
 
         Args:
             session: 数据库会话。
             category: 商品类目。
             relationship_type: 关系类型过滤（可选）。
             limit: 最大返回数量。
+            tenant_id: 租户 ID（可选）。
 
         Returns:
             边关系字典列表，包含源/目标实体名称。
         """
         source_entity = aliased(GraphRAGEntity)
         target_entity = aliased(GraphRAGEntity)
+
+        if tenant_id:
+            edge_tenant_condition = (
+                (GraphRAGEdge.tenant_id == tenant_id)
+                | (GraphRAGEdge.tenant_id.is_(None))
+            )
+        else:
+            edge_tenant_condition = GraphRAGEdge.tenant_id.is_(None)
+
         stmt = (
             select(
                 GraphRAGEdge,
@@ -159,12 +221,22 @@ class GraphMemoryService:
                 GraphRAGEdge.target_entity_id == target_entity.id,
             )
             .where(GraphRAGEdge.category == category)
+            .where(edge_tenant_condition)
         )
 
         if relationship_type:
             stmt = stmt.where(GraphRAGEdge.relationship_type == relationship_type)
 
-        stmt = stmt.order_by(GraphRAGEdge.weight.desc()).limit(limit)
+        # 排序：tenant-specific 优先
+        if tenant_id:
+            stmt = stmt.order_by(
+                GraphRAGEdge.tenant_id.is_(None),  # False(0) before True(1)
+                GraphRAGEdge.weight.desc(),
+            )
+        else:
+            stmt = stmt.order_by(GraphRAGEdge.weight.desc())
+
+        stmt = stmt.limit(limit)
 
         result = await session.execute(stmt)
         rows = result.all()
@@ -197,22 +269,32 @@ class GraphMemoryService:
         session: AsyncSession,
         category: str,
         limit: int = 20,
+        *,
+        tenant_id: str | None = None,
     ) -> GraphMemoryContext:
         """构建类目上下文。
 
         综合查询实体、边和类目记忆，构建完整的类目知识上下文。
+        支持租户隔离。
 
         Args:
             session: 数据库会话。
             category: 商品类目。
             limit: 实体返回数量限制。
+            tenant_id: 租户 ID（可选）。
 
         Returns:
             GraphMemoryContext 包含实体、边和类目记忆信息。
         """
-        entities = await self.list_entities(session, category, limit=limit)
-        edges = await self.list_edges(session, category, limit=min(limit * 2, 50))
-        category_memory = await self.get_category_memory(session, category)
+        entities = await self.list_entities(
+            session, category, limit=limit, tenant_id=tenant_id
+        )
+        edges = await self.list_edges(
+            session, category, limit=min(limit * 2, 50), tenant_id=tenant_id
+        )
+        category_memory = await self.get_category_memory(
+            session, category, tenant_id=tenant_id
+        )
 
         entity_dicts = [
             {
