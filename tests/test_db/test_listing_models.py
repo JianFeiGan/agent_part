@@ -96,6 +96,7 @@ class TestListingModels:
     def test_adapter_config_po_fields(self) -> None:
         """测试适配器配置模型。"""
         po = AdapterConfigPO(
+            tenant_id="tenant-a",
             platform="amazon",
             shop_id="shop-001",
             credentials={
@@ -106,6 +107,7 @@ class TestListingModels:
             },
             is_active=True,
         )
+        assert po.tenant_id == "tenant-a"
         assert po.platform == "amazon"
         assert po.shop_id == "shop-001"
         assert po.credentials["marketplace_id"] == "TEST_MARKETPLACE"

@@ -178,7 +178,7 @@ def _get_registry(settings: Settings) -> dict[str, TokenPrincipal]:
     return parse_token_registry(settings.auth_api_tokens_json)
 
 
-async def require_auth(request: Request, settings: Settings | None = None) -> AuthContext:
+async def require_auth(request: Request) -> AuthContext:
     """FastAPI 依赖：验证 HTTP 请求的 API token。
 
     当 auth_enabled=False 时返回开发模式 AuthContext。
@@ -186,7 +186,6 @@ async def require_auth(request: Request, settings: Settings | None = None) -> Au
 
     Args:
         request: FastAPI Request 对象。
-        settings: 应用配置。如果为 None 则从 get_settings() 获取。
 
     Returns:
         认证后的 AuthContext。
@@ -195,8 +194,7 @@ async def require_auth(request: Request, settings: Settings | None = None) -> Au
         HTTPException: 401 当 token 缺失或无效时。
         HTTPException: 503 当 token 注册表不可用时。
     """
-    if settings is None:
-        settings = get_settings()
+    settings = get_settings()
 
     if not settings.auth_enabled:
         return AuthContext(tenant_id="dev", user_id="dev", scopes=["*"])
@@ -212,14 +210,13 @@ async def require_auth(request: Request, settings: Settings | None = None) -> Au
     return verify_api_token(raw_token, registry, settings)
 
 
-def authenticate_websocket(websocket: WebSocket, settings: Settings | None = None) -> AuthContext:
+def authenticate_websocket(websocket: WebSocket) -> AuthContext:
     """WebSocket 鉴权。
 
     同步执行，从 WebSocket 头或查询参数提取并验证 token。
 
     Args:
         websocket: FastAPI WebSocket 对象。
-        settings: 应用配置。如果为 None 则从 get_settings() 获取。
 
     Returns:
         认证后的 AuthContext。
@@ -228,8 +225,7 @@ def authenticate_websocket(websocket: WebSocket, settings: Settings | None = Non
         HTTPException: 401 当 token 缺失或无效时。
         HTTPException: 503 当 token 注册表不可用时。
     """
-    if settings is None:
-        settings = get_settings()
+    settings = get_settings()
 
     if not settings.auth_enabled:
         return AuthContext(tenant_id="dev", user_id="dev", scopes=["*"])

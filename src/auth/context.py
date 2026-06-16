@@ -8,8 +8,6 @@ Description:
 2026-06-15
 """
 
-from pydantic import BaseModel, Field
-
 
 class TokenPrincipal:
     """Token 主体信息，记录 token 哈希与关联的租户/用户/权限。"""
@@ -29,8 +27,11 @@ class TokenPrincipal:
         self.scopes = scopes
 
 
-class AuthContext(BaseModel):
+class AuthContext:
     """认证上下文，携带租户、用户和权限范围信息。
+
+    注意：这是普通类而非 Pydantic BaseModel，以避免 FastAPI 将其
+    误解析为请求体参数。仅作为依赖注入的返回值使用。
 
     Attributes:
         tenant_id: 租户标识。
@@ -38,9 +39,17 @@ class AuthContext(BaseModel):
         scopes: 权限范围列表。
     """
 
-    tenant_id: str = Field(description="租户标识")
-    user_id: str = Field(description="用户标识")
-    scopes: list[str] = Field(default_factory=list, description="权限范围列表")
+    def __init__(self, tenant_id: str, user_id: str, scopes: list[str] | None = None) -> None:
+        """初始化 AuthContext。
+
+        Args:
+            tenant_id: 租户标识。
+            user_id: 用户标识。
+            scopes: 权限范围列表。
+        """
+        self.tenant_id = tenant_id
+        self.user_id = user_id
+        self.scopes = scopes if scopes is not None else []
 
     def has_scope(self, scope: str) -> bool:
         """检查是否拥有指定 scope。
