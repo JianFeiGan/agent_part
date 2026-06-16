@@ -14,6 +14,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.api.router import api_router
 from src.api.service.redis_client import close_redis, get_redis
@@ -120,6 +121,14 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 
 # 注册路由
 app.include_router(api_router)
+
+# 挂载静态文件目录（本地存储）
+if settings.storage_type == "local":
+    from pathlib import Path
+
+    storage_dir = Path(settings.storage_path)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=str(storage_dir)), name="static")
 
 
 # 根路径
