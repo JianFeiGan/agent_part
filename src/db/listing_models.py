@@ -74,7 +74,7 @@ class ListingTaskPO(Base):
         String(100), nullable=False, index=True, comment="租户 ID"
     )
     product_sku: Mapped[str] = mapped_column(
-        String(100), ForeignKey("listing_products.sku"), nullable=False, index=True
+        String(100), nullable=False, index=True, comment="关联商品SKU（业务层按 tenant 过滤）"
     )
     target_platforms: Mapped[list[str]] = mapped_column(JSONB, default=list)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
@@ -89,7 +89,13 @@ class ListingTaskPO(Base):
         onupdate=lambda: datetime.now(UTC),
     )
 
-    product: Mapped["ListingProductPO"] = relationship("ListingProductPO", back_populates="tasks")
+    product: Mapped["ListingProductPO"] = relationship(
+        "ListingProductPO",
+        back_populates="tasks",
+        primaryjoin="and_(ListingTaskPO.product_sku == ListingProductPO.sku, "
+        "ListingTaskPO.tenant_id == ListingProductPO.tenant_id)",
+        foreign_keys=[product_sku],
+    )
     asset_packages: Mapped[list["AssetPackagePO"]] = relationship(
         "AssetPackagePO", back_populates="task"
     )
