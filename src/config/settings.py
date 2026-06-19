@@ -79,6 +79,7 @@ class Settings(BaseSettings):
     default_image_height: int = Field(default=1024, description="默认图片高度")
     default_video_fps: int = Field(default=30, description="默认视频帧率")
     max_concurrent_generations: int = Field(default=5, description="最大并发生成数")
+    max_upload_size_mb: int = Field(default=10, description="上传文件最大大小（MB）")
 
     # ==================== 模型配置 ====================
     llm_model: str = Field(default="qwen3.5-flash", description="LLM 模型名称")
