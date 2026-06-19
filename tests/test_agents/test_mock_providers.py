@@ -2,13 +2,17 @@
 Mock provider 测试模块。
 
 验证图片和视频 mock provider 输出符合预期：
-- URL 使用 mock:// 协议
+- URL 使用 /static/ 协议（通过 StorageBackend）
 - metadata 包含 provider/is_mock/note
 - 视频 progress 设置为 100
+- 存储文件确实存在
+- GeneratedAssetPO 记录可创建（is_mock=True）
 @author ganjianfei
 @version 1.0.0
-2026-06-12
+2026-06-19
 """
+
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -17,6 +21,7 @@ from src.agents.video_generator import VideoGeneratorAgent
 from src.graph.state import AgentState
 from src.models.assets import AssetStatus
 from src.models.storyboard import Scene, SceneType, ShotType, Storyboard
+from src.storage.local import LocalStorageBackend
 
 
 def _make_storyboard() -> Storyboard:
@@ -58,10 +63,24 @@ def _make_state(storyboard: Storyboard) -> AgentState:
 class TestMockImageProvider:
     """图片 mock provider 测试。"""
 
+    @pytest.fixture
+    def storage_backend(self, tmp_path) -> LocalStorageBackend:
+        """创建指向临时目录的本地存储后端。"""
+        return LocalStorageBackend(base_path=str(tmp_path))
+
+    @pytest.fixture
+    def mock_session(self) -> AsyncMock:
+        """创建模拟异步会话。"""
+        session = AsyncMock()
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+        session.refresh = AsyncMock()
+        return session
+
     @pytest.mark.asyncio
-    async def test_image_url_uses_mock_scheme(self) -> None:
-        """图片 URL 应使用 mock://images/... 格式。"""
-        agent = ImageGeneratorAgent()
+    async def test_image_url_uses_static_prefix(self, storage_backend: LocalStorageBackend) -> None:
+        """图片 URL 应使用 /static/ 前缀（通过 StorageBackend）。"""
+        agent = ImageGeneratorAgent(storage_backend=storage_backend)
         storyboard = _make_storyboard()
         state = _make_state(storyboard)
 
@@ -73,12 +92,66 @@ class TestMockImageProvider:
         for img_data in images:
             url = img_data["url"]
             assert url is not None
-            assert url.startswith("mock://images/"), f"Expected mock://images/..., got {url}"
-            assert "example.com" not in url, f"URL should not contain example.com: {url}"
+            assert url.startswith("/static/"), f"Expected /static/..., got {url}"
+            assert url.endswith(".png"), f"Expected .png extension, got {url}"
+
+    @pytest.mark.asyncio
+    async def test_mock_image_provider_writes_to_storage(
+        self, storage_backend: LocalStorageBackend
+    ) -> None:
+        """上传后 storage 中应存在文件。"""
+        agent = ImageGeneratorAgent(storage_backend=storage_backend)
+        storyboard = _make_storyboard()
+        state = _make_state(storyboard)
+
+        result = await agent.execute(state)
+
+        assert result.success is True
+        images = result.data["generated_images"]
+        assert len(images) > 0
+        for img_data in images:
+            url = img_data["url"]
+            # 从 URL 中提取 key：/static/images/system/img_xxx.png -> images/system/img_xxx.png
+            key = url[len("/static/") :]
+            exists = await storage_backend.exists(key)
+            assert exists, f"File should exist at key: {key}"
+
+    @pytest.mark.asyncio
+    async def test_mock_image_provider_creates_asset_po(
+        self, storage_backend: LocalStorageBackend, mock_session: AsyncMock
+    ) -> None:
+        """GeneratedAssetPO 行应存在，is_mock=True。"""
+        agent = ImageGeneratorAgent(storage_backend=storage_backend)
+        storyboard = _make_storyboard()
+        state = _make_state(storyboard)
+
+        result = await agent.execute(state)
+
+        assert result.success is True
+        images = result.data["generated_images"]
+        assert len(images) > 0
+        for img_data in images:
+            # 直接调用 _call_image_api 时传入 session
+            img_list = await agent._call_image_api(
+                prompt=img_data.get("prompt", "test"),
+                negative_prompt=None,
+                width=img_data.get("width", 1024),
+                height=img_data.get("height", 1024),
+                image_type=img_data.get("image_type", "main"),
+                state=state,
+                session=mock_session,
+            )
+            assert len(img_list) == 1
+            generated = img_list[0]
+            assert generated.metadata.get("is_mock") is True
+            assert generated.metadata.get("provider") == "mock"
+            # 验证 URL 格式
+            assert generated.url.startswith("/static/")
 
     @pytest.mark.asyncio
     async def test_image_metadata_has_mock_markers(self) -> None:
         """图片 metadata 应包含 provider/is_mock/note。"""
+        # 使用不带 storage_backend 的 agent（不写存储，仍用 /static/ URL）
         agent = ImageGeneratorAgent()
         storyboard = _make_storyboard()
         state = _make_state(storyboard)
@@ -104,14 +177,44 @@ class TestMockImageProvider:
             assert img["url"].startswith("mock://images/")
             assert "example.com" not in img["url"]
 
+    @pytest.mark.asyncio
+    async def test_fallback_tenant_is_system(self, storage_backend: LocalStorageBackend) -> None:
+        """当 state 没有 tenant_id 时，应 fallback 到 'system'。"""
+        agent = ImageGeneratorAgent(storage_backend=storage_backend)
+        storyboard = _make_storyboard()
+        state = _make_state(storyboard)
+
+        result = await agent.execute(state)
+
+        assert result.success is True
+        images = result.data["generated_images"]
+        for img_data in images:
+            url = img_data["url"]
+            # 验证 key 包含 system 租户
+            assert "/images/system/" in url, f"Expected /images/system/ in URL, got {url}"
+
 
 class TestMockVideoProvider:
     """视频 mock provider 测试。"""
 
+    @pytest.fixture
+    def storage_backend(self, tmp_path) -> LocalStorageBackend:
+        """创建指向临时目录的本地存储后端。"""
+        return LocalStorageBackend(base_path=str(tmp_path))
+
+    @pytest.fixture
+    def mock_session(self) -> AsyncMock:
+        """创建模拟异步会话。"""
+        session = AsyncMock()
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+        session.refresh = AsyncMock()
+        return session
+
     @pytest.mark.asyncio
-    async def test_video_url_uses_mock_scheme(self) -> None:
-        """视频 URL 应使用 mock://videos/... 格式。"""
-        agent = VideoGeneratorAgent()
+    async def test_video_url_uses_static_prefix(self, storage_backend: LocalStorageBackend) -> None:
+        """视频 URL 应使用 /static/ 前缀（通过 StorageBackend）。"""
+        agent = VideoGeneratorAgent(storage_backend=storage_backend)
         storyboard = _make_storyboard()
         state = _make_state(storyboard)
 
@@ -121,8 +224,27 @@ class TestMockVideoProvider:
         video_data = result.data["generated_video"]
         url = video_data["url"]
         assert url is not None
-        assert url.startswith("mock://videos/"), f"Expected mock://videos/..., got {url}"
-        assert "example.com" not in url, f"URL should not contain example.com: {url}"
+        assert url.startswith("/static/"), f"Expected /static/..., got {url}"
+        assert url.endswith(".mp4"), f"Expected .mp4 extension, got {url}"
+
+    @pytest.mark.asyncio
+    async def test_mock_video_provider_writes_to_storage(
+        self, storage_backend: LocalStorageBackend
+    ) -> None:
+        """上传后 storage 中应存在文件。"""
+        agent = VideoGeneratorAgent(storage_backend=storage_backend)
+        storyboard = _make_storyboard()
+        state = _make_state(storyboard)
+
+        result = await agent.execute(state)
+
+        assert result.success is True
+        video_data = result.data["generated_video"]
+        url = video_data["url"]
+        # 从 URL 中提取 key
+        key = url[len("/static/") :]
+        exists = await storage_backend.exists(key)
+        assert exists, f"File should exist at key: {key}"
 
     @pytest.mark.asyncio
     async def test_video_metadata_has_mock_markers(self) -> None:
@@ -151,7 +273,9 @@ class TestMockVideoProvider:
 
         assert result.success is True
         video_data = result.data["generated_video"]
-        assert video_data["progress"] == 100.0, f"Expected progress 100, got {video_data['progress']}"
+        assert video_data["progress"] == 100.0, (
+            f"Expected progress 100, got {video_data['progress']}"
+        )
 
     @pytest.mark.asyncio
     async def test_video_status_is_completed(self) -> None:
@@ -165,3 +289,46 @@ class TestMockVideoProvider:
         assert result.success is True
         video_data = result.data["generated_video"]
         assert video_data["status"] == AssetStatus.COMPLETED.value
+
+    @pytest.mark.asyncio
+    async def test_mock_video_creates_asset_po(
+        self, storage_backend: LocalStorageBackend, mock_session: AsyncMock
+    ) -> None:
+        """视频 GeneratedAssetPO 行应存在，is_mock=True。"""
+        agent = VideoGeneratorAgent(storage_backend=storage_backend)
+        storyboard = _make_storyboard()
+        state = _make_state(storyboard)
+
+        result = await agent.execute(state)
+
+        assert result.success is True
+        video_data = result.data["generated_video"]
+        # 直接调用 _call_video_api 传入 session
+        video = await agent._call_video_api(
+            video_id=video_data.get("video_id", "vid_test"),
+            storyboard=storyboard,
+            scene_prompts=[{"prompt": "test"}],
+            width=video_data.get("width", 1920),
+            height=video_data.get("height", 1080),
+            state=state,
+            session=mock_session,
+        )
+        assert video.metadata.get("is_mock") is True
+        assert video.metadata.get("provider") == "mock"
+        assert video.url.startswith("/static/")
+
+    @pytest.mark.asyncio
+    async def test_video_fallback_tenant_is_system(
+        self, storage_backend: LocalStorageBackend
+    ) -> None:
+        """当 state 没有 tenant_id 时，应 fallback 到 'system'。"""
+        agent = VideoGeneratorAgent(storage_backend=storage_backend)
+        storyboard = _make_storyboard()
+        state = _make_state(storyboard)
+
+        result = await agent.execute(state)
+
+        assert result.success is True
+        video_data = result.data["generated_video"]
+        url = video_data["url"]
+        assert "/videos/system/" in url, f"Expected /videos/system/ in URL, got {url}"

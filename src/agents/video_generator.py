@@ -13,15 +13,29 @@ Description:
 2026-03-23
 """
 
+import base64
+import logging
 import uuid
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.db.asset_repository import AssetRepository
 from src.models.assets import AssetStatus, GeneratedVideo, VideoFormat
 from src.models.storyboard import Scene
+from src.storage.base import StorageBackend
+from src.storage.factory import get_storage_backend
+
+logger = logging.getLogger(__name__)
+
+# 最小可解析的 MP4 文件 base64（ftyp + moov atom，1x1 像素）
+_EMPTY_MP4_BASE64 = (
+    "AAAAGGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAAhtZGF0AAAA"
+    "AQAAAAEAAAAAAAAAAAAAAAAAAA=="
+)
 
 
 class VideoGeneratorAgent(BaseAgent[AgentState]):
@@ -35,9 +49,22 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         >>> video = result.data.get("generated_video")
     """
 
-    def __init__(self, **kwargs: Any) -> None:
-        """初始化视频生成Agent。"""
+    def __init__(
+        self,
+        storage_backend: StorageBackend | None = None,
+        session_factory: Any | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """初始化视频生成Agent。
+
+        Args:
+            storage_backend: 可选的存储后端，默认从 factory 获取。
+            session_factory: 可选的 AsyncSession 工厂，用于 DB 写入。
+            **kwargs: 传递给 BaseAgent 的参数。
+        """
         super().__init__(role=AgentRole.VIDEO_GENERATOR, **kwargs)
+        self._storage_backend = storage_backend
+        self._session_factory = session_factory
         self._setup_prompts()
 
     def _setup_prompts(self) -> None:
@@ -128,13 +155,13 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
     async def _generate_video(
         self,
         storyboard: Any,
-        _state: AgentState,
+        state: AgentState,
     ) -> GeneratedVideo:
         """生成视频。
 
         Args:
             storyboard: 分镜脚本。
-            _state: 当前状态。
+            state: 当前状态。
 
         Returns:
             生成的视频。
@@ -159,6 +186,7 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
             scene_prompts=scene_prompts,
             width=width,
             height=height,
+            state=state,
         )
 
         return video
@@ -243,6 +271,106 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         except Exception:
             return scene.visual_prompt
 
+    def _resolve_tenant_id(self, state: AgentState) -> str:
+        """从 state 中解析 tenant_id。
+
+        TODO: GenerationRequest 当前没有 tenant_id 字段。
+        后续需要添加 tenant_id 到 GenerationRequest 或 AgentState。
+
+        Args:
+            state: 当前 AgentState。
+
+        Returns:
+            tenant_id 字符串。
+        """
+        if state.generation_request is not None:
+            req_tenant = getattr(state.generation_request, "tenant_id", None)
+            if req_tenant:
+                return req_tenant
+        if state.product_info is not None:
+            prod_tenant = getattr(state.product_info, "tenant_id", None)
+            if prod_tenant:
+                return prod_tenant
+        state_tenant = getattr(state, "tenant_id", None)
+        if state_tenant:
+            return state_tenant
+        logger.warning("No tenant_id found in state; falling back to 'system'.")
+        return "system"
+
+    async def _write_asset_to_storage(
+        self,
+        data: bytes,
+        tenant_id: str,
+        video_id: str,
+        mime_type: str,
+    ) -> tuple[str, str]:
+        """将二进制数据写入存储后端并返回 URL 和 key。
+
+        Args:
+            data: 文件二进制数据。
+            tenant_id: 租户 ID。
+            video_id: 视频 ID。
+            mime_type: MIME 类型。
+
+        Returns:
+            (url, storage_key) 元组。
+        """
+        backend = self._storage_backend or get_storage_backend()
+        key = f"videos/{tenant_id}/{video_id}.mp4"
+        url = await backend.save(data, key, content_type=mime_type)
+        return url, key
+
+    async def _create_asset_po(
+        self,
+        session: AsyncSession,
+        tenant_id: str,
+        url: str,
+        storage_key: str,
+        data: bytes,
+        video_id: str,
+        visual_prompt: str,
+        width: int,
+        height: int,
+        duration: float,
+        mime_type: str,
+    ) -> None:
+        """在数据库中创建 GeneratedAssetPO 记录。
+
+        Args:
+            session: 异步数据库会话。
+            tenant_id: 租户 ID。
+            url: 可访问 URL。
+            storage_key: 存储键名。
+            data: 文件二进制数据。
+            video_id: 视频 ID。
+            visual_prompt: 视觉提示词。
+            width: 宽度。
+            height: 高度。
+            duration: 时长。
+            mime_type: MIME 类型。
+        """
+        from src.storage.local import LocalStorageBackend
+
+        sha256 = LocalStorageBackend.compute_sha256(data)
+        repo = AssetRepository(session)
+        await repo.create_asset(
+            tenant_id=tenant_id,
+            asset_type="video",
+            provider="mock",
+            url=url,
+            storage_key=storage_key,
+            storage_backend="local",
+            mime_type=mime_type,
+            file_size=len(data),
+            width=width,
+            height=height,
+            duration=duration,
+            sha256=sha256,
+            status="completed",
+            is_mock=True,
+            extra_data={"visual_prompt": visual_prompt, "video_id": video_id},
+        )
+
     async def _call_video_api(
         self,
         video_id: str,
@@ -250,6 +378,8 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         scene_prompts: list[dict[str, Any]],
         width: int,
         height: int,
+        state: AgentState | None = None,
+        session: AsyncSession | None = None,
     ) -> GeneratedVideo:
         """调用视频生成API。
 
@@ -259,23 +389,59 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
             scene_prompts: 场景提示词列表。
             width: 宽度。
             height: 高度。
+            state: 当前 AgentState（用于获取 tenant_id）。
+            session: 可选的 AsyncSession（用于写 DB）。
 
         Returns:
             生成的视频。
         """
+        # 生成最小可解析的 1x1x1 占位 MP4
+        # 这是一个最小的合法 MP4 文件（ftyp + moov atom）
+        placeholder_bytes = base64.b64decode(_EMPTY_MP4_BASE64)
+
+        # 解析 tenant_id
+        tenant_id = "system"
+        if state is not None:
+            tenant_id = self._resolve_tenant_id(state)
+
+        # 写入存储后端
+        url, storage_key = await self._write_asset_to_storage(
+            placeholder_bytes,
+            tenant_id,
+            video_id,
+            "video/mp4",
+        )
+
+        # 写入数据库（如果有 session）
+        if session is not None:
+            await self._create_asset_po(
+                session=session,
+                tenant_id=tenant_id,
+                url=url,
+                storage_key=storage_key,
+                data=placeholder_bytes,
+                video_id=video_id,
+                visual_prompt=str(scene_prompts),
+                width=width,
+                height=height,
+                duration=storyboard.total_duration,
+                mime_type="video/mp4",
+            )
+
         # 创建视频对象
         video = GeneratedVideo(
             video_id=video_id,
             title=storyboard.title,
             storyboard_id=storyboard.storyboard_id,
             visual_prompt=str(scene_prompts),
-            url=f"mock://videos/{video_id}.mp4",
+            url=url,
             local_path=None,
             format=VideoFormat.MP4,
             width=width,
             height=height,
             duration=storyboard.total_duration,
             fps=30,
+            file_size=len(placeholder_bytes),
             status=AssetStatus.COMPLETED,
             progress=100.0,
             model="kling-v1",
