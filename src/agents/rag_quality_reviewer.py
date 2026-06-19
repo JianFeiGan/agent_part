@@ -81,6 +81,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
                     "你是一个专业的电商视觉内容质量审核专家。"
                     "请结合以下合规规则，对生成的内容进行全面质量评估。\n\n"
                     "【合规审核规则】\n{compliance_rules}\n\n"
+                    "【类目记忆】\n{category_memory_context}\n\n"
                     "评估维度：\n"
                     "1. 清晰度 (clarity): 图片/视频是否清晰\n"
                     "2. 构图 (composition): 构图是否合理美观\n"
@@ -147,12 +148,17 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
             # 加载合规规则
             await self._load_compliance_rules(state)
 
+            # 检索类目记忆上下文
+            category_memory_context = await self._retrieve_category_memory(state)
+
             quality_reports: list[QualityReport] = []
             all_issues: list[dict[str, Any]] = []
 
             # 审核图片
             for image in state.generated_images:
-                report = await self._review_image_with_rag(image, product, state)
+                report = await self._review_image_with_rag(
+                    image, product, state, category_memory_context
+                )
                 quality_reports.append(report)
                 if report.issues:
                     all_issues.extend(
@@ -164,7 +170,9 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
 
             # 审核视频
             if state.generated_video:
-                report = await self._review_video_with_rag(state.generated_video, product, state)
+                report = await self._review_video_with_rag(
+                    state.generated_video, product, state, category_memory_context
+                )
                 quality_reports.append(report)
                 if report.issues:
                     all_issues.extend(
@@ -207,6 +215,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
                     "asset_collection": asset_collection.model_dump(),
                     "final_results": final_results,
                     "compliance_rules_applied": len(self._compliance_rules),
+                    "rag_sources": self._build_rag_sources(state),
                 },
                 next_agent=None,
             )
@@ -261,11 +270,117 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
             for r in results.results
         ]
 
+    async def _retrieve_category_memory(self, state: AgentState) -> str:
+        """检索类目记忆上下文。
+
+        从 Graph RAG 获取类目相关的实体、边和记忆信息。
+
+        Args:
+            state: 当前状态。
+
+        Returns:
+            格式化后的类目记忆上下文字符串，无数据时返回空字符串。
+        """
+        if not self.has_rag() or not self._session:
+            return ""
+
+        product = state.product_info
+        if not product:
+            return ""
+
+        category = self._extract_category(product)
+        if not category:
+            return ""
+
+        tenant_id = self._extract_tenant_id(state)
+
+        if not hasattr(self._retriever, "retrieve_category_memory_context"):
+            return ""
+
+        try:
+            context = await self._retriever.retrieve_category_memory_context(
+                self._session,
+                category,
+                limit=20,
+                tenant_id=tenant_id,
+            )
+            return self._truncate_context(context, max_chars=4000)
+        except Exception:
+            return ""
+
+    def _truncate_context(self, context: str, max_chars: int = 4000) -> str:
+        """截断上下文以控制 token budget。
+
+        Args:
+            context: 原始上下文字符串。
+            max_chars: 最大字符数。
+
+        Returns:
+            截断后的上下文。
+        """
+        if len(context) <= max_chars:
+            return context
+        return context[:max_chars] + "..."
+
+    @staticmethod
+    def _extract_category(product: Any) -> str:
+        """从商品信息提取类目字符串。
+
+        Args:
+            product: 商品信息。
+
+        Returns:
+            类目字符串。
+        """
+        if product.category is None:
+            return ""
+        if hasattr(product.category, "value"):
+            return str(product.category.value)
+        return str(product.category)
+
+    @staticmethod
+    def _extract_tenant_id(state: AgentState) -> str:
+        """从状态中提取租户 ID。
+
+        Args:
+            state: 当前状态。
+
+        Returns:
+            租户 ID，fallback 为 "system"。
+        """
+        if state.generation_request and hasattr(state.generation_request, "tenant_id"):
+            tid = getattr(state.generation_request, "tenant_id", None)
+            if tid:
+                return str(tid)
+        return "system"
+
+    def _build_rag_sources(self, state: AgentState) -> list[dict[str, Any]]:
+        """构建 RAG 来源列表，区分 source_type。
+
+        Args:
+            state: 当前状态。
+
+        Returns:
+            RAG 来源列表。
+        """
+        sources: list[dict[str, Any]] = []
+        for src in state.rag_sources:
+            src_copy = dict(src)
+            if "doc_type" in src_copy:
+                dt = src_copy["doc_type"]
+                if dt == "compliance_rule":
+                    src_copy["source_type"] = "compliance_rule"
+                else:
+                    src_copy["source_type"] = dt
+            sources.append(src_copy)
+        return sources
+
     async def _review_image_with_rag(
         self,
         image: GeneratedImage,
         product: Any,
         state: AgentState,
+        category_memory_context: str = "",
     ) -> QualityReport:
         """使用RAG规则审核图片。
 
@@ -273,6 +388,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
             image: 图片对象。
             product: 商品信息。
             state: 当前状态。
+            category_memory_context: 类目记忆上下文。
 
         Returns:
             质量报告。
@@ -288,6 +404,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
                     prompt,
                     {
                         "compliance_rules": compliance_rules_text or "暂无特定合规规则",
+                        "category_memory_context": category_memory_context or "（无相关类目记忆）",
                         "product_name": product.name,
                         "content_type": f"图片-{image.image_type}",
                         "content_description": image.prompt,
@@ -340,6 +457,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
         video: GeneratedVideo,
         product: Any,
         state: AgentState,
+        category_memory_context: str = "",
     ) -> QualityReport:
         """使用RAG规则审核视频。
 
@@ -347,6 +465,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
             video: 视频对象。
             product: 商品信息。
             state: 当前状态。
+            category_memory_context: 类目记忆上下文。
 
         Returns:
             质量报告。
@@ -362,6 +481,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
                     prompt,
                     {
                         "compliance_rules": compliance_rules_text or "暂无特定合规规则",
+                        "category_memory_context": category_memory_context or "（无相关类目记忆）",
                         "product_name": product.name,
                         "content_type": "视频",
                         "content_description": video.visual_prompt or "",
@@ -419,12 +539,12 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
             and len([i for i in issues if i.severity == "high"]) == 0,
         )
 
-    async def _check_compliance(self, content: str, category: str) -> list[QualityIssue]:
+    async def _check_compliance(self, content: str, category: str) -> list[QualityIssue]:  # noqa: ARG002
         """检查内容合规性。
 
         Args:
             content: 待检查内容。
-            category: 商品类目。
+            category: 商品类目（保留用于未来扩展）。
 
         Returns:
             合规问题列表。
