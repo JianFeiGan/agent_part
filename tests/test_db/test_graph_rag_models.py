@@ -257,9 +257,18 @@ class TestCategoryMemory:
         assert column is not None
 
     def test_category_unique_constraint(self) -> None:
-        """测试 category 字段有 unique 约束。"""
-        column = CategoryMemory.__table__.columns["category"]
-        assert column.unique is True
+        """测试 (tenant_id, category) 复合 unique 约束。"""
+        from sqlalchemy import UniqueConstraint
+
+        constraints = [
+            c for c in CategoryMemory.__table__.constraints if isinstance(c, UniqueConstraint)
+        ]
+        # 验证存在复合唯一约束包含 tenant_id 和 category
+        found = any(
+            {"tenant_id", "category"}.issubset({col.name for col in c.columns})
+            for c in constraints
+        )
+        assert found is True
 
     def test_embedding_column_exists(self) -> None:
         """测试 embedding 列存在且类型为 Vector。"""

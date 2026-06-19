@@ -21,6 +21,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -368,12 +369,16 @@ class CategoryMemory(Base):
 
     __tablename__ = "category_memories"
 
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "category", name="uq_category_memories_tenant_category"),
+    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True, index=True, comment="租户 ID"
     )
     category: Mapped[str] = mapped_column(
-        String(100), nullable=False, unique=True, index=True, comment="商品类目"
+        String(100), nullable=False, index=True, comment="商品类目"
     )
     summary: Mapped[str | None] = mapped_column(Text, comment="类目摘要")
     best_practices: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="最佳实践")
