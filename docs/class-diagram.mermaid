@@ -1,0 +1,67 @@
+classDiagram
+    class DashScopeImageClient {
+        -_settings: Settings
+        -_httpx: AsyncClient
+        +is_available() bool
+        +generate(prompt: str, negative_prompt: str|None, width: int, height: int, n: int, seed: int|None) ImageGenerationResult
+        -_call_api(...) dict
+        -_download(url: str) bytes
+    }
+    class KlingVideoClient {
+        -_settings: Settings
+        -_access_key: str
+        -_secret_key: str
+        -_base_url: str
+        -_token_cache: tuple~str,float~|None
+        +is_available() bool
+        +generate(prompt: str, image: bytes|None, duration: float, mode: str, ...) VideoGenerationResult
+        -_create_token() str
+        -_submit(prompt: str, ...) str
+        -_query(task_id: str) tuple~str,str|None~
+        -_download(url: str) bytes
+    }
+    class ImageGenerationResult {
+        +images: list~SingleImageResult~
+    }
+    class SingleImageResult {
+        +data: bytes
+        +url: str
+        +seed: int|None
+    }
+    class VideoGenerationResult {
+        +data: bytes
+        +url: str
+        +duration: float
+        +task_id: str
+    }
+    class ImageGeneratorAgent {
+        -_image_client: DashScopeImageClient|None
+        -_storage_backend: StorageBackend
+        +execute(state) AgentResult
+        +_call_image_api(...) list~GeneratedImage~
+        +_create_asset_po(..., provider: str, is_mock: bool) None
+    }
+    class VideoGeneratorAgent {
+        -_video_client: KlingVideoClient|None
+        -_storage_backend: StorageBackend
+        +execute(state) AgentResult
+        +_call_video_api(...) GeneratedVideo
+        +_create_asset_po(..., provider: str, is_mock: bool) None
+    }
+    class StorageBackend {
+        <<Protocol>>
+        +save(data: bytes, key: str, content_type: str) str
+    }
+    class AssetRepository {
+        +create_asset(tenant_id, ..., provider: str, is_mock: bool, ...) GeneratedAssetPO
+    }
+
+    ImageGeneratorAgent ..> DashScopeImageClient : uses
+    VideoGeneratorAgent ..> KlingVideoClient : uses
+    DashScopeImageClient ..> ImageGenerationResult : returns
+    KlingVideoClient ..> VideoGenerationResult : returns
+    ImageGenerationResult *-- SingleImageResult
+    ImageGeneratorAgent ..> StorageBackend : writes bytes
+    VideoGeneratorAgent ..> StorageBackend : writes bytes
+    ImageGeneratorAgent ..> AssetRepository : create PO (if session)
+    VideoGeneratorAgent ..> AssetRepository : create PO (if session)
