@@ -1,0 +1,71 @@
+sequenceDiagram
+    participant A as ImageGeneratorAgent
+    participant C as DashScopeImageClient
+    participant D as dashscope.ImageSynthesis
+    participant H as httpx (download)
+    participant S as StorageBackend
+    participant R as AssetRepository
+
+    A->>A: _call_image_api(prompt, w, h, state)
+    A->>C: is_available()?
+    alt API Key 已配置（真实路径）
+        C-->>A: True
+        A->>C: generate(prompt, w, h)
+        C->>D: ImageSynthesis.call(model=wanx-v1, prompt, size)
+        D-->>C: result (output.results[].url)
+        C->>H: GET url
+        H-->>C: bytes
+        C-->>A: ImageGenerationResult(data=bytes, url, seed)
+        A->>S: save(bytes, key=images/{tenant}/{id}.png)
+        S-->>A: url=/static/...
+        opt session 非空
+            A->>R: create_asset(provider=wanx-v1, is_mock=False)
+        end
+        A->>A: GeneratedImage(model=settings.image_model, is_mock=False, provider=wanx-v1)
+    else 缺 Key（降级）
+        C-->>A: False
+        A->>A: placeholder_bytes = 1x1 PNG
+        A->>A: logger.warning("dashscope_api_key 缺失，回退 mock")
+        A->>S: save(placeholder_bytes, key)
+        S-->>A: url=/static/...
+        opt session 非空
+            A->>R: create_asset(provider="mock", is_mock=True)
+        end
+        A->>A: GeneratedImage(model=settings.image_model, is_mock=True, provider="mock")
+    end
+    A-->>A: [GeneratedImage]
+
+---
+
+sequenceDiagram
+    participant A as VideoGeneratorAgent
+    participant C as KlingVideoClient
+    participant K as Kling API (api.klingai.com)
+    participant H as httpx (download)
+    participant S as StorageBackend
+
+    A->>A: _call_video_api(video_id, storyboard, scenes, w, h, state)
+    A->>C: is_available()?
+    alt 已配置（真实路径）
+        C-->>A: True
+        A->>C: generate(prompt, duration, ...)
+        C->>C: _create_token()（HS256 JWT，缓存至 exp-60s）
+        C->>K: POST /v1/videos/generations（Authorization: Bearer JWT）
+        K-->>C: task_id
+        loop 轮询直到 succeed/failed（带超时 + 退避）
+            C->>K: GET /v1/videos/generations/{task_id}
+            K-->>C: task_status, resource_url?
+        end
+        C->>H: GET resource_url
+        H-->>C: bytes
+        C-->>A: VideoGenerationResult(data=bytes, url, duration, task_id)
+        A->>S: save(bytes, key=videos/{tenant}/{id}.mp4)
+        S-->>A: url=/static/...
+        A->>A: GeneratedVideo(model=settings.video_model, is_mock=False, provider=kling-v1)
+    else 缺 Key（降级）
+        C-->>A: False
+        A->>A: placeholder_bytes = 1x1 MP4 + warning
+        A->>S: save(placeholder_bytes)
+        A->>A: GeneratedVideo(... is_mock=True, provider="mock")
+    end
+    A-->>A: GeneratedVideo

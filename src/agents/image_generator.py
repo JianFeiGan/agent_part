@@ -22,6 +22,9 @@ from langchain_core.tools import tool
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.clients import get_image_client
+from src.clients.dashscope_image_client import DashScopeImageClient
+from src.clients.provider_result import ProviderUnavailableError
 from src.db.asset_repository import AssetRepository
 from src.models.assets import AssetStatus, GeneratedImage, ImageFormat
 from src.models.creative import ImageType
@@ -76,6 +79,9 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         super().__init__(role=AgentRole.IMAGE_GENERATOR, **kwargs)
         self._storage_backend = storage_backend
         self._session_factory = session_factory
+        self._image_client: DashScopeImageClient | None = get_image_client(
+            settings=self.settings
+        )
         self._setup_prompts()
 
     def _setup_prompts(self) -> None:
@@ -340,6 +346,8 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         width: int,
         height: int,
         mime_type: str,
+        provider: str = "mock",
+        is_mock: bool = True,
     ) -> None:
         """在数据库中创建 GeneratedAssetPO 记录。
 
@@ -354,6 +362,8 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
             width: 宽度。
             height: 高度。
             mime_type: MIME 类型。
+            provider: 生成提供方（真实为模型名，降级为 "mock"）。
+            is_mock: 是否为 Mock 占位（真实为 False）。
         """
         from src.storage.local import LocalStorageBackend
 
@@ -362,7 +372,7 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         await repo.create_asset(
             tenant_id=tenant_id,
             asset_type="image",
-            provider="mock",
+            provider=provider,
             url=url,
             storage_key=storage_key,
             storage_backend="local",
@@ -372,7 +382,7 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
             height=height,
             sha256=sha256,
             status="completed",
-            is_mock=True,
+            is_mock=is_mock,
             extra_data={"prompt": prompt, "image_id": image_id},
         )
 
@@ -403,15 +413,77 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         # 生成图片ID
         image_id = f"img_{uuid.uuid4().hex[:8]}"
 
-        # 生成 1x1 透明 PNG 占位字节
-        placeholder_bytes = base64.b64decode(_EMPTY_PNG_BASE64)
-
         # 解析 tenant_id
         tenant_id = "system"
         if state is not None:
             tenant_id = self._resolve_tenant_id(state)
 
-        # 写入存储后端
+        # 真实路径：调用 DashScope 通义万象
+        if self._image_client is not None:
+            try:
+                result = await self._image_client.generate(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    width=width,
+                    height=height,
+                    n=1,
+                    seed=None,
+                )
+                image_bytes = result.images[0].data
+                storage_key = f"images/{tenant_id}/{image_id}.png"
+                url = await self._write_asset_to_storage(
+                    image_bytes,
+                    tenant_id,
+                    image_id,
+                    "image/png",
+                )
+                model_name = self.settings.image_model
+                if session is not None:
+                    await self._create_asset_po(
+                        session=session,
+                        tenant_id=tenant_id,
+                        url=url,
+                        storage_key=storage_key,
+                        data=image_bytes,
+                        image_id=image_id,
+                        prompt=prompt,
+                        width=width,
+                        height=height,
+                        mime_type="image/png",
+                        provider=model_name,
+                        is_mock=False,
+                    )
+                image = GeneratedImage(
+                    image_id=image_id,
+                    image_type=image_type,
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    url=url,
+                    local_path=None,
+                    format=ImageFormat.PNG,
+                    width=width,
+                    height=height,
+                    file_size=len(image_bytes),
+                    status=AssetStatus.COMPLETED,
+                    model=model_name,
+                    metadata={
+                        "provider": model_name,
+                        "is_mock": False,
+                        "remote_url": result.images[0].url,
+                        "seed": result.images[0].seed,
+                    },
+                )
+                return [image]
+            except ProviderUnavailableError as exc:
+                logger.error("provider=dashscope 真实图片生成失败，回退 mock: %s", exc)
+        else:
+            logger.warning(
+                "provider=dashscope 未配置 API Key，回退 mock 占位行为 (tenant=%s)",
+                tenant_id,
+            )
+
+        # 降级 / Mock 占位路径（与无 key 的 CI / 本地行为逐字节一致）
+        placeholder_bytes = base64.b64decode(_EMPTY_PNG_BASE64)
         storage_key = f"images/{tenant_id}/{image_id}.png"
         url = await self._write_asset_to_storage(
             placeholder_bytes,
@@ -433,6 +505,8 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
                 width=width,
                 height=height,
                 mime_type="image/png",
+                provider="mock",
+                is_mock=True,
             )
 
         image = GeneratedImage(
@@ -447,7 +521,7 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
             height=height,
             file_size=len(placeholder_bytes),
             status=AssetStatus.COMPLETED,
-            model="wanx-v1",
+            model=self.settings.image_model,
             metadata={
                 "provider": "mock",
                 "is_mock": True,
