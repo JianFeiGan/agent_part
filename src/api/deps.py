@@ -2,7 +2,7 @@
 API 依赖注入模块。
 
 Description:
-    提供 FastAPI 路由的公共依赖项，包括 Redis 客户端、配置等。
+    提供 FastAPI 路由的公共依赖项，包括 Redis 客户端、配置、Auth 鉴权等。
 @author ganjianfei
 @version 1.0.0
 2026-03-25
@@ -14,6 +14,8 @@ from typing import Annotated
 from fastapi import Depends
 
 from src.api.service.redis_client import RedisClient, get_redis
+from src.auth.api_key import require_auth
+from src.auth.context import AuthContext
 from src.config.settings import Settings, get_settings
 
 
@@ -39,3 +41,4 @@ async def get_redis_dep() -> AsyncGenerator[RedisClient, None]:
 # 类型别名，简化依赖注入
 SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
 RedisDep = Annotated[RedisClient, Depends(get_redis_dep)]
+AuthDep = Annotated[AuthContext, Depends(require_auth)]

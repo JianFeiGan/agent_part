@@ -11,6 +11,21 @@ from src.db.listing_models import ComplianceReportPO, ListingProductPO, ListingT
 from src.models.listing import ListingProduct, Platform
 
 
+@pytest.fixture(autouse=True)
+def _disable_auth() -> None:
+    """禁用 auth 以便测试。"""
+    from src.config.settings import get_settings
+
+    settings = get_settings()
+    settings.auth_enabled = False
+
+
+@pytest.fixture
+def client() -> TestClient:
+    """创建测试客户端。"""
+    return TestClient(app)
+
+
 def _make_product_po(**kwargs) -> MagicMock:
     """构造模拟 ListingProductPO。"""
     defaults = {
@@ -82,12 +97,6 @@ def _mock_get_db():
     cm.__aenter__ = AsyncMock(return_value=mock_session)
     cm.__aexit__ = AsyncMock(return_value=None)
     return cm, mock_session
-
-
-@pytest.fixture
-def client() -> TestClient:
-    """创建测试客户端。"""
-    return TestClient(app)
 
 
 class TestProductImportAPI:

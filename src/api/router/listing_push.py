@@ -12,8 +12,7 @@ Description:
 
 import logging
 
-from fastapi import APIRouter, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, status
 
 from src.agents.adapter_config import AdapterConfigManager
 from src.agents.listing_amazon_adapter import AmazonAdapter
@@ -26,6 +25,8 @@ from src.api.schema.listing import (
     PushResponse,
     PushResultResponse,
 )
+from src.auth.api_key import require_auth
+from src.auth.context import AuthContext
 from src.db.listing_models import ListingProductPO, ListingTaskPO, TaskResultPO
 from src.db.postgres import get_db
 from src.db.repository import BaseRepository
@@ -44,23 +45,27 @@ registry.register(Platform.SHOPIFY, ShopifyAdapter)
 _config_manager = AdapterConfigManager()
 
 
-async def _load_domain_objects(task_id: int):
-    """从数据库加载任务、商品、文案包。
+async def _load_domain_objects(task_id: int, *, tenant_id: str):
+    """从数据库加载任务、商品、文案包（tenant 过滤）。
+
+    Args:
+        task_id: 任务 ID。
+        tenant_id: 租户 ID。
 
     Returns:
-        (task_po, product, copywriting_packages) 或 None（未找到）。
+        (task_po, product, task_obj) 或 None（未找到）。
     """
-    from src.models.listing import CopywritingPackage, ImageRef, ListingProduct, ListingTask
+    from src.models.listing import ImageRef, ListingProduct, ListingTask
 
     async with get_db() as session:
         task_repo = BaseRepository(ListingTaskPO, session)
         task_po = await task_repo.get(task_id)
-        if not task_po:
+        if not task_po or getattr(task_po, "tenant_id", None) != tenant_id:
             return None
 
         product_repo = BaseRepository(ListingProductPO, session)
         product_po = await product_repo.get_by_field("sku", task_po.product_sku)
-        if not product_po:
+        if not product_po or getattr(product_po, "tenant_id", None) != tenant_id:
             return None
 
         product = ListingProduct(
@@ -90,12 +95,15 @@ async def _load_domain_objects(task_id: int):
     summary="推送刊登",
 )
 async def push_listing(
-    task_id: int, request: PushListingRequest | None = None
+    task_id: int,
+    auth: AuthContext = Depends(require_auth),
+    request: PushListingRequest | None = None,
 ) -> ApiResponse[PushResponse]:
     """将刊登推送至指定平台。
 
     Args:
         task_id: 任务ID。
+        auth: 认证上下文。
         request: 推送请求（可选，不指定则推送全部平台）。
 
     Returns:
@@ -103,7 +111,7 @@ async def push_listing(
     """
     from src.models.listing import AssetPackage, CopywritingPackage
 
-    loaded = await _load_domain_objects(task_id)
+    loaded = await _load_domain_objects(task_id, tenant_id=auth.tenant_id)
     if not loaded:
         return ApiResponse(code=404, message=f"任务 {task_id} 或关联商品不存在", data=None)
 
@@ -117,8 +125,10 @@ async def push_listing(
     async with get_db() as session:
         for platform in target_platforms:
             try:
-                # 从数据库加载适配器凭证
-                config = await _config_manager.get_config(platform)
+                # 从数据库加载适配器凭证（租户感知）
+                config = await _config_manager.get_config(
+                    platform, tenant_id=auth.tenant_id
+                )
                 adapter = registry.get(platform, config=config)
 
                 asset_package = AssetPackage(
@@ -150,6 +160,7 @@ async def push_listing(
 
                 # 持久化推送结果
                 result_po = TaskResultPO(
+                    tenant_id=auth.tenant_id,
                     task_id=task_id,
                     platform=platform.value,
                     success=push_result.success,
@@ -172,6 +183,7 @@ async def push_listing(
                 )
                 # 也记录失败结果
                 result_po = TaskResultPO(
+                    tenant_id=auth.tenant_id,
                     task_id=task_id,
                     platform=platform.value,
                     success=False,
@@ -199,18 +211,22 @@ async def push_listing(
     response_model=ApiResponse[list[PushResultResponse]],
     summary="查询推送结果",
 )
-async def get_push_results(task_id: int) -> ApiResponse[list[PushResultResponse]]:
+async def get_push_results(
+    task_id: int,
+    auth: AuthContext = Depends(require_auth),
+) -> ApiResponse[list[PushResultResponse]]:
     """获取指定任务的推送结果。
 
     Args:
         task_id: 任务ID。
+        auth: 认证上下文。
 
     Returns:
-        各平台推送结果。
+        各平台推送结果（仅当前租户）。
     """
     async with get_db() as session:
         repo = BaseRepository(TaskResultPO, session)
-        results_po = await repo.list(task_id=task_id)
+        results_po = await repo.list(task_id=task_id, tenant_id=auth.tenant_id)
         if not results_po:
             return ApiResponse(code=404, message=f"任务 {task_id} 无推送结果", data=None)
 

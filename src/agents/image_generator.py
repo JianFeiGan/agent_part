@@ -12,15 +12,23 @@ Description:
 2026-03-23
 """
 
+import base64
+import logging
 import uuid
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.db.asset_repository import AssetRepository
 from src.models.assets import AssetStatus, GeneratedImage, ImageFormat
 from src.models.creative import ImageType
+from src.storage.base import StorageBackend
+from src.storage.factory import get_storage_backend
+
+logger = logging.getLogger(__name__)
 
 
 class ImageGenerationInput:
@@ -34,6 +42,13 @@ class ImageGenerationInput:
     num_images: int
 
 
+# 1x1 透明 PNG 的 base64 编码（最小合法 PNG）
+_EMPTY_PNG_BASE64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+"
+    "hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+)
+
+
 class ImageGeneratorAgent(BaseAgent[AgentState]):
     """图片生成Agent。
 
@@ -45,9 +60,22 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         >>> images = result.data.get("generated_images")
     """
 
-    def __init__(self, **kwargs: Any) -> None:
-        """初始化图片生成Agent。"""
+    def __init__(
+        self,
+        storage_backend: StorageBackend | None = None,
+        session_factory: Any | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """初始化图片生成Agent。
+
+        Args:
+            storage_backend: 可选的存储后端，默认从 factory 获取。
+            session_factory: 可选的 AsyncSession 工厂，用于 DB 写入。
+            **kwargs: 传递给 BaseAgent 的参数。
+        """
         super().__init__(role=AgentRole.IMAGE_GENERATOR, **kwargs)
+        self._storage_backend = storage_backend
+        self._session_factory = session_factory
         self._setup_prompts()
 
     def _setup_prompts(self) -> None:
@@ -125,13 +153,13 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
     async def _generate_images(
         self,
         prompt_data: dict[str, Any],
-        state: AgentState,
+        _state: AgentState,
     ) -> list[GeneratedImage]:
         """生成图片。
 
         Args:
             prompt_data: 提示词数据。
-            state: 当前状态。
+            _state: 当前状态。
 
         Returns:
             生成的图片列表。
@@ -163,6 +191,7 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
             width=width,
             height=height,
             image_type=image_type.value,
+            state=_state,
         )
 
         return images
@@ -247,6 +276,106 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
 
         return ", ".join(parts)
 
+    def _resolve_tenant_id(self, state: AgentState) -> str:
+        """从 state 中解析 tenant_id。
+
+        TODO: GenerationRequest 当前没有 tenant_id 字段。
+        后续需要添加 tenant_id 到 GenerationRequest 或 AgentState。
+
+        Args:
+            state: 当前 AgentState。
+
+        Returns:
+            tenant_id 字符串。
+        """
+        # 尝试从 generation_request 获取（当前没有该字段）
+        if state.generation_request is not None:
+            req_tenant = getattr(state.generation_request, "tenant_id", None)
+            if req_tenant:
+                return req_tenant
+        # 尝试从 product_info 获取
+        if state.product_info is not None:
+            prod_tenant = getattr(state.product_info, "tenant_id", None)
+            if prod_tenant:
+                return prod_tenant
+        # 尝试从 state 顶层获取
+        state_tenant = getattr(state, "tenant_id", None)
+        if state_tenant:
+            return state_tenant
+        logger.warning("No tenant_id found in state; falling back to 'system'.")
+        return "system"
+
+    async def _write_asset_to_storage(
+        self,
+        data: bytes,
+        tenant_id: str,
+        image_id: str,
+        mime_type: str,
+    ) -> str:
+        """将二进制数据写入存储后端并返回 URL。
+
+        Args:
+            data: 文件二进制数据。
+            tenant_id: 租户 ID。
+            image_id: 图片 ID。
+            mime_type: MIME 类型。
+
+        Returns:
+            可访问 URL。
+        """
+        backend = self._storage_backend or get_storage_backend()
+        key = f"images/{tenant_id}/{image_id}.png"
+        url = await backend.save(data, key, content_type=mime_type)
+        return url
+
+    async def _create_asset_po(
+        self,
+        session: AsyncSession,
+        tenant_id: str,
+        url: str,
+        storage_key: str,
+        data: bytes,
+        image_id: str,
+        prompt: str,
+        width: int,
+        height: int,
+        mime_type: str,
+    ) -> None:
+        """在数据库中创建 GeneratedAssetPO 记录。
+
+        Args:
+            session: 异步数据库会话。
+            tenant_id: 租户 ID。
+            url: 可访问 URL。
+            storage_key: 存储键名。
+            data: 文件二进制数据。
+            image_id: 图片 ID。
+            prompt: 生成提示词。
+            width: 宽度。
+            height: 高度。
+            mime_type: MIME 类型。
+        """
+        from src.storage.local import LocalStorageBackend
+
+        sha256 = LocalStorageBackend.compute_sha256(data)
+        repo = AssetRepository(session)
+        await repo.create_asset(
+            tenant_id=tenant_id,
+            asset_type="image",
+            provider="mock",
+            url=url,
+            storage_key=storage_key,
+            storage_backend="local",
+            mime_type=mime_type,
+            file_size=len(data),
+            width=width,
+            height=height,
+            sha256=sha256,
+            status="completed",
+            is_mock=True,
+            extra_data={"prompt": prompt, "image_id": image_id},
+        )
+
     async def _call_image_api(
         self,
         prompt: str,
@@ -254,6 +383,8 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         width: int,
         height: int,
         image_type: str,
+        state: AgentState | None = None,
+        session: AsyncSession | None = None,
     ) -> list[GeneratedImage]:
         """调用图片生成API。
 
@@ -263,6 +394,8 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
             width: 宽度。
             height: 高度。
             image_type: 图片类型。
+            state: 当前 AgentState（用于获取 tenant_id）。
+            session: 可选的 AsyncSession（用于写 DB）。
 
         Returns:
             生成的图片列表。
@@ -270,25 +403,57 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         # 生成图片ID
         image_id = f"img_{uuid.uuid4().hex[:8]}"
 
-        # TODO: 实际调用通义万象API
-        # 这里返回模拟结果
+        # 生成 1x1 透明 PNG 占位字节
+        placeholder_bytes = base64.b64decode(_EMPTY_PNG_BASE64)
+
+        # 解析 tenant_id
+        tenant_id = "system"
+        if state is not None:
+            tenant_id = self._resolve_tenant_id(state)
+
+        # 写入存储后端
+        storage_key = f"images/{tenant_id}/{image_id}.png"
+        url = await self._write_asset_to_storage(
+            placeholder_bytes,
+            tenant_id,
+            image_id,
+            "image/png",
+        )
+
+        # 写入数据库（如果有 session）
+        if session is not None:
+            await self._create_asset_po(
+                session=session,
+                tenant_id=tenant_id,
+                url=url,
+                storage_key=storage_key,
+                data=placeholder_bytes,
+                image_id=image_id,
+                prompt=prompt,
+                width=width,
+                height=height,
+                mime_type="image/png",
+            )
+
         image = GeneratedImage(
             image_id=image_id,
             image_type=image_type,
             prompt=prompt,
             negative_prompt=negative_prompt,
-            url=None,  # API返回的URL
+            url=url,
             local_path=None,
             format=ImageFormat.PNG,
             width=width,
             height=height,
-            status=AssetStatus.PENDING,
+            file_size=len(placeholder_bytes),
+            status=AssetStatus.COMPLETED,
             model="wanx-v1",
+            metadata={
+                "provider": "mock",
+                "is_mock": True,
+                "note": "Placeholder asset generated by mock provider; not a real media URL.",
+            },
         )
-
-        # 模拟生成完成
-        image.status = AssetStatus.COMPLETED
-        image.url = f"https://example.com/images/{image_id}.png"
 
         return [image]
 
@@ -317,9 +482,14 @@ async def generate_product_image(
         "success": True,
         "images": [
             {
-                "url": f"https://example.com/images/{uuid.uuid4().hex[:8]}.png",
+                "url": f"mock://images/{uuid.uuid4().hex[:8]}.png",
                 "width": 1024,
                 "height": 1024,
+                "metadata": {
+                    "provider": "mock",
+                    "is_mock": True,
+                    "note": "Placeholder asset generated by mock provider; not a real media URL.",
+                },
             }
         ],
     }
