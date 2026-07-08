@@ -58,5 +58,13 @@ Product → GenerationRequest → AgentState (状态流转)
 | 工作流 | LangChain, LangGraph |
 | 数据库 | PostgreSQL, PGVector, Redis |
 | LLM | 通义千问, Claude |
-| 图像 | 通义万象 |
-| 视频 | 可灵 AI |
+| 图像生成 | Mock Provider（预留通义万象接入） |
+| 视频生成 | Mock Provider（预留可灵 AI 接入） |
+
+## Graph RAG / 分类记忆
+
+当前采用 **P0 最小底座** 实现：
+
+- **存储**：PostgreSQL + PGVector 向量检索，不依赖 Neo4j 等图数据库。
+- **分类记忆**：基于文档类型标签（brand_guide / category_knowledge / case_study / compliance_rule）进行检索过滤，属于轻量分类能力。
+- **暂不包含**：Neo4j 图存储、自动实体抽取、图谱可视化编辑器。这些属于后续阶段规划。

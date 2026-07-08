@@ -160,7 +160,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
         )
         self.register_prompt("rag_color", color_prompt)
 
-    async def execute(self, AgentState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行RAG增强的创意策划。
 
         Args:
@@ -360,14 +360,12 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
 
         return self._create_default_plan(product)
 
-    def _get_palette(self, name: str, brand_guidelines: str = "") -> ColorPalette:
+    def _get_palette(self, name: str, _brand_guidelines: str = "") -> ColorPalette:
         """获取配色方案。
-
-        如果品牌规范中有配色要求，优先使用。
 
         Args:
             name: 方案名称。
-            brand_guidelines: 品牌规范。
+            _brand_guidelines: 品牌规范。
 
         Returns:
             配色方案。

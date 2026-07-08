@@ -103,11 +103,20 @@
         </div>
       </template>
       <el-table :data="recentTasks" style="width: 100%">
-        <el-table-column prop="id" label="ID" width="80" />
-        <el-table-column prop="name" label="任务名称" />
-        <el-table-column prop="type" label="类型" width="120">
+        <el-table-column prop="task_id" label="任务ID" width="140" />
+        <el-table-column prop="product_id" label="商品ID" width="140">
           <template #default="{ row }">
-            <el-tag>{{ getTaskTypeLabel(row.type) }}</el-tag>
+            {{ row.product_id || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="task_type" label="任务类型" width="140">
+          <template #default="{ row }">
+            <el-tag size="small" type="info">{{ row.task_type || '-' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="current_step" label="当前步骤" width="150">
+          <template #default="{ row }">
+            <el-tag type="info">{{ row.current_step }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="status" label="状态" width="120">
@@ -134,8 +143,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { TaskType, TaskStatus, TaskTypeLabels, TaskStatusLabels } from '@/types/task'
-import type { Task } from '@/types/task'
+import { TaskStatusLabels } from '@/types/task'
+import { getDashboardStats } from '@/api/dashboard'
+import type { RecentTaskItem } from '@/types/dashboard'
 
 /**
  * 仪表盘页面
@@ -153,25 +163,20 @@ const statistics = ref({
 })
 
 // 最近任务列表
-const recentTasks = ref<Task[]>([])
-
-// 获取任务类型标签
-const getTaskTypeLabel = (type: TaskType) => {
-  return TaskTypeLabels[type] || type
-}
+const recentTasks = ref<RecentTaskItem[]>([])
 
 // 获取任务状态标签
-const getStatusLabel = (status: TaskStatus) => {
-  return TaskStatusLabels[status] || status
+const getStatusLabel = (status: string) => {
+  return TaskStatusLabels[status as keyof typeof TaskStatusLabels] || status
 }
 
 // 获取状态标签类型
-const getStatusType = (status: TaskStatus) => {
-  const typeMap: Record<TaskStatus, string> = {
-    [TaskStatus.PENDING]: 'info',
-    [TaskStatus.PROCESSING]: 'warning',
-    [TaskStatus.COMPLETED]: 'success',
-    [TaskStatus.FAILED]: 'danger'
+const getStatusType = (status: string) => {
+  const typeMap: Record<string, string> = {
+    pending: 'info',
+    running: 'warning',
+    completed: 'success',
+    failed: 'danger'
   }
   return typeMap[status] || 'info'
 }
@@ -181,53 +186,24 @@ const navigateTo = (path: string) => {
   router.push(path)
 }
 
-// 加载统计数据
-const loadStatistics = async () => {
-  // TODO: 调用 API 获取统计数据
-  // 模拟数据
-  statistics.value = {
-    totalProducts: 128,
-    totalTasks: 256,
-    processingTasks: 12,
-    failedTasks: 3
+// 加载仪表盘数据
+const loadDashboard = async () => {
+  try {
+    const data = await getDashboardStats()
+    statistics.value = {
+      totalProducts: data.total_products,
+      totalTasks: data.total_tasks,
+      processingTasks: data.running_tasks,
+      failedTasks: data.failed_tasks
+    }
+    recentTasks.value = data.recent_tasks
+  } catch {
+    // API 失败时保持默认值 0 和空数组
   }
 }
 
-// 加载最近任务
-const loadRecentTasks = async () => {
-  // TODO: 调用 API 获取最近任务
-  // 模拟数据
-  recentTasks.value = [
-    {
-      id: 1,
-      name: '商品主图生成',
-      type: TaskType.IMAGE_GENERATION,
-      status: TaskStatus.COMPLETED,
-      product_id: 1,
-      product_name: '测试商品',
-      config: {},
-      progress: 100,
-      created_at: '2024-01-15 10:30:00',
-      updated_at: '2024-01-15 10:35:00'
-    },
-    {
-      id: 2,
-      name: '宣传视频生成',
-      type: TaskType.VIDEO_GENERATION,
-      status: TaskStatus.PROCESSING,
-      product_id: 2,
-      product_name: '示例商品',
-      config: {},
-      progress: 65,
-      created_at: '2024-01-15 11:00:00',
-      updated_at: '2024-01-15 11:15:00'
-    }
-  ]
-}
-
 onMounted(() => {
-  loadStatistics()
-  loadRecentTasks()
+  loadDashboard()
 })
 </script>
 
