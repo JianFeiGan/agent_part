@@ -14,6 +14,7 @@ Description:
 """
 
 import json
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -29,6 +30,8 @@ from src.models.assets import (
     QualityReport,
     QualityScore,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class QualityReviewerAgent(BaseAgent[AgentState]):
@@ -222,8 +225,17 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
                     },
                 )
                 score = self._parse_quality_score(response)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("质量评分 LLM 调用失败，按 fail-closed 处理: %s", exc)
+                score = QualityScore(overall_score=0.0)
+                issues.append(
+                    QualityIssue(
+                        issue_type="scoring_unavailable",
+                        severity="high",
+                        description="质量评分模型调用失败，无法验证内容质量",
+                        suggestion="检查 LLM 配置后重试，或人工审核",
+                    )
+                )
 
         # 检查图片规格
         if image.width < 800 or image.height < 800:
@@ -288,8 +300,17 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
                     },
                 )
                 score = self._parse_quality_score(response)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("质量评分 LLM 调用失败，按 fail-closed 处理: %s", exc)
+                score = QualityScore(overall_score=0.0)
+                issues.append(
+                    QualityIssue(
+                        issue_type="scoring_unavailable",
+                        severity="high",
+                        description="质量评分模型调用失败，无法验证内容质量",
+                        suggestion="检查 LLM 配置后重试，或人工审核",
+                    )
+                )
 
         # 检查视频规格
         if video.duration < 5:
@@ -407,7 +428,7 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
             "completed_at": datetime.now().isoformat(),
         }
 
-    def _get_recommendation(self, score: float, issues: list[dict[str, Any]]) -> str:
+    def _get_recommendation(self, score: float, _issues: list[dict[str, Any]]) -> str:
         """获取改进建议。
 
         Args:

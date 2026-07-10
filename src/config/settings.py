@@ -68,7 +68,7 @@ class Settings(BaseSettings):
     # ==================== RAG 配置 ====================
     rag_enabled: bool = Field(default=True, description="启用 RAG 检索增强")
     embedding_model: str = Field(default="BAAI/bge-large-zh", description="Embedding 模型名称")
-    embedding_device: str = Field(default="cuda", description="Embedding 设备: cuda/cpu")
+    embedding_device: str = Field(default="auto", description="Embedding 设备: auto/cuda/cpu（auto 自动探测可用设备）")
     chunk_size: int = Field(default=512, description="文档分块大小 (tokens)")
     chunk_overlap: int = Field(default=64, description="分块重叠大小 (tokens)")
     retrieval_top_k: int = Field(default=5, description="检索返回文档数量")
@@ -85,6 +85,16 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="qwen3.5-flash", description="LLM 模型名称")
     image_model: str = Field(default="wanx-v1", description="图像生成模型")
     video_model: str = Field(default="kling-v1", description="视频生成模型")
+
+    # ==================== 占位资产降级配置 ====================
+    allow_mock_assets: bool = Field(
+        default=True,
+        description=(
+            "是否允许在无 API Key 或真实 Provider 失败时降级生成占位（mock）资产。"
+            "占位资产会被明确标记 is_mock=True 且仅供本地/CI 便利；"
+            "生产环境必须设为 False，否则会静默产出'已完成'的假图/假视频。"
+        ),
+    )
 
     # ==================== 认证配置 ====================
     auth_enabled: bool = Field(default=True, description="是否启用 API Token 鉴权")
