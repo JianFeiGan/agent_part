@@ -19,10 +19,12 @@ import uuid
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.tools import tool
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.clients import get_video_client
+from src.clients.kling_video_client import KlingVideoClient
+from src.clients.provider_result import ProviderUnavailableError
 from src.db.asset_repository import AssetRepository
 from src.models.assets import AssetStatus, GeneratedVideo, VideoFormat
 from src.models.storyboard import Scene
@@ -65,6 +67,9 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         super().__init__(role=AgentRole.VIDEO_GENERATOR, **kwargs)
         self._storage_backend = storage_backend
         self._session_factory = session_factory
+        self._video_client: KlingVideoClient | None = get_video_client(
+            settings=self.settings
+        )
         self._setup_prompts()
 
     def _setup_prompts(self) -> None:
@@ -333,6 +338,8 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         height: int,
         duration: float,
         mime_type: str,
+        provider: str = "mock",
+        is_mock: bool = True,
     ) -> None:
         """在数据库中创建 GeneratedAssetPO 记录。
 
@@ -348,6 +355,8 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
             height: 高度。
             duration: 时长。
             mime_type: MIME 类型。
+            provider: 生成提供方（真实为模型名，降级为 "mock"）。
+            is_mock: 是否为 Mock 占位（真实为 False）。
         """
         from src.storage.local import LocalStorageBackend
 
@@ -356,7 +365,7 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         await repo.create_asset(
             tenant_id=tenant_id,
             asset_type="video",
-            provider="mock",
+            provider=provider,
             url=url,
             storage_key=storage_key,
             storage_backend="local",
@@ -367,7 +376,7 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
             duration=duration,
             sha256=sha256,
             status="completed",
-            is_mock=True,
+            is_mock=is_mock,
             extra_data={"visual_prompt": visual_prompt, "video_id": video_id},
         )
 
@@ -395,16 +404,101 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         Returns:
             生成的视频。
         """
-        # 生成最小可解析的 1x1x1 占位 MP4
-        # 这是一个最小的合法 MP4 文件（ftyp + moov atom）
-        placeholder_bytes = base64.b64decode(_EMPTY_MP4_BASE64)
-
         # 解析 tenant_id
         tenant_id = "system"
         if state is not None:
             tenant_id = self._resolve_tenant_id(state)
 
-        # 写入存储后端
+        # Kling 模型时长上限保护：超过则裁剪并打 info 日志
+        duration = float(storyboard.total_duration)
+        if duration > 10.0:
+            logger.info(
+                "provider=kling 视频时长 %.1fs 超过模型上限，裁剪为 10.0s", duration
+            )
+            duration = 10.0
+
+        # 真实路径：调用 Kling 可灵 AI
+        if self._video_client is not None:
+            try:
+                visual_prompt = self._build_video_prompt(scene_prompts)
+                result = await self._video_client.generate(
+                    prompt=visual_prompt,
+                    image=None,
+                    duration=duration,
+                    mode="std",
+                    cfg_scale=0.5,
+                    aspect_ratio="16:9",
+                )
+                video_bytes = result.data
+                storage_key = f"videos/{tenant_id}/{video_id}.mp4"
+                url, _ = await self._write_asset_to_storage(
+                    video_bytes,
+                    tenant_id,
+                    video_id,
+                    "video/mp4",
+                )
+                model_name = self.settings.video_model
+                if session is not None:
+                    await self._create_asset_po(
+                        session=session,
+                        tenant_id=tenant_id,
+                        url=url,
+                        storage_key=storage_key,
+                        data=video_bytes,
+                        video_id=video_id,
+                        visual_prompt=visual_prompt,
+                        width=width,
+                        height=height,
+                        duration=duration,
+                        mime_type="video/mp4",
+                        provider=model_name,
+                        is_mock=False,
+                    )
+                video = GeneratedVideo(
+                    video_id=video_id,
+                    title=storyboard.title,
+                    storyboard_id=storyboard.storyboard_id,
+                    visual_prompt=visual_prompt,
+                    url=url,
+                    local_path=None,
+                    format=VideoFormat.MP4,
+                    width=width,
+                    height=height,
+                    duration=duration,
+                    fps=30,
+                    file_size=len(video_bytes),
+                    status=AssetStatus.COMPLETED,
+                    progress=100.0,
+                    model=model_name,
+                    metadata={
+                        "provider": model_name,
+                        "is_mock": False,
+                        "remote_url": result.url,
+                        "task_id": result.task_id,
+                    },
+                )
+                return video
+            except ProviderUnavailableError as exc:
+                logger.error("provider=kling 真实视频生成失败: %s", exc)
+                if not self.settings.allow_mock_assets:
+                    raise
+        else:
+            logger.warning(
+                "provider=kling 未配置 API Key，回退 mock 占位行为 "
+                "(tenant=%s, allow_mock_assets=%s)",
+                tenant_id,
+                self.settings.allow_mock_assets,
+            )
+            if not self.settings.allow_mock_assets:
+                raise ProviderUnavailableError(
+                    "真实视频生成 Provider 不可用（未配置可灵 API Key），"
+                    "且 mock 占位已禁用 (ALLOW_MOCK_ASSETS=false)。"
+                    "请配置 API Key，或在本地/开发环境显式开启 mock。"
+                )
+
+        # 降级 / Mock 占位路径（与无 key 的 CI / 本地行为逐字节一致）
+        # 生成最小可解析的 1x1x1 占位 MP4（ftyp + moov atom）
+        placeholder_bytes = base64.b64decode(_EMPTY_MP4_BASE64)
         url, storage_key = await self._write_asset_to_storage(
             placeholder_bytes,
             tenant_id,
@@ -426,6 +520,8 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
                 height=height,
                 duration=storyboard.total_duration,
                 mime_type="video/mp4",
+                provider="mock",
+                is_mock=True,
             )
 
         # 创建视频对象
@@ -444,7 +540,7 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
             file_size=len(placeholder_bytes),
             status=AssetStatus.COMPLETED,
             progress=100.0,
-            model="kling-v1",
+            model="mock",
             metadata={
                 "provider": "mock",
                 "is_mock": True,
@@ -454,79 +550,20 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
 
         return video
 
+    def _build_video_prompt(self, scene_prompts: list[dict[str, Any]]) -> str:
+        """将分镜提示词列表合并为单一视频生成提示词。
 
-# 定义LangChain工具
-@tool
-async def generate_product_video(
-    storyboard: dict,
-    style: str = "professional",
-    duration: float = 30.0,
-) -> dict:
-    """生成商品视频工具。
+        Args:
+            scene_prompts: 处理后的场景提示词列表（含 ``prompt`` 字段）。
 
-    Args:
-        storyboard: 分镜脚本字典。
-        style: 风格，默认professional。
-        duration: 时长，默认30秒。
-
-    Returns:
-        生成结果字典。
-    """
-    return {
-        "success": True,
-        "video": {
-            "url": f"mock://videos/{uuid.uuid4().hex[:8]}.mp4",
-            "duration": duration,
-            "resolution": "1080p",
-            "progress": 100.0,
-            "metadata": {
-                "provider": "mock",
-                "is_mock": True,
-                "note": "Placeholder asset generated by mock provider; not a real media URL.",
-            },
-        },
-    }
-
-
-@tool
-async def generate_storyboard(
-    product_info: dict,
-    video_duration: float,
-    video_style: str,
-    key_selling_points: list[str],
-) -> dict:
-    """生成视频分镜脚本工具。
-
-    自动划分场景、设计镜头语言。
-
-    Args:
-        product_info: 商品信息字典。
-        video_duration: 视频时长。
-        video_style: 视频风格。
-        key_selling_points: 关键卖点列表。
-
-    Returns:
-        分镜脚本字典。
-    """
-    # 计算场景数量
-    num_scenes = max(3, int(video_duration / 5))
-
-    scenes = []
-    for i in range(num_scenes):
-        scenes.append(
-            {
-                "scene_id": i + 1,
-                "duration": video_duration / num_scenes,
-                "description": f"场景 {i + 1}",
-                "shot_type": "medium",
-            }
-        )
-
-    return {
-        "success": True,
-        "storyboard": {
-            "title": f"{product_info.get('name', '产品')}视频",
-            "total_duration": video_duration,
-            "scenes": scenes,
-        },
-    }
+        Returns:
+            合并后的视频提示词字符串。
+        """
+        parts = [
+            sp.get("prompt", "")
+            for sp in scene_prompts
+            if isinstance(sp, dict) and sp.get("prompt")
+        ]
+        if not parts:
+            return "A high-quality product promotional video"
+        return "\n".join(parts)
