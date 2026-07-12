@@ -66,7 +66,10 @@ class ListingProductPO(Base):
         foreign_keys="ListingTaskPO.product_sku",
     )
 
-    __table_args__ = (Index("uq_listing_products_tenant_sku", "tenant_id", "sku", unique=True),)
+    __table_args__ = (
+        Index("uq_listing_products_tenant_sku", "tenant_id", "sku", unique=True),
+        Index("uq_listing_products_sku", "sku", unique=True),
+    )
 
     def __repr__(self) -> str:
         return f"<ListingProductPO(id={self.id}, sku='{self.sku}')>"

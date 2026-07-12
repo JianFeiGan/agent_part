@@ -47,6 +47,11 @@ class ApiResponse(BaseModel, Generic[T]):
         }
     }
 
+    @classmethod
+    def success(cls, data: T | None = None, message: str = "success") -> "ApiResponse[T]":
+        """创建成功响应。"""
+        return cls(code=200, message=message, data=data)
+
 
 # 类型别名，保持向后兼容
 Result = ApiResponse

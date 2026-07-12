@@ -29,6 +29,18 @@ class Settings(BaseSettings):
     kling_access_key: str = Field(default="", description="可灵AI Access Key")
     kling_secret_key: str = Field(default="", description="可灵AI Secret Key")
 
+    # ==================== 千问模型配置 ====================
+    qwen_api_key: str = Field(default="", description="千问 API Key（阿里云百炼）")
+    qwen_api_base: str = Field(
+        default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        description="千问 OpenAI 兼容端点"
+    )
+    llm_provider: str = Field(default="dashscope", description="LLM 提供商: dashscope/qwen")
+    embedding_provider: str = Field(default="local", description="Embedding 提供商: local/qwen")
+    qwen_llm_model: str = Field(default="qwen-plus", description="千问 LLM 模型名称")
+    qwen_embedding_model: str = Field(default="text-embedding-v3", description="千问 Embedding 模型名称")
+    qwen_embedding_dimensions: int = Field(default=1024, description="千问 Embedding 向量维度")
+
     # ==================== LangChain 配置 ====================
     langchain_tracing_v2: bool = Field(default=False, description="启用 LangSmith 追踪")
     langchain_api_key: str = Field(default="", description="LangSmith API Key")

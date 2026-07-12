@@ -104,7 +104,7 @@ class DatabaseManager:
                 await session.rollback()
                 raise
 
-    async def get_engine(self) -> AsyncEngine:
+    def get_engine(self) -> AsyncEngine:
         """获取数据库引擎。
 
         Returns:
@@ -133,6 +133,9 @@ async def init_db() -> None:
         _db_manager = DatabaseManager()
         await _db_manager.init()
 
+        # 导入所有模型以确保表定义被注册到 Base.metadata
+        from src.db import listing_models, models
+
         # 创建表
         async with _db_manager.get_engine().begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
@@ -149,15 +152,33 @@ async def close_db() -> None:
         _db_manager = None
 
 
-@asynccontextmanager
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """获取数据库会话上下文管理器。
+    """获取数据库会话（用于 FastAPI Depends）。
 
     Yields:
         异步数据库会话。
 
     Example:
-        >>> async with get_db() as session:
+        >>> @router.get("/")
+        ... async def list_items(session: AsyncSession = Depends(get_db)):
+        ...     result = await session.execute(select(Item))
+    """
+    if _db_manager is None:
+        await init_db()
+
+    async with _db_manager.get_session() as session:  # type: ignore
+        yield session
+
+
+@asynccontextmanager
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    """获取数据库会话上下文管理器（用于 async with）。
+
+    Yields:
+        异步数据库会话。
+
+    Example:
+        >>> async with get_db_session() as session:
         ...     result = await session.execute(select(KnowledgeDoc))
         ...     docs = result.scalars().all()
     """

@@ -34,7 +34,7 @@ from src.db.listing_models import (
     ListingProductPO,
     ListingTaskPO,
 )
-from src.db.postgres import get_db
+from src.db.postgres import get_db, get_db_session
 from src.db.repository import BaseRepository
 from src.models.listing import ComplianceReport, ComplianceStatus, ListingProduct, Platform
 
@@ -104,7 +104,7 @@ async def import_product(
 
     product = result["product"]
 
-    async with get_db() as session:
+    async with get_db_session() as session:
         repo = BaseRepository(ListingProductPO, session)
         try:
             po = await repo.create(
@@ -149,7 +149,7 @@ async def list_products(auth: AuthDep) -> ApiResponse[list[ProductResponse]]:
     Returns:
         商品列表（仅当前租户）。
     """
-    async with get_db() as session:
+    async with get_db_session() as session:
         repo = BaseRepository(ListingProductPO, session)
         products = await repo.list(tenant_id=auth.tenant_id)
         return ApiResponse(
@@ -178,7 +178,7 @@ async def create_task(
     Returns:
         创建的任务信息。
     """
-    async with get_db() as session:
+    async with get_db_session() as session:
         product_repo = BaseRepository(ListingProductPO, session)
         product_po = await product_repo.get_by_field("sku", request.product_sku)
         if not product_po:
@@ -218,7 +218,7 @@ async def list_tasks(auth: AuthDep) -> ApiResponse[list[ListingTaskResponse]]:
     Returns:
         任务列表（仅当前租户）。
     """
-    async with get_db() as session:
+    async with get_db_session() as session:
         repo = BaseRepository(ListingTaskPO, session)
         tasks = await repo.list(tenant_id=auth.tenant_id)
         return ApiResponse(
@@ -301,7 +301,7 @@ async def run_compliance_check(
     Returns:
         各平台合规报告。
     """
-    async with get_db() as session:
+    async with get_db_session() as session:
         task_repo = BaseRepository(ListingTaskPO, session)
         task_po = await task_repo.get(task_id)
         if not task_po:
@@ -379,7 +379,7 @@ async def get_compliance_report(
     Returns:
         各平台合规报告（仅当前租户）。
     """
-    async with get_db() as session:
+    async with get_db_session() as session:
         repo = BaseRepository(ComplianceReportPO, session)
         reports_po = await repo.list(task_id=task_id, tenant_id=auth.tenant_id)
         if not reports_po:
