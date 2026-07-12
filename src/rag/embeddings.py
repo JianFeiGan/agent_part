@@ -2,7 +2,7 @@
 Embedding 服务封装。
 
 Description:
-    封装 BGE-large-zh Embedding 模型，提供文本向量化功能。
+    封装 BGE-large-zh 和千问 Embedding 模型，提供文本向量化功能。
 @author ganjianfei
 @version 1.0.0
 2026-04-05
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 class EmbeddingService:
     """Embedding 服务封装。
 
-    提供单文本和批量文本的向量化功能。
+    支持本地 BGE 模型和千问 Embedding API。
 
     Example:
         >>> embedding_service = EmbeddingService()
@@ -32,10 +32,18 @@ class EmbeddingService:
         self.settings = get_settings()
         self._model: Any = None
         self._initialized = False
+        self._qwen_client = None
+
+    def _is_qwen_provider(self) -> bool:
+        """检查是否使用千问 Embedding。"""
+        return self.settings.embedding_provider == "qwen"
 
     def _ensure_model_loaded(self) -> None:
-        """确保模型已加载。"""
+        """确保模型已加载（本地模型）。"""
         if self._initialized:
+            return
+
+        if self._is_qwen_provider():
             return
 
         try:
@@ -57,6 +65,13 @@ class EmbeddingService:
                 "Run: pip install sentence-transformers FlagEmbedding"
             ) from e
 
+    async def _get_qwen_client(self):
+        """获取千问 Embedding 客户端。"""
+        if self._qwen_client is None:
+            from src.clients.qwen_embedding_client import QwenEmbeddingClient
+            self._qwen_client = QwenEmbeddingClient(self.settings)
+        return self._qwen_client
+
     @property
     def dimension(self) -> int:
         """获取向量维度。
@@ -64,6 +79,8 @@ class EmbeddingService:
         Returns:
             向量维度。
         """
+        if self._is_qwen_provider():
+            return self.settings.qwen_embedding_dimensions
         self._ensure_model_loaded()
         return self._model.get_sentence_embedding_dimension()
 
@@ -76,6 +93,9 @@ class EmbeddingService:
         Returns:
             向量列表。
         """
+        if self._is_qwen_provider():
+            raise RuntimeError("千问 Embedding 仅支持异步调用，请使用 aembed_single")
+
         self._ensure_model_loaded()
 
         embedding = self._model.encode(text, normalize_embeddings=True)
@@ -91,6 +111,9 @@ class EmbeddingService:
         Returns:
             向量列表的列表。
         """
+        if self._is_qwen_provider():
+            raise RuntimeError("千问 Embedding 仅支持异步调用，请使用 aembed_batch")
+
         self._ensure_model_loaded()
 
         embeddings = self._model.encode(
@@ -110,10 +133,11 @@ class EmbeddingService:
         Returns:
             向量列表。
         """
-        # SentenceTransformer 的 encode 是同步的，这里提供异步接口
-        # 实际使用时可以考虑用 asyncio.to_thread
-        import asyncio
+        if self._is_qwen_provider():
+            client = await self._get_qwen_client()
+            return await client.embed(text)
 
+        import asyncio
         return await asyncio.to_thread(self.embed_single, text)
 
     async def aembed_batch(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
@@ -126,12 +150,17 @@ class EmbeddingService:
         Returns:
             向量列表的列表。
         """
-        import asyncio
+        if self._is_qwen_provider():
+            client = await self._get_qwen_client()
+            result = await client.embed_batch(texts)
+            if isinstance(result[0], list):
+                return result
+            return [result]
 
+        import asyncio
         return await asyncio.to_thread(self.embed_batch, texts, batch_size)
 
 
-# 全局 Embedding 服务实例
 _embedding_service: EmbeddingService | None = None
 
 

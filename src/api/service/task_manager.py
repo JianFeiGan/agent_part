@@ -280,6 +280,21 @@ class TaskManager:
         # 提取 completed_steps
         completed_steps = state.completed_steps if state else []
 
+        # 提取生成的图片
+        images = []
+        if state and hasattr(state, "generated_images") and state.generated_images:
+            images = [img.model_dump() for img in state.generated_images]
+
+        # 提取生成的视频
+        video = None
+        if state and state.generated_video:
+            video = state.generated_video.model_dump()
+
+        # 提取质量报告
+        quality_reports = []
+        if state and hasattr(state, "quality_reports") and state.quality_reports:
+            quality_reports = [r.model_dump() for r in state.quality_reports]
+
         return {
             "task_id": task_id,
             "product_id": metadata.get("product_id"),
@@ -289,9 +304,9 @@ class TaskManager:
             "current_step": metadata.get("current_step"),
             "completed_steps": completed_steps,
             "agent_logs": agent_logs,
-            "images": [],
-            "video": None,
-            "quality_reports": [],
+            "images": images,
+            "video": video,
+            "quality_reports": quality_reports,
             "error_message": error_message,
             "created_at": metadata.get("created_at"),
             "updated_at": metadata.get("updated_at"),

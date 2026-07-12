@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """应用生命周期管理。
 
-    启动时初始化 Redis 连接，关闭时清理资源。
+    启动时初始化 Redis 连接和数据库，关闭时清理资源。
     """
     # 启动时
     logger.info("正在启动应用...")
@@ -41,6 +41,15 @@ async def lifespan(app: FastAPI):
         logger.info("Redis 连接成功")
     except Exception as e:
         logger.warning(f"Redis 连接失败: {e}，将使用内存存储")
+
+    # 初始化数据库
+    try:
+        from src.db.postgres import init_db
+
+        await init_db()
+        logger.info("数据库初始化成功")
+    except Exception as e:
+        logger.warning(f"数据库初始化失败: {e}")
 
     yield
 

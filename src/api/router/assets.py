@@ -17,7 +17,7 @@ from src.api.schema.common import ApiResponse
 from src.auth.context import AuthContext
 from src.db.asset_repository import AssetRepository
 from src.db.listing_models import GeneratedAssetPO
-from src.db.postgres import get_db
+from src.db.postgres import get_db, get_db_session
 from src.storage.factory import get_storage_backend
 
 router = APIRouter()
@@ -98,7 +98,7 @@ async def list_assets(
     """
     _require_scope(auth, "assets:read", "assets:write")
 
-    async with get_db() as session:
+    async with get_db_session() as session:
         repo = AssetRepository(session)
 
         if product_id is not None:
@@ -150,7 +150,7 @@ async def get_asset(
     """
     _require_scope(auth, "assets:read", "assets:write")
 
-    async with get_db() as session:
+    async with get_db_session() as session:
         repo = AssetRepository(session)
         asset = await repo.get_for_tenant(asset_id, auth.tenant_id)
         if asset is None:
@@ -190,7 +190,7 @@ async def delete_asset(
     """
     _require_scope(auth, "assets:write")
 
-    async with get_db() as session:
+    async with get_db_session() as session:
         repo = AssetRepository(session)
         asset = await repo.get_for_tenant(asset_id, auth.tenant_id)
         if asset is None:

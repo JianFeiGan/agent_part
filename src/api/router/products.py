@@ -22,7 +22,7 @@ from src.api.schema.product import (
 )
 from src.auth.context import AuthContext
 from src.db.asset_repository import AssetRepository
-from src.db.postgres import get_db
+from src.db.postgres import get_db, get_db_session
 from src.models.product import Product
 from src.storage.factory import get_storage_backend
 from src.storage.local import LocalStorageBackend
@@ -328,7 +328,7 @@ async def upload_product_image(
     backend = get_storage_backend()
 
     # --- 去重检查 ---
-    async with get_db() as session:
+    async with get_db_session() as session:
         asset_repo = AssetRepository(session)
         existing = await asset_repo.find_by_sha256(auth.tenant_id, file_sha256)
         if existing is not None:

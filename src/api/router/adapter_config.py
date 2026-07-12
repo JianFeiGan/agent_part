@@ -25,7 +25,7 @@ from src.api.schema.common import ApiResponse
 from src.auth.api_key import require_auth
 from src.auth.context import AuthContext
 from src.db.listing_models import AdapterConfigPO
-from src.db.postgres import get_db
+from src.db.postgres import get_db, get_db_session
 from src.models.listing import Platform
 
 logger = logging.getLogger(__name__)
@@ -67,7 +67,7 @@ async def create_adapter_config(
     Returns:
         新创建的配置（脱敏）。
     """
-    async with get_db() as session:
+    async with get_db_session() as session:
         po = AdapterConfigPO(
             tenant_id=auth.tenant_id,
             platform=request.platform.value,
@@ -106,7 +106,7 @@ async def list_adapter_configs(
     Returns:
         配置列表（脱敏）。
     """
-    async with get_db() as session:
+    async with get_db_session() as session:
         stmt = select(AdapterConfigPO).where(
             AdapterConfigPO.tenant_id == auth.tenant_id
         )
@@ -140,7 +140,7 @@ async def get_adapter_config(
     Returns:
         配置详情（脱敏）。
     """
-    async with get_db() as session:
+    async with get_db_session() as session:
         po = await session.get(AdapterConfigPO, config_id)
         if not po or po.tenant_id != auth.tenant_id:
             return ApiResponse(code=404, message="配置不存在", data=None)
@@ -171,7 +171,7 @@ async def update_adapter_config(
     Returns:
         更新后的配置（脱敏）。
     """
-    async with get_db() as session:
+    async with get_db_session() as session:
         po = await session.get(AdapterConfigPO, config_id)
         if not po or po.tenant_id != auth.tenant_id:
             return ApiResponse(code=404, message="配置不存在", data=None)
@@ -211,7 +211,7 @@ async def delete_adapter_config(
     Returns:
         操作结果。
     """
-    async with get_db() as session:
+    async with get_db_session() as session:
         po = await session.get(AdapterConfigPO, config_id)
         if not po or po.tenant_id != auth.tenant_id:
             return ApiResponse(code=404, message="配置不存在", data=None)

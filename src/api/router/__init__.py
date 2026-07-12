@@ -16,6 +16,7 @@ from src.api.router.dashboard import router as dashboard_router
 from src.api.router.evaluation import router as evaluation_router
 from src.api.router.health import router as health_router
 from src.api.router.knowledge import router as knowledge_router
+from src.api.router.knowledge_graph import router as knowledge_graph_router
 from src.api.router.listing import router as listing_router
 from src.api.router.listing_push import router as listing_push_router
 from src.api.router.products import router as products_router
@@ -29,6 +30,7 @@ api_router.include_router(health_router, tags=["健康检查"])
 api_router.include_router(products_router, prefix="/products", tags=["商品管理"])
 api_router.include_router(tasks_router, prefix="/tasks", tags=["任务管理"])
 api_router.include_router(knowledge_router, prefix="/knowledge", tags=["知识库管理"])
+api_router.include_router(knowledge_graph_router, prefix="/knowledge", tags=["知识图谱"])
 api_router.include_router(evaluation_router, prefix="/evaluation", tags=["RAG评估"])
 api_router.include_router(listing_router, prefix="/listing", tags=["刊登工具"])
 api_router.include_router(listing_push_router, prefix="/listing", tags=["刊登推送"])
