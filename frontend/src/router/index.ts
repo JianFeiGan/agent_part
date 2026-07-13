@@ -148,7 +148,7 @@ const router = createRouter({
 router.beforeEach((to, _from, next) => {
   const title = to.meta.title as string
   if (title) {
-    document.title = `${title} - 商品视觉生成器`
+    document.title = `${title} - Agent Part`
   }
   next()
 })

@@ -6,7 +6,7 @@
         <el-icon :size="24"><PictureFilled /></el-icon>
       </div>
       <transition name="fade-text">
-        <span v-show="!isCollapse" class="logo-text">视觉生成器</span>
+        <span v-show="!isCollapse" class="logo-text">Agent Part</span>
       </transition>
     </div>
 
