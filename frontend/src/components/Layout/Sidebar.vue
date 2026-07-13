@@ -170,6 +170,13 @@ const isCollapse = computed(() => appStore.isCollapse)
   background-color: var(--sidebar-bg) !important;
   padding-top: 12px;
   overflow-y: auto;
+
+  /* 覆盖 Element Plus 菜单 CSS 变量 */
+  --el-menu-active-color: #ffffff !important;
+  --el-menu-hover-bg-color: var(--sidebar-hover) !important;
+  --el-menu-hover-text-color: #c8d6e5 !important;
+  --el-menu-bg-color: var(--sidebar-bg) !important;
+  --el-menu-text-color: var(--sidebar-text) !important;
 }
 
 .sidebar-menu:not(.el-menu--collapse) {
@@ -199,6 +206,19 @@ const isCollapse = computed(() => appStore.isCollapse)
   font-weight: 600;
 }
 
+/* 穿透：确保 Element Plus 内部文字节点也继承颜色 */
+:deep(.el-menu-item.is-active) {
+  color: #fff !important;
+}
+
+:deep(.el-menu-item.is-active .el-menu-item__text) {
+  color: #fff !important;
+}
+
+:deep(.el-menu-item.is-active .el-icon) {
+  color: #fff !important;
+}
+
 /* 子菜单标题 */
 .sidebar-menu .el-sub-menu__title {
   color: var(--sidebar-text) !important;
@@ -212,6 +232,15 @@ const isCollapse = computed(() => appStore.isCollapse)
 
 .sidebar-menu .el-sub-menu__title:hover {
   background-color: var(--sidebar-hover) !important;
+  color: #c8d6e5 !important;
+}
+
+/* 展开的子菜单标题也高亮 */
+:deep(.el-sub-menu.is-opened > .el-sub-menu__title) {
+  color: #c8d6e5 !important;
+}
+
+:deep(.el-sub-menu.is-opened > .el-sub-menu__title .el-icon) {
   color: #c8d6e5 !important;
 }
 
