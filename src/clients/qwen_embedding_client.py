@@ -39,7 +39,7 @@ class QwenEmbeddingClient:
 
     def is_available(self) -> bool:
         """检查是否已配置 API Key。"""
-        return bool(self._settings.qwen_api_key)
+        return bool(self._settings.effective_qwen_api_key)
 
     async def _get_client(self) -> httpx.AsyncClient:
         """获取或创建 httpx 客户端。"""
@@ -60,25 +60,26 @@ class QwenEmbeddingClient:
             ValueError: 如果未配置 API Key。
             RuntimeError: 如果 API 调用失败。
         """
-        return await self.embed_batch([text])
+        result = await self.embed_batch([text])
+        return result[0]
 
-    async def embed_batch(self, texts: list[str]) -> list[float]:
+    async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """批量生成文本向量。
 
         Args:
             texts: 输入文本列表。
 
         Returns:
-            第一个文本的向量（用于单文本场景）。
+            向量列表（始终返回 list[list[float]]）。
 
         Raises:
             ValueError: 如果未配置 API Key。
             RuntimeError: 如果 API 调用失败。
         """
         if not self.is_available():
-            raise ValueError("QWEN_API_KEY 未配置")
+            raise ValueError("QWEN_API_KEY 或 DASHSCOPE_API_KEY 未配置")
 
-        api_key = self._settings.qwen_api_key
+        api_key = self._settings.effective_qwen_api_key
         base_url = self._settings.qwen_api_base
         model = self._settings.qwen_embedding_model
         dimensions = self._settings.qwen_embedding_dimensions
@@ -114,10 +115,6 @@ class QwenEmbeddingClient:
             raise RuntimeError(f"千问 Embedding API 返回数据为空: {result}")
 
         embeddings = [item["embedding"] for item in result["data"]]
-
-        if len(texts) == 1:
-            return embeddings[0]
-
         return embeddings
 
     async def close(self) -> None:
@@ -154,4 +151,4 @@ def is_qwen_embedding_configured(settings: Settings | None = None) -> bool:
         是否已配置 API Key。
     """
     settings = settings or get_settings()
-    return bool(settings.qwen_api_key)
+    return bool(settings.effective_qwen_api_key)

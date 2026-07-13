@@ -41,6 +41,30 @@ class Settings(BaseSettings):
     qwen_embedding_model: str = Field(default="text-embedding-v3", description="千问 Embedding 模型名称")
     qwen_embedding_dimensions: int = Field(default=1024, description="千问 Embedding 向量维度")
 
+    @property
+    def effective_dashscope_api_key(self) -> str:
+        """获取有效的 DashScope API Key。
+
+        百炼平台的 API Key 是统一的，同一个 Key 既可用于 OpenAI 兼容模式
+        也可用于 DashScope 原生协议。当 dashscope_api_key 未配置时，
+        回退到 qwen_api_key。
+
+        Returns:
+            有效的 API Key。
+        """
+        return self.dashscope_api_key or self.qwen_api_key
+
+    @property
+    def effective_qwen_api_key(self) -> str:
+        """获取有效的千问 API Key。
+
+        当 qwen_api_key 未配置时，回退到 dashscope_api_key。
+
+        Returns:
+            有效的 API Key。
+        """
+        return self.qwen_api_key or self.dashscope_api_key
+
     # ==================== LangChain 配置 ====================
     langchain_tracing_v2: bool = Field(default=False, description="启用 LangSmith 追踪")
     langchain_api_key: str = Field(default="", description="LangSmith API Key")
@@ -94,7 +118,7 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = Field(default=10, description="上传文件最大大小（MB）")
 
     # ==================== 模型配置 ====================
-    llm_model: str = Field(default="qwen3.5-flash", description="LLM 模型名称")
+    llm_model: str = Field(default="qwen-plus", description="LLM 模型名称")
     image_model: str = Field(default="wanx-v1", description="图像生成模型")
     video_model: str = Field(default="kling-v1", description="视频生成模型")
 

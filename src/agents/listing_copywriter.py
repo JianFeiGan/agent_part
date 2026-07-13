@@ -54,15 +54,46 @@ class AICopywritingAgent:
         self._current_provider: LLMProvider = LLMProvider.TONGYI
 
     def _create_llm(self, provider: LLMProvider) -> BaseChatModel:
-        """创建指定 LLM 实例。"""
-        if provider == LLMProvider.TONGYI:
-            from langchain_community.chat_models import ChatTongyi
+        """创建指定 LLM 实例。
 
-            return ChatTongyi(
-                model=self._settings.llm_model,
-                dashscope_api_key=self._settings.dashscope_api_key,
-                temperature=0.7,
-                request_timeout=10,
+        根据 llm_provider 配置和降级策略选择 LLM：
+        - TONGYI: 优先使用百炼 OpenAI 兼容模式，回退到 DashScope SDK
+        - CLAUDE: 使用 ChatAnthropic
+
+        Args:
+            provider: LLM 提供商。
+
+        Returns:
+            LLM 实例。
+
+        Raises:
+            ValueError: 未配置对应的 API Key。
+        """
+        if provider == LLMProvider.TONGYI:
+            # 优先使用百炼 OpenAI 兼容模式
+            if self._settings.llm_provider == "qwen" and self._settings.qwen_api_key:
+                from langchain_openai import ChatOpenAI
+
+                return ChatOpenAI(
+                    model=self._settings.qwen_llm_model,
+                    api_key=self._settings.qwen_api_key,
+                    base_url=self._settings.qwen_api_base,
+                    temperature=0.7,
+                    request_timeout=10,
+                )
+            # 回退到 DashScope SDK
+            if self._settings.dashscope_api_key:
+                from langchain_community.chat_models import ChatTongyi
+
+                return ChatTongyi(
+                    model=self._settings.llm_model,
+                    dashscope_api_key=self._settings.dashscope_api_key,
+                    temperature=0.7,
+                    request_timeout=10,
+                )
+            # 两个 Key 都未配置
+            raise ValueError(
+                "未配置 API Key：请设置 QWEN_API_KEY 或 DASHSCOPE_API_KEY"
             )
         elif provider == LLMProvider.CLAUDE:
             from langchain_anthropic import ChatAnthropic

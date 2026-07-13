@@ -171,6 +171,9 @@ async def create_task(
 ) -> ApiResponse[ListingTaskResponse]:
     """创建刊登任务，触发生成素材和文案。
 
+    创建 DB 记录后，异步启动 ListingWorkflow 执行
+    素材优化 + 文案生成 + 合规检查流程。
+
     Args:
         request: 刊登任务请求。
         auth: 认证上下文。
@@ -189,17 +192,45 @@ async def create_task(
             tenant_id=auth.tenant_id,
             product_sku=request.product_sku,
             target_platforms=[p.value for p in request.target_platforms],
-            status="pending",
+            status="running",
         )
+
+    # 异步启动刊登工作流
+    import asyncio
+
+    from src.graph.listing_workflow import ListingWorkflow
+
+    product = _po_to_product(product_po)
+    workflow = ListingWorkflow()
+
+    async def _run_workflow() -> None:
+        """后台执行刊登工作流并更新任务状态。"""
+        try:
+            result = await workflow.run(
+                product=product,
+                target_platforms=request.target_platforms,
+                thread_id=f"listing_{task_po.id}",
+            )
+            async with get_db_session() as session:
+                task_repo = BaseRepository(ListingTaskPO, session)
+                await task_repo.update(task_po.id, status="completed")
+            logger.info(f"刊登任务 {task_po.id} 工作流执行完成")
+        except Exception as e:
+            logger.error(f"刊登任务 {task_po.id} 工作流执行失败: {e}")
+            async with get_db_session() as session:
+                task_repo = BaseRepository(ListingTaskPO, session)
+                await task_repo.update(task_po.id, status="failed")
+
+    asyncio.create_task(_run_workflow())
 
     return ApiResponse(
         code=200,
-        message="任务已创建",
+        message="任务已创建，正在执行素材优化和文案生成",
         data=ListingTaskResponse(
             task_id=task_po.id,
             product_sku=request.product_sku,
             target_platforms=[p.value for p in request.target_platforms],
-            status="pending",
+            status="running",
         ),
     )
 

@@ -134,7 +134,7 @@ async def init_db() -> None:
         await _db_manager.init()
 
         # 导入所有模型以确保表定义被注册到 Base.metadata
-        from src.db import listing_models, models
+        from src.db import conversation_models, listing_models, models
 
         # 创建表
         async with _db_manager.get_engine().begin() as conn:

@@ -124,6 +124,16 @@ const routes: RouteRecordRaw[] = [
           title: '适配器配置',
           icon: 'Setting'
         }
+      },
+      // AI 会话记录
+      {
+        path: 'conversation',
+        name: 'Conversation',
+        component: () => import('@/views/conversation/index.vue'),
+        meta: {
+          title: 'AI 会话记录',
+          icon: 'ChatDotRound'
+        }
       }
     ]
   }

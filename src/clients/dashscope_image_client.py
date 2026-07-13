@@ -1,15 +1,15 @@
 """
 DashScope 通义万象图片生成客户端。
 
-封装 ``dashscope.ImageSynthesis.call``（同步阻塞 API，使用 ``asyncio.to_thread``
-包裹以防止阻塞事件循环）以及结果字节的下载，将结果收敛为
-``ImageGenerationResult``。
+封装 ``dashscope.ImageSynthesis`` 的异步调用模式（async_call + wait），
+支持 wanx-v1、wan2.7-image-pro 等模型，使用 ``asyncio.to_thread``
+包裹以防止阻塞事件循环。
 
 设计要点：
 - ``dashscope`` 在方法内部懒加载导入，避免模块顶层副作用。
-- ``ImageSynthesis.call`` 返回类型为 ``Any``，使用本地 TypedDict + ``cast``
-  收敛，满足 mypy ``warn_return_any``。
+- 使用 async_call + wait 模式，兼容所有万相系列模型。
 - ``httpx.AsyncClient`` 默认懒创建，构造时可注入以便测试替换。
+- API Key 使用 effective_dashscope_api_key，兼容百炼平台统一 Key。
 """
 
 from __future__ import annotations
@@ -55,8 +55,24 @@ class _WanxResponse(Protocol):
     output: _WanxOutput
 
 
+# 支持同步 call 的模型列表（无需异步轮询）
+_SYNC_MODELS = {"wanx-v1", "wanx-v1-edit"}
+
+# wanx 系列支持的尺寸枚举（非标准尺寸会被拒绝）
+_SUPPORTED_SIZES = {
+    "1024*1024", "720*1280", "1280*720",
+    "960*1280", "1280*960",
+    "768*1024", "1024*768",
+    "720*480", "480*720",
+}
+
+
 class DashScopeImageClient:
-    """DashScope 通义万象（wanx-v1）图片生成客户端。"""
+    """DashScope 通义万象图片生成客户端。
+
+    支持万相系列模型（wanx-v1, wan2.7-image-pro 等）。
+    自动选择同步/异步调用模式。
+    """
 
     def __init__(
         self,
@@ -121,6 +137,32 @@ class DashScopeImageClient:
             if self._httpx is None:
                 await client.aclose()
 
+    def _normalize_size(self, width: int, height: int) -> str:
+        """将宽高转换为 DashScope 支持的 size 格式。
+
+        如果精确尺寸不在支持列表中，回退到最接近的标准尺寸。
+
+        Args:
+            width: 宽度。
+            height: 高度。
+
+        Returns:
+            DashScope size 字符串，如 "1024*1024"。
+        """
+        size_str = f"{width}*{height}"
+        if size_str in _SUPPORTED_SIZES:
+            return size_str
+
+        # 回退到最接近的标准尺寸
+        if width >= height:
+            if width > 1280:
+                return "1280*720"
+            return "1024*1024"
+        else:
+            if height > 1280:
+                return "720*1280"
+            return "1024*1024"
+
     async def _call_api(
         self,
         prompt: str,
@@ -130,7 +172,11 @@ class DashScopeImageClient:
         n: int,
         seed: int | None,
     ) -> _WanxResponse:
-        """同步调用 DashScope wanx-v1，返回收敛后的响应结构。
+        """调用 DashScope 图片生成 API。
+
+        根据模型类型自动选择同步/异步调用模式：
+        - wanx-v1 等旧模型使用同步 call
+        - wan2.7-image-pro 等新模型使用 async_call + wait
 
         Args:
             prompt: 正向提示词。
@@ -148,18 +194,36 @@ class DashScopeImageClient:
         """
         from dashscope import ImageSynthesis
 
+        api_key = getattr(
+            self._settings,
+            "effective_dashscope_api_key",
+            None,
+        ) or getattr(self._settings, "dashscope_api_key", "") or getattr(self._settings, "qwen_api_key", "")
+        model = self._settings.image_model
+        size = self._normalize_size(width, height)
+
         kwargs: dict[str, Any] = {
-            "api_key": self._settings.dashscope_api_key,
-            "model": self._settings.image_model,
+            "api_key": api_key,
+            "model": model,
             "prompt": prompt,
-            "negative_prompt": negative_prompt,
             "n": n,
-            "size": f"{width}*{height}",
+            "size": size,
         }
+        if negative_prompt:
+            kwargs["negative_prompt"] = negative_prompt
         if seed is not None:
             kwargs["seed"] = seed
 
-        raw = await asyncio.to_thread(ImageSynthesis.call, **kwargs)
+        logger.info(f"调用 DashScope 图片生成: model={model}, size={size}")
+
+        # 根据模型选择调用模式
+        if model in _SYNC_MODELS:
+            raw = await asyncio.to_thread(ImageSynthesis.call, **kwargs)
+        else:
+            # 新模型使用异步调用 + 轮询等待
+            task = await asyncio.to_thread(ImageSynthesis.async_call, **kwargs)
+            raw = await asyncio.to_thread(ImageSynthesis.wait, task)
+
         response = cast("_WanxResponse", raw)
         if response.status_code != HTTPStatus.OK.value:
             raise ProviderUnavailableError(

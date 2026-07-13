@@ -70,13 +70,21 @@ class ProviderUnavailableError(Exception):
 def is_image_provider_configured(settings: Settings) -> bool:
     """判断图片 provider（DashScope）是否已配置 API Key。
 
+    百炼平台的 API Key 是统一的，检查 dashscope_api_key 或 qwen_api_key。
+
     Args:
         settings: 应用配置实例。
 
     Returns:
         已配置返回 True，否则 False。
     """
-    return bool(getattr(settings, "dashscope_api_key", ""))
+    # 优先使用 effective_dashscope_api_key（Settings 属性），
+    # 回退到直接检查 dashscope_api_key（兼容 SimpleNamespace 等测试 mock）
+    if hasattr(settings, "effective_dashscope_api_key"):
+        return bool(settings.effective_dashscope_api_key)
+    dashscope_key = getattr(settings, "dashscope_api_key", "")
+    qwen_key = getattr(settings, "qwen_api_key", "")
+    return bool(dashscope_key or qwen_key)
 
 
 def is_video_provider_configured(settings: Settings) -> bool:
