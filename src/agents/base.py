@@ -8,6 +8,7 @@ Description:
 2026-03-23
 """
 
+import logging
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
@@ -18,6 +19,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 from src.config.settings import Settings, get_settings
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     pass
@@ -178,18 +181,49 @@ class BaseAgent(ABC, Generic[StateT]):
     def _create_llm(self) -> BaseChatModel:
         """创建LLM实例。
 
+        根据 llm_provider 配置选择 LLM 创建方式：
+        - qwen: 使用 ChatOpenAI + 百炼 OpenAI 兼容端点
+        - dashscope: 使用 ChatTongyi + DashScope SDK
+
         子类可重写此方法以使用不同的LLM。
 
         Returns:
             语言模型实例。
+
+        Raises:
+            ImportError: 缺少必要的依赖包。
+            ValueError: 未配置对应的 API Key。
         """
-        # 默认使用通义千问
+        provider = self.settings.llm_provider
+
+        if provider == "qwen":
+            from langchain_openai import ChatOpenAI
+
+            api_key = self.settings.effective_qwen_api_key
+            if not api_key:
+                raise ValueError("QWEN_API_KEY 或 DASHSCOPE_API_KEY 未配置，请检查 .env 文件")
+
+            model_name = self.settings.qwen_llm_model
+            logger.info(f"初始化千问 LLM (OpenAI兼容): model={model_name}")
+
+            return ChatOpenAI(
+                model=model_name,
+                api_key=api_key,
+                base_url=self.settings.qwen_api_base,
+                temperature=0.7,
+            )
+
+        # 默认使用 DashScope SDK
         try:
             from langchain_community.chat_models import ChatTongyi
 
+            api_key = self.settings.effective_dashscope_api_key
+            if not api_key:
+                raise ValueError("DASHSCOPE_API_KEY 或 QWEN_API_KEY 未配置，请检查 .env 文件")
+
             return ChatTongyi(
                 model=self.settings.llm_model,
-                dashscope_api_key=self.settings.dashscope_api_key,
+                dashscope_api_key=api_key,
                 temperature=0.7,
             )
         except ImportError:
@@ -243,7 +277,7 @@ class BaseAgent(ABC, Generic[StateT]):
         input_vars: dict[str, Any],
         **kwargs: Any,
     ) -> str:
-        """调用LLM生成响应。
+        """调用LLM生成响应，并自动记录会话信息。
 
         Args:
             prompt: 提示模板。
@@ -253,9 +287,25 @@ class BaseAgent(ABC, Generic[StateT]):
         Returns:
             生成的响应文本。
         """
-        chain = prompt | self.llm
-        response = await chain.ainvoke(input_vars, **kwargs)
-        return response.content if hasattr(response, "content") else str(response)
+        from src.api.service.conversation_recorder import ConversationRecorder
+
+        # 构建输入内容摘要
+        input_summary = str(input_vars)[:2000] if input_vars else ""
+
+        # 获取模型名称
+        model_name = getattr(self.llm, "model_name", getattr(self.llm, "model", "unknown"))
+
+        async with ConversationRecorder(
+            tenant_id="system",
+            agent_name=self.role.value,
+            model_name=model_name,
+            provider=self.settings.llm_provider,
+            input_content=input_summary,
+        ) as recorder:
+            chain = prompt | self.llm
+            response = await chain.ainvoke(input_vars, **kwargs)
+            recorder.set_response(response)
+            return response.content if hasattr(response, "content") else str(response)
 
     def __repr__(self) -> str:
         """返回Agent描述。

@@ -194,9 +194,13 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
             图片提示词列表。
         """
         # 准备输入
-        selling_points = (
-            [sp.get("title", "") for sp in state.selling_points] if state.selling_points else []
-        )
+        selling_points = []
+        if state.selling_points:
+            for sp in state.selling_points:
+                if isinstance(sp, dict):
+                    selling_points.append(sp.get("title", sp.get("description", str(sp))))
+                else:
+                    selling_points.append(str(sp))
         image_types = state.generation_request.image_types if state.generation_request else ["main"]
 
         prompt = self.get_prompt("image_prompt")
@@ -235,23 +239,33 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
                 data_list = json.loads(response[start:end])
                 prompts = []
                 for data in data_list:
+                    # 防御性处理：确保 data 是字典
+                    if not isinstance(data, dict):
+                        continue
+
                     type_str = data.get("image_type", "main")
                     try:
                         image_type = ImageType(type_str)
                     except ValueError:
                         image_type = ImageType.MAIN
 
+                    style_kw = data.get("style_keywords", [])
+                    # 确保 style_keywords 是列表
+                    if isinstance(style_kw, str):
+                        style_kw = [kw.strip() for kw in style_kw.split(",") if kw.strip()]
+
                     prompts.append(
                         ImagePrompt(
                             image_type=image_type,
                             prompt=data.get("prompt", ""),
                             negative_prompt=data.get("negative_prompt"),
-                            style_keywords=data.get("style_keywords", []),
+                            style_keywords=style_kw,
                             aspect_ratio=data.get("aspect_ratio", "1:1"),
                         )
                     )
-                return prompts
-        except json.JSONDecodeError:
+                if prompts:
+                    return prompts
+        except (json.JSONDecodeError, TypeError):
             pass
 
         return self._create_default_prompts(None, image_types)

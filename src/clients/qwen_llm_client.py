@@ -39,9 +39,9 @@ def get_qwen_llm(
     """
     settings = settings or get_settings()
 
-    api_key = settings.qwen_api_key
+    api_key = settings.effective_qwen_api_key
     if not api_key:
-        raise ValueError("QWEN_API_KEY 未配置，请检查 .env 文件")
+        raise ValueError("QWEN_API_KEY 或 DASHSCOPE_API_KEY 未配置，请检查 .env 文件")
 
     base_url = settings.qwen_api_base
     model_name = model or settings.qwen_llm_model
@@ -67,4 +67,4 @@ def is_qwen_llm_configured(settings: Settings | None = None) -> bool:
         是否已配置 API Key。
     """
     settings = settings or get_settings()
-    return bool(settings.qwen_api_key)
+    return bool(settings.effective_qwen_api_key)

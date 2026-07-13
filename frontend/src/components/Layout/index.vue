@@ -10,10 +10,7 @@
       <!-- 头部 -->
       <el-header class="layout-header">
         <div class="header-left">
-          <el-icon
-            class="collapse-btn"
-            @click="toggleCollapse"
-          >
+          <el-icon class="collapse-btn" @click="toggleCollapse">
             <component :is="isCollapse ? 'Expand' : 'Fold'" />
           </el-icon>
           <el-breadcrumb separator="/">
@@ -26,9 +23,9 @@
         <div class="header-right">
           <el-dropdown>
             <span class="user-info">
-              <el-avatar :size="32" icon="User" />
+              <el-avatar :size="32" icon="User" class="user-avatar" />
               <span class="username">管理员</span>
-              <el-icon><ArrowDown /></el-icon>
+              <el-icon class="arrow-icon"><ArrowDown /></el-icon>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
@@ -59,27 +56,12 @@ import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import Sidebar from './Sidebar.vue'
 
-/**
- * 布局组件
- * @description 主布局组件，包含侧边栏、头部和主内容区
- */
-
 const route = useRoute()
 const appStore = useAppStore()
-
-// 当前路由
 const currentRoute = computed(() => route)
-
-// 侧边栏折叠状态
 const isCollapse = computed(() => appStore.isCollapse)
-
-// 侧边栏宽度
 const sidebarWidth = computed(() => appStore.sidebarWidth)
-
-// 切换折叠
-const toggleCollapse = () => {
-  appStore.toggleCollapse()
-}
+const toggleCollapse = () => { appStore.toggleCollapse() }
 </script>
 
 <style scoped>
@@ -89,17 +71,20 @@ const toggleCollapse = () => {
 }
 
 .layout-aside {
-  transition: width 0.3s ease;
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.12);
 }
 
 .layout-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: #fff;
-  border-bottom: 1px solid #e4e7ed;
-  padding: 0 20px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-border-light);
+  padding: 0 24px;
   height: 60px;
 }
 
@@ -112,12 +97,15 @@ const toggleCollapse = () => {
 .collapse-btn {
   font-size: 20px;
   cursor: pointer;
-  color: #606266;
-  transition: color 0.3s;
+  color: var(--color-text-secondary);
+  transition: all var(--transition-fast);
+  padding: 6px;
+  border-radius: 8px;
 }
 
 .collapse-btn:hover {
-  color: #409eff;
+  color: var(--color-primary);
+  background-color: var(--color-primary-bg);
 }
 
 .header-right {
@@ -130,27 +118,35 @@ const toggleCollapse = () => {
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  color: #606266;
+  color: var(--color-text-regular);
+  padding: 6px 12px;
+  border-radius: 10px;
+  transition: all var(--transition-fast);
+}
+
+.user-info:hover {
+  background-color: var(--color-primary-bg);
+  color: var(--color-primary);
+}
+
+.user-avatar {
+  background: linear-gradient(135deg, #3b6df0, #06b6d4);
+  box-shadow: 0 2px 6px rgba(59, 109, 240, 0.3);
 }
 
 .username {
   font-size: 14px;
+  font-weight: 600;
+}
+
+.arrow-icon {
+  font-size: 12px;
+  color: var(--color-text-secondary);
 }
 
 .layout-main {
-  background-color: #f5f7fa;
-  padding: 20px;
+  background-color: var(--color-bg-page);
+  padding: 24px;
   overflow-y: auto;
-}
-
-/* 页面切换动画 */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
 }
 </style>

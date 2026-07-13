@@ -152,10 +152,7 @@ class EmbeddingService:
         """
         if self._is_qwen_provider():
             client = await self._get_qwen_client()
-            result = await client.embed_batch(texts)
-            if isinstance(result[0], list):
-                return result
-            return [result]
+            return await client.embed_batch(texts)
 
         import asyncio
         return await asyncio.to_thread(self.embed_batch, texts, batch_size)

@@ -1,6 +1,6 @@
 [project]
 name = "product-visual-generator"
-version = "0.1.0"
+version = "0.2.0"
 description = "多Agent协作商品图片/视频自动生成系统"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -10,49 +10,39 @@ dependencies = [
     "langchain-community>=0.3.0",
     "langgraph>=0.2.0",
     "langchain-core>=0.3.0",
-
     # 阿里云通义系列
     "dashscope>=1.14.0",
-
     # JWT 鉴权（Kling AI HS256）
     "pyjwt>=2.8.0",
-
     # 数据验证
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
-
     # API服务
     "fastapi>=0.100.0",
     "uvicorn[standard]>=0.23.0",
     "python-multipart>=0.0.6",
-
     # HTTP客户端
     "httpx>=0.25.0",
     "aiohttp>=3.9.0",
-
     # 异步支持
     "asyncio-throttle>=1.0.2",
-
     # 工具库
     "python-dotenv>=1.0.0",
     "tenacity>=8.2.0",
     "rich>=13.0.0",
-
     # Redis
     "redis>=5.0.0",
-
     # PostgreSQL + PGVector
     "asyncpg>=0.29.0",
     "sqlalchemy[asyncio]>=2.0.0",
     "pgvector>=0.2.0",
     "psycopg[binary]>=3.1.0",
-
     # RAG Embedding
     "sentence-transformers>=2.2.0",
     "FlagEmbedding>=1.2.0",
-
     # 图片处理
     "pillow>=10.0.0",
+    "langchain-openai>=1.3.5",
 ]
 
 [project.optional-dependencies]

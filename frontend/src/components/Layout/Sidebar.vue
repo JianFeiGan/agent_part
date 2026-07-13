@@ -2,10 +2,12 @@
   <div class="sidebar">
     <!-- Logo -->
     <div class="logo">
-      <el-icon :size="32" color="#409eff">
-        <PictureFilled />
-      </el-icon>
-      <span v-show="!isCollapse" class="logo-text">视觉生成器</span>
+      <div class="logo-icon">
+        <el-icon :size="24"><PictureFilled /></el-icon>
+      </div>
+      <transition name="fade-text">
+        <span v-show="!isCollapse" class="logo-text">视觉生成器</span>
+      </transition>
     </div>
 
     <!-- 导航菜单 -->
@@ -84,6 +86,17 @@
           <template #title>适配器配置</template>
         </el-menu-item>
       </el-sub-menu>
+
+      <el-sub-menu index="conversation">
+        <template #title>
+          <el-icon><ChatDotRound /></el-icon>
+          <span>AI 会话</span>
+        </template>
+        <el-menu-item index="/conversation">
+          <el-icon><DataLine /></el-icon>
+          <template #title>会话记录</template>
+        </el-menu-item>
+      </el-sub-menu>
     </el-menu>
   </div>
 </template>
@@ -93,18 +106,9 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 
-/**
- * 侧边栏组件
- * @description 导航菜单侧边栏
- */
-
 const route = useRoute()
 const appStore = useAppStore()
-
-// 当前激活的菜单
 const activeMenu = computed(() => route.path)
-
-// 侧边栏折叠状态
 const isCollapse = computed(() => appStore.isCollapse)
 </script>
 
@@ -113,63 +117,149 @@ const isCollapse = computed(() => appStore.isCollapse)
   height: 100%;
   display: flex;
   flex-direction: column;
-  background-color: #304156;
+  background: var(--sidebar-bg);
 }
 
+/* Logo */
 .logo {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   height: 60px;
   padding: 0 16px;
-  background-color: #263445;
+  background: var(--sidebar-bg-dark);
+  border-bottom: 1px solid var(--sidebar-divider);
+}
+
+.logo-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #3b6df0, #06b6d4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(59, 109, 240, 0.4);
 }
 
 .logo-text {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
   color: #fff;
   white-space: nowrap;
+  letter-spacing: 0.3px;
 }
 
+.fade-text-enter-active,
+.fade-text-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fade-text-enter-from,
+.fade-text-leave-to {
+  opacity: 0;
+}
+
+/* 菜单 */
 .sidebar-menu {
   flex: 1;
-  border-right: none;
-  background-color: #304156;
+  border-right: none !important;
+  background-color: var(--sidebar-bg) !important;
+  padding-top: 12px;
+  overflow-y: auto;
 }
 
 .sidebar-menu:not(.el-menu--collapse) {
   width: 220px;
 }
 
-/* 覆盖 Element Plus 默认样式 */
+/* 菜单项 */
 .sidebar-menu .el-menu-item {
-  color: #bfcbd9;
+  color: var(--sidebar-text) !important;
+  height: 42px !important;
+  line-height: 42px !important;
+  margin: 2px 10px;
+  border-radius: 8px !important;
+  transition: all var(--transition-fast) !important;
+  font-size: 13.5px;
 }
 
 .sidebar-menu .el-menu-item:hover {
-  background-color: #263445;
+  background-color: var(--sidebar-hover) !important;
+  color: #c8d6e5 !important;
 }
 
 .sidebar-menu .el-menu-item.is-active {
-  color: #409eff;
-  background-color: #263445;
+  color: #fff !important;
+  background: var(--sidebar-active-bg) !important;
+  box-shadow: var(--sidebar-active-shadow);
+  font-weight: 600;
 }
 
+/* 子菜单标题 */
 .sidebar-menu .el-sub-menu__title {
-  color: #bfcbd9;
+  color: var(--sidebar-text) !important;
+  height: 42px !important;
+  line-height: 42px !important;
+  margin: 2px 10px;
+  border-radius: 8px !important;
+  transition: all var(--transition-fast) !important;
+  font-size: 13.5px;
 }
 
 .sidebar-menu .el-sub-menu__title:hover {
-  background-color: #263445;
+  background-color: var(--sidebar-hover) !important;
+  color: #c8d6e5 !important;
 }
 
+/* 子菜单图标颜色 */
+.sidebar-menu .el-sub-menu__title .el-icon,
+.sidebar-menu .el-menu-item .el-icon {
+  color: var(--sidebar-text);
+  transition: color var(--transition-fast);
+}
+
+.sidebar-menu .el-menu-item:hover .el-icon,
+.sidebar-menu .el-sub-menu__title:hover .el-icon {
+  color: #c8d6e5;
+}
+
+.sidebar-menu .el-menu-item.is-active .el-icon {
+  color: #fff;
+}
+
+/* 子菜单内嵌菜单 */
 :deep(.el-menu) {
-  background-color: #304156;
+  background-color: var(--sidebar-bg) !important;
+}
+
+:deep(.el-sub-menu .el-menu) {
+  background-color: transparent !important;
+}
+
+:deep(.el-sub-menu .el-menu .el-menu-item) {
+  padding-left: 48px !important;
+  font-size: 13px;
 }
 
 :deep(.el-menu--collapse) {
   width: 64px;
+}
+
+/* 滚动条 */
+.sidebar-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar-menu::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+}
+
+.sidebar-menu::-webkit-scrollbar-track {
+  background-color: transparent;
 }
 </style>
