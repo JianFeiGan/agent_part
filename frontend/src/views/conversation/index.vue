@@ -599,12 +599,16 @@ async function loadRecords() {
 }
 
 async function handleSearch() {
+  currentPage.value = 1  // 切换搜索条件时重置分页
   if (filters.value.keyword.trim()) {
     recordsLoading.value = true
     try {
       const { data } = await searchConversations({
         keyword: filters.value.keyword.trim(),
         search_field: filters.value.search_field as 'input' | 'output' | 'both',
+        agent_name: filters.value.agent_name || undefined,
+        model_name: filters.value.model_name || undefined,
+        status: (filters.value.status || undefined) as 'success' | 'failed' | 'timeout' | undefined,
         page: currentPage.value,
         page_size: pageSize.value
       })

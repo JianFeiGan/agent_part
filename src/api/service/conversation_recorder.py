@@ -11,7 +11,6 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.clients.qwen_llm_client import is_qwen_llm_configured
 from src.config.settings import get_settings
 from src.db.conversation_models import AIConversationLog
 from src.db.postgres import get_db_session
@@ -193,36 +192,53 @@ class ConversationRecorder:
             self._status = "failed"
             self._error_message = str(exc_val)[:2000]
 
-        await record_conversation(
-            tenant_id=self._tenant_id,
-            task_id=self._task_id,
-            session_id=self._session_id,
-            agent_name=self._agent_name,
-            model_name=self._model_name,
-            provider=self._provider,
-            input_content=self._input_content,
-            output_content=self._output_content,
-            input_tokens=self._input_tokens,
-            output_tokens=self._output_tokens,
-            latency_ms=latency_ms,
-            status=self._status,
-            error_message=self._error_message,
-        )
+        try:
+            await record_conversation(
+                tenant_id=self._tenant_id,
+                task_id=self._task_id,
+                session_id=self._session_id,
+                agent_name=self._agent_name,
+                model_name=self._model_name,
+                provider=self._provider,
+                input_content=self._input_content,
+                output_content=self._output_content,
+                input_tokens=self._input_tokens,
+                output_tokens=self._output_tokens,
+                latency_ms=latency_ms,
+                status=self._status,
+                error_message=self._error_message,
+            )
+        except Exception as e:
+            # 记录失败绝不影响原始异常传播
+            logger.warning(f"AI 会话记录写入失败: {e}")
+
         return False  # 不抑制异常
 
     def set_response(self, response: Any) -> None:
         """设置 LLM 响应，自动提取 token 使用量。"""
-        self._output_content = getattr(response, "content", str(response))
+        content = getattr(response, "content", str(response))
+        # AIMessage.content 在多模态响应时可能为 list，转为字符串
+        if isinstance(content, list):
+            content = str(content)
+        self._output_content = content
 
-        # 尝试从 response_metadata 提取 token 使用量
+        # 尝试从 usage_metadata 提取 token 使用量
+        # LangChain AIMessage.usage_metadata 可能是 UsageMetadata pydantic 对象或 dict
         usage_metadata = getattr(response, "usage_metadata", None)
         if usage_metadata:
-            self._input_tokens = usage_metadata.get("input_tokens", 0)
-            self._output_tokens = usage_metadata.get("output_tokens", 0)
+            if isinstance(usage_metadata, dict):
+                self._input_tokens = usage_metadata.get("input_tokens", 0)
+                self._output_tokens = usage_metadata.get("output_tokens", 0)
+            else:
+                # UsageMetadata pydantic/dataclass 对象，使用 getattr
+                self._input_tokens = getattr(usage_metadata, "input_tokens", 0) or 0
+                self._output_tokens = getattr(usage_metadata, "output_tokens", 0) or 0
         else:
-            # 从 response_metadata 提取（OpenAI 兼容模式）
+            # 从 response_metadata 提取（OpenAI 兼容模式 / DashScope SDK）
             response_metadata = getattr(response, "response_metadata", {})
-            token_usage = response_metadata.get("token_usage", {})
-            if token_usage:
-                self._input_tokens = token_usage.get("prompt_tokens", 0)
-                self._output_tokens = token_usage.get("completion_tokens", 0)
+            if isinstance(response_metadata, dict):
+                # ChatOpenAI: token_usage; ChatTongyi: usage
+                token_usage = response_metadata.get("token_usage") or response_metadata.get("usage") or {}
+                if token_usage:
+                    self._input_tokens = token_usage.get("prompt_tokens", 0)
+                    self._output_tokens = token_usage.get("completion_tokens", 0)
