@@ -74,6 +74,9 @@ export interface ConversationQueryParams {
 export interface ConversationContentQuery {
   keyword: string
   search_field?: SearchField
+  agent_name?: string
+  model_name?: string
+  status?: ConversationStatus
   page?: number
   page_size?: number
 }

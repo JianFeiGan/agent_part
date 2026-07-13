@@ -5,7 +5,7 @@ AI 会话记录 API 路由。
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, status
@@ -299,7 +299,7 @@ async def get_cost_budget(
 
     计算今日和本月的费用使用量，与预算对比，并预估月费用。
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
@@ -372,20 +372,30 @@ async def search_conversations(
 ) -> ApiResponse[ConversationListResponse]:
     """按关键词搜索会话的输入/输出内容。"""
     async with get_db_session() as session:
-        keyword = f"%{request.keyword}%"
+        # 转义 SQL LIKE 通配符，防止用户输入的 % 和 _ 被当作通配符
+        escaped = request.keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        keyword = f"%{escaped}%"
         base = AIConversationLog.tenant_id == auth.tenant_id
+
+        # 附加过滤条件
+        if request.agent_name:
+            base &= AIConversationLog.agent_name == request.agent_name
+        if request.model_name:
+            base &= AIConversationLog.model_name == request.model_name
+        if request.status:
+            base &= AIConversationLog.status == request.status
 
         # 根据搜索字段构建条件
         from sqlalchemy import or_
 
         if request.search_field == "input":
-            condition = AIConversationLog.input_content.ilike(keyword)
+            condition = AIConversationLog.input_content.ilike(keyword, escape="\\")
         elif request.search_field == "output":
-            condition = AIConversationLog.output_content.ilike(keyword)
+            condition = AIConversationLog.output_content.ilike(keyword, escape="\\")
         else:
             condition = or_(
-                AIConversationLog.input_content.ilike(keyword),
-                AIConversationLog.output_content.ilike(keyword),
+                AIConversationLog.input_content.ilike(keyword, escape="\\"),
+                AIConversationLog.output_content.ilike(keyword, escape="\\"),
             )
 
         # 总数

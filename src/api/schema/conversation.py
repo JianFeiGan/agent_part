@@ -4,6 +4,8 @@ AI 会话记录 API Schema。
 
 from datetime import datetime
 
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -29,10 +31,13 @@ class ConversationContentQuery(BaseModel):
     """会话内容查询参数。"""
 
     keyword: str = Field(description="搜索关键词")
-    search_field: str = Field(
+    search_field: Literal["input", "output", "both"] = Field(
         default="both",
         description="搜索字段: input/output/both",
     )
+    agent_name: str | None = Field(default=None, description="Agent 名称过滤")
+    model_name: str | None = Field(default=None, description="模型名称过滤")
+    status: str | None = Field(default=None, description="状态过滤")
     page: int = Field(default=1, ge=1, description="页码")
     page_size: int = Field(default=20, ge=1, le=100, description="每页大小")
 

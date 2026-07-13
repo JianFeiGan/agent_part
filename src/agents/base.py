@@ -101,6 +101,9 @@ class BaseAgent(ABC, Generic[StateT]):
         llm: BaseChatModel | None = None,
         settings: Settings | None = None,
         retriever: Any | None = None,  # KnowledgeRetriever 类型，使用 Any 避免循环导入
+        tenant_id: str = "system",
+        task_id: str | None = None,
+        session_id: str | None = None,
     ) -> None:
         """初始化Agent。
 
@@ -109,11 +112,17 @@ class BaseAgent(ABC, Generic[StateT]):
             llm: 可选的语言模型实例。
             settings: 可选的配置实例。
             retriever: 可选的知识检索器，用于RAG增强。
+            tenant_id: 租户 ID，用于会话记录隔离。
+            task_id: 关联任务 ID，用于会话记录关联。
+            session_id: 会话 ID，用于同一工作流的 LLM 调用关联。
         """
         self.role = role
         self.settings = settings or get_settings()
         self._llm = llm
         self._retriever = retriever
+        self._tenant_id = tenant_id
+        self._task_id = task_id
+        self._session_id = session_id
         self._tools: list[Any] = []
         self._prompts: dict[str, ChatPromptTemplate] = {}
 
@@ -296,7 +305,9 @@ class BaseAgent(ABC, Generic[StateT]):
         model_name = getattr(self.llm, "model_name", getattr(self.llm, "model", "unknown"))
 
         async with ConversationRecorder(
-            tenant_id="system",
+            tenant_id=self._tenant_id,
+            task_id=self._task_id,
+            session_id=self._session_id,
             agent_name=self.role.value,
             model_name=model_name,
             provider=self.settings.llm_provider,
