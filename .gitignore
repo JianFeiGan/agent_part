@@ -220,5 +220,6 @@ openspec/
 knowledge/
 migrations/
 .flow/
-.claude/output/
+.claude/
+output/
 frontend/package-lock.json
