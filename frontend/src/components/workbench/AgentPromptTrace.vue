@@ -24,7 +24,7 @@ import type { AgentLog } from '@/types/task'
  * 展示 prompt_template 和 prompt_variables。
  */
 
-const props = defineProps<{
+defineProps<{
   log: AgentLog | null
 }>()
 

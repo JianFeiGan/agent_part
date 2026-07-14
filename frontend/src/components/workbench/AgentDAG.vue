@@ -6,7 +6,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { Graph } from '@antv/g6'
 import { useWorkbenchStore } from '@/stores/workbench'
-import { WORKFLOW_TOPOLOGY, NODE_MAP } from '@/workflow/topology'
+import { WORKFLOW_TOPOLOGY } from '@/workflow/topology'
 import { getAgentNodeStyle, getEdgeStyle } from '@/workflow/node-renderer'
 import type { AgentLog } from '@/types/task'
 

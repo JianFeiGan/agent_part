@@ -15,7 +15,7 @@ import type { AgentLog } from '@/types/task'
  * 展示 input_data 字段，标注来源 Agent。
  */
 
-const props = defineProps<{
+defineProps<{
   log: AgentLog | null
   fromLabel?: string
 }>()

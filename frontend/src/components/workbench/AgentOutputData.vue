@@ -15,7 +15,7 @@ import type { AgentLog } from '@/types/task'
  * 展示 output_data 字段，标注去向 Agent。
  */
 
-const props = defineProps<{
+defineProps<{
   log: AgentLog | null
   toLabel?: string
 }>()
