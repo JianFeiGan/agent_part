@@ -161,6 +161,11 @@ class Settings(BaseSettings):
     max_concurrent_generations: int = Field(default=5, description="最大并发生成数")
     max_upload_size_mb: int = Field(default=10, description="上传文件最大大小（MB）")
 
+    # ==================== 图片生成 RAG 配置 ====================
+    image_rag_enabled: bool = Field(default=False, description="启用图片生成 RAG 增强")
+    image_rag_auto_ingest: bool = Field(default=True, description="自动将高质量生成结果入库知识库")
+    image_rag_quality_threshold: float = Field(default=0.7, description="自动入库的质量评分阈值")
+
     # ==================== 模型配置 ====================
     llm_model: str = Field(default="qwen-plus", description="LLM 模型名称")
     image_model: str = Field(default="wanx-v1", description="图像生成模型")

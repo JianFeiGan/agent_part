@@ -258,6 +258,25 @@ class WorkflowBuilder:
 
         return QualityReviewerAgent()
 
+    def _create_image_generator(self) -> Any:
+        """创建图片生成 Agent。
+
+        根据 RAG 配置选择普通或 RAG 增强版本。
+
+        Returns:
+            Agent 实例。
+        """
+        if self._rag_enabled and self._retriever:
+            from src.agents.rag_image_generator import RAGEnhancedImageGenerator
+
+            return RAGEnhancedImageGenerator(
+                retriever=self._retriever,
+                session=self._session,
+            )
+        from src.agents.image_generator import ImageGeneratorAgent
+
+        return ImageGeneratorAgent()
+
     def add_agent_nodes(self) -> "WorkflowBuilder":
         """添加所有Agent节点。
 
@@ -265,7 +284,6 @@ class WorkflowBuilder:
             self，支持链式调用。
         """
         # 延迟导入以避免循环导入
-        from src.agents.image_generator import ImageGeneratorAgent
         from src.agents.orchestrator import OrchestratorAgent
         from src.agents.video_generator import VideoGeneratorAgent
         from src.agents.visual_designer import VisualDesignerAgent
@@ -275,7 +293,7 @@ class WorkflowBuilder:
         requirement_analyzer = self._create_requirement_analyzer()
         creative_planner = self._create_creative_planner()
         visual_designer = VisualDesignerAgent()
-        image_generator = ImageGeneratorAgent()
+        image_generator = self._create_image_generator()
         video_generator = VideoGeneratorAgent()
         quality_reviewer = self._create_quality_reviewer()
 

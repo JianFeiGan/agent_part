@@ -467,6 +467,77 @@ class KnowledgeRetriever:
             sources=sources,
         )
 
+    async def retrieve_for_image_generation(
+        self,
+        session: AsyncSession,
+        category: str,
+        brand: str | None = None,
+        style_preference: str | None = None,
+        *,
+        tenant_id: str,
+    ) -> RetrievalResult:
+        """为图片生成检索知识。
+
+        检索品牌视觉规范、风格模板和成功创意案例，
+        用于优化图片生成 Prompt。
+
+        Args:
+            session: 数据库会话。
+            category: 商品类目。
+            brand: 品牌名称。
+            style_preference: 风格偏好。
+            tenant_id: 租户 ID。
+
+        Returns:
+            检索结果。
+        """
+        results_list: list[SearchResult] = []
+
+        # 1. 检索品牌视觉规范（配色、字体、构图规则）
+        if brand:
+            brand_result = await self.retrieve(
+                session,
+                query=f"{brand} 视觉规范 配色方案 构图规则",
+                doc_type="brand_guide",
+                top_k=3,
+                tenant_id=tenant_id,
+            )
+            results_list.extend(brand_result.results)
+
+        # 2. 检索风格模板
+        style_query = f"{category} {style_preference or ''} 图片风格 视觉设计 配色"
+        style_result = await self.retrieve(
+            session,
+            query=style_query,
+            doc_type="case_study",
+            category=category,
+            top_k=5,
+            tenant_id=tenant_id,
+        )
+        results_list.extend(style_result.results)
+
+        # 3. 检索类目知识中的视觉相关内容
+        category_result = await self.retrieve(
+            session,
+            query=f"{category} 产品摄影 图片构图 视觉呈现",
+            doc_type="category_knowledge",
+            category=category,
+            top_k=3,
+            tenant_id=tenant_id,
+        )
+        results_list.extend(category_result.results)
+
+        unique_results = self._deduplicate_results(results_list)
+        context = self._build_context(unique_results)
+        sources = self._extract_sources(unique_results)
+
+        return RetrievalResult(
+            query=f"图片生成: {category}",
+            results=unique_results,
+            context=context,
+            sources=sources,
+        )
+
     async def retrieve_compliance_rules(
         self,
         session: AsyncSession,
