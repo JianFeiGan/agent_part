@@ -64,7 +64,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'tasks/:id',
         name: 'TaskDetail',
-        component: () => import('@/views/tasks/Detail.vue'),
+        component: () => import('@/views/tasks/Workbench.vue'),
         meta: {
           title: '任务详情',
           hidden: true
