@@ -33,12 +33,14 @@ class Settings(BaseSettings):
     qwen_api_key: str = Field(default="", description="千问 API Key（阿里云百炼）")
     qwen_api_base: str = Field(
         default="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        description="千问 OpenAI 兼容端点"
+        description="千问 OpenAI 兼容端点",
     )
     llm_provider: str = Field(default="dashscope", description="LLM 提供商: dashscope/qwen")
     embedding_provider: str = Field(default="local", description="Embedding 提供商: local/qwen")
     qwen_llm_model: str = Field(default="qwen-plus", description="千问 LLM 模型名称")
-    qwen_embedding_model: str = Field(default="text-embedding-v3", description="千问 Embedding 模型名称")
+    qwen_embedding_model: str = Field(
+        default="text-embedding-v3", description="千问 Embedding 模型名称"
+    )
     qwen_embedding_dimensions: int = Field(default=1024, description="千问 Embedding 向量维度")
 
     @property
@@ -104,7 +106,9 @@ class Settings(BaseSettings):
     # ==================== RAG 配置 ====================
     rag_enabled: bool = Field(default=True, description="启用 RAG 检索增强")
     embedding_model: str = Field(default="BAAI/bge-large-zh", description="Embedding 模型名称")
-    embedding_device: str = Field(default="auto", description="Embedding 设备: auto/cuda/cpu（auto 自动探测可用设备）")
+    embedding_device: str = Field(
+        default="auto", description="Embedding 设备: auto/cuda/cpu（auto 自动探测可用设备）"
+    )
     chunk_size: int = Field(default=512, description="文档分块大小 (tokens)")
     chunk_overlap: int = Field(default=64, description="分块重叠大小 (tokens)")
     retrieval_top_k: int = Field(default=5, description="检索返回文档数量")
@@ -116,6 +120,11 @@ class Settings(BaseSettings):
     default_video_fps: int = Field(default=30, description="默认视频帧率")
     max_concurrent_generations: int = Field(default=5, description="最大并发生成数")
     max_upload_size_mb: int = Field(default=10, description="上传文件最大大小（MB）")
+
+    # ==================== 图片生成 RAG 配置 ====================
+    image_rag_enabled: bool = Field(default=False, description="启用图片生成 RAG 增强")
+    image_rag_auto_ingest: bool = Field(default=True, description="自动将高质量生成结果入库知识库")
+    image_rag_quality_threshold: float = Field(default=0.7, description="自动入库的质量评分阈值")
 
     # ==================== 模型配置 ====================
     llm_model: str = Field(default="qwen-plus", description="LLM 模型名称")

@@ -78,9 +78,7 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         super().__init__(role=AgentRole.IMAGE_GENERATOR, **kwargs)
         self._storage_backend = storage_backend
         self._session_factory = session_factory
-        self._image_client: DashScopeImageClient | None = get_image_client(
-            settings=self.settings
-        )
+        self._image_client: DashScopeImageClient | None = get_image_client(settings=self.settings)
         self._setup_prompts()
 
     def _setup_prompts(self) -> None:
@@ -539,3 +537,46 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         )
 
         return [image]
+
+    async def ingest_result_to_knowledge(
+        self,
+        session: AsyncSession,
+        prompt: str,
+        enhanced_prompt: str,
+        image_url: str,
+        category: str,
+        brand: str | None = None,
+        quality_score: float | None = None,
+        *,
+        tenant_id: str,
+    ) -> int | None:
+        """将图片生成结果入库知识库作为案例积累。
+
+        委托给 RAGEnhancedImageGenerator.ingest_generation_result。
+
+        Args:
+            session: 数据库会话。
+            prompt: 原始 Prompt。
+            enhanced_prompt: 增强后的 Prompt。
+            image_url: 生成图片 URL。
+            category: 商品类目。
+            brand: 品牌名称。
+            quality_score: 质量评分。
+            tenant_id: 租户 ID。
+
+        Returns:
+            入库文档 ID，失败返回 None。
+        """
+        from src.agents.rag_image_generator import RAGEnhancedImageGenerator
+
+        agent = RAGEnhancedImageGenerator(base_agent=self)
+        return await agent.ingest_generation_result(
+            session,
+            prompt=prompt,
+            enhanced_prompt=enhanced_prompt,
+            image_url=image_url,
+            category=category,
+            brand=brand,
+            quality_score=quality_score,
+            tenant_id=tenant_id,
+        )
