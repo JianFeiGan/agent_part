@@ -40,7 +40,7 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
 
 | 特性 | 描述 |
 |------|------|
-| 🤖 **多 Agent 协作** | 7 个视觉生成 Agent + 5 个刊登 Agent + 3 个 RAG 增强 Agent + 3 个知识库 Agent |
+| 🤖 **多 Agent 协作** | 7 个视觉生成 Agent + 4 个刊登 Agent + 3 个 RAG 增强 Agent + 3 个知识库 Agent |
 | 🔄 **LangGraph 工作流** | 条件路由、并行执行、状态检查点、RAG 动态注入 |
 | 🖼️ **图片生成** | DashScope 万象（wanx-v1 / wan2.7-image-pro），async_call + wait 模式 |
 | 🎬 **视频生成** | 可灵 AI（kling-v1），HS256 JWT 鉴权 + 异步任务轮询 |
@@ -141,23 +141,23 @@ npm run dev
 
 | 变量 | 说明 |
 |------|------|
-| `LLM_PROVIDER` | LLM 提供商：`qwen`（百炼 OpenAI 兼容）或 `dashscope` |
 | `QWEN_API_KEY` | 百炼 API Key（同时支持 OpenAI 兼容和 DashScope 原生协议） |
-| `QWEN_API_BASE` | 百炼 OpenAI 兼容端点 |
 
 ### 可选
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
+| `LLM_PROVIDER` | `dashscope` | LLM 提供商：`qwen`（百炼 OpenAI 兼容）或 `dashscope` |
+| `QWEN_API_BASE` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 百炼 OpenAI 兼容端点 |
 | `DASHSCOPE_API_KEY` | — | DashScope API Key（可与 QWEN_API_KEY 共用） |
 | `QWEN_LLM_MODEL` | `qwen-plus` | LLM 模型名称 |
 | `KLING_ACCESS_KEY` | — | 可灵 AI Access Key |
 | `KLING_SECRET_KEY` | — | 可灵 AI Secret Key |
-| `EMBEDDING_PROVIDER` | `qwen` | Embedding 提供商：`local`（BGE-large-zh）或 `qwen` |
+| `EMBEDDING_PROVIDER` | `local` | Embedding 提供商：`local`（BGE-large-zh）或 `qwen` |
 | `EMBEDDING_MODEL` | `BAAI/bge-large-zh` | 本地 Embedding 模型名称 |
 | `RAG_ENABLED` | `true` | 启用 RAG 知识检索 |
 | `RETRIEVAL_TOP_K` | `5` | 检索返回数量 |
-| `SIMILARITY_THRESHOLD` | `0.5` | 相似度阈值 |
+| `SIMILARITY_THRESHOLD` | `0.7` | 相似度阈值 |
 | `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL 连接 URL |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis 连接 URL |
 | `STORAGE_TYPE` | `local` | 存储类型：`local` 或 `oss` |
@@ -233,8 +233,10 @@ agent_part/
 | **图片生成** | DashScope 万象 (wanx-v1, wan2.7-image-pro) |
 | **视频生成** | 可灵 AI (kling-v1) |
 | **向量检索** | PGVector, BGE-large-zh, 千问 text-embedding-v3 |
+| **图谱检索** | Graph RAG (实体/关系/社区/摘要) |
 | **前端框架** | Vue 3, TypeScript, Element Plus, Pinia |
 | **数据库** | PostgreSQL 16 + PGVector, Redis 6 |
+| **存储** | 本地文件系统 / 阿里云 OSS |
 | **部署** | Docker Compose, Nginx |
 
 ---
@@ -293,7 +295,7 @@ A multi-agent collaboration system that automates the generation of marketing vi
 
 | Feature | Description |
 |---------|-------------|
-| 🤖 **Multi-Agent** | 7 visual + 5 listing + 3 RAG + 3 knowledge agents |
+| 🤖 **Multi-Agent** | 7 visual + 4 listing + 3 RAG + 3 knowledge agents |
 | 🔄 **LangGraph Workflows** | Conditional routing, parallel execution, state checkpoints |
 | 🖼️ **Image Gen** | DashScope Wanx (wanx-v1 / wan2.7-image-pro), async_call + wait |
 | 🎬 **Video Gen** | Kling AI (kling-v1), JWT auth + async task polling |
@@ -361,19 +363,23 @@ docker compose up -d
 
 | Variable | Description |
 |----------|-------------|
-| `LLM_PROVIDER` | LLM provider: `qwen` (Bailian OpenAI-compatible) or `dashscope` |
 | `QWEN_API_KEY` | Bailian API Key (supports both OpenAI-compatible and DashScope) |
-| `QWEN_API_BASE` | Bailian OpenAI-compatible endpoint |
 
 **Optional:**
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `LLM_PROVIDER` | `dashscope` | `qwen` (Bailian OpenAI-compatible) or `dashscope` |
+| `QWEN_API_BASE` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | Bailian OpenAI-compatible endpoint |
 | `DASHSCOPE_API_KEY` | — | DashScope API Key (can share QWEN_API_KEY) |
 | `KLING_ACCESS_KEY` | — | Kling AI Access Key |
 | `KLING_SECRET_KEY` | — | Kling AI Secret Key |
-| `EMBEDDING_PROVIDER` | `qwen` | `local` (BGE-large-zh) or `qwen` |
+| `QWEN_LLM_MODEL` | `qwen-plus` | LLM model name |
+| `EMBEDDING_PROVIDER` | `local` | `local` (BGE-large-zh) or `qwen` |
+| `EMBEDDING_MODEL` | `BAAI/bge-large-zh` | Local Embedding model name |
 | `RAG_ENABLED` | `true` | Enable RAG retrieval |
+| `RETRIEVAL_TOP_K` | `5` | Number of retrieval results |
+| `SIMILARITY_THRESHOLD` | `0.7` | Similarity threshold |
 | `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL connection |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis connection |
 | `STORAGE_TYPE` | `local` | `local` or `oss` |
@@ -389,8 +395,10 @@ docker compose up -d
 | **Image** | DashScope Wanx (wanx-v1, wan2.7-image-pro) |
 | **Video** | Kling AI (kling-v1) |
 | **Vector** | PGVector, BGE-large-zh, Qwen text-embedding-v3 |
+| **Graph** | Graph RAG (entities/relations/communities/summaries) |
 | **Frontend** | Vue 3, TypeScript, Element Plus, Pinia |
 | **Database** | PostgreSQL 16 + PGVector, Redis 6 |
+| **Storage** | Local filesystem / Alibaba Cloud OSS |
 | **Deploy** | Docker Compose, Nginx |
 
 ### Development
