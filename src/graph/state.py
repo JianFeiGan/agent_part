@@ -209,6 +209,15 @@ class AgentState(BaseModel):
     rag_context: str | None = Field(default=None, description="RAG 检索上下文")
     rag_enabled: bool = Field(default=True, description="是否启用 RAG 增强")
 
+    # ==================== 图片生成 RAG 增强字段 ====================
+    image_rag_context: str | None = Field(default=None, description="图片生成 RAG 上下文")
+    image_rag_sources: Annotated[list[dict[str, Any]], add] = Field(
+        default_factory=list, description="图片生成 RAG 来源列表（累加）"
+    )
+    image_prompts_enhanced: Annotated[list[dict[str, Any]], add] = Field(
+        default_factory=list, description="RAG 增强后的图片 Prompt 列表（累加）"
+    )
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def mark_step_completed(self, step: str) -> None:
