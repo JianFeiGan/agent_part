@@ -29,6 +29,31 @@ export interface AgentLog {
   status: AgentLogStatus | string
   message: string | null
   output_summary: string | null
+  // Trace 可观测性字段
+  input_data: Record<string, unknown> | null
+  output_data: Record<string, unknown> | null
+  prompt_template: string | null
+  prompt_variables: Record<string, unknown> | null
+  input_tokens: number
+  output_tokens: number
+  total_tokens: number
+  cost_cny: number
+  latency_ms: number | null
+  model_name: string | null
+  provider: string | null
+  child_calls: ChildCallRecord[]
+}
+
+/**
+ * 子调用记录（工具调用、嵌套 LLM 调用）
+ */
+export interface ChildCallRecord {
+  call_type: 'tool' | 'llm' | 'rag'
+  name: string
+  input: string | null
+  output: string | null
+  latency_ms: number | null
+  tokens?: number
 }
 
 /**
@@ -187,3 +212,29 @@ export interface TaskQueryParams {
   page?: number
   page_size?: number
 }
+
+// ==================== WebSocket 事件类型 ====================
+
+/** Agent 状态变化事件 */
+export interface AgentStatusChangeEvent {
+  type: 'agent_status_change'
+  agent_name: string
+  status: AgentLogStatus | string
+  progress?: number
+}
+
+/** Agent 日志更新事件 */
+export interface AgentLogUpdateEvent {
+  type: 'agent_log_update'
+  agent_log: AgentLog
+}
+
+/** 全局进度更新事件 */
+export interface ProgressUpdateEvent {
+  type: 'progress_update'
+  progress: number
+  current_step: string
+}
+
+/** WebSocket 事件联合类型 */
+export type TaskWsEvent = AgentStatusChangeEvent | AgentLogUpdateEvent | ProgressUpdateEvent
