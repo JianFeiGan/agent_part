@@ -136,6 +136,24 @@ class Settings(BaseSettings):
     hybrid_colbert_weight: float = Field(default=0.3, description="ColBERT 检索权重")
     hybrid_rrf_k: int = Field(default=60, description="RRF 融合常数 K")
 
+    # ==================== Graph RAG 配置 ====================
+    graph_rag_enabled: bool = Field(default=False, description="启用 Graph RAG 知识图谱增强")
+    graph_rag_auto_build: bool = Field(default=True, description="文档入库时自动构建图谱")
+    graph_rag_search_mode: str = Field(
+        default="local", description="Graph RAG 检索模式: local/global/hybrid"
+    )
+    graph_rag_max_communities: int = Field(default=10, description="社区发现最大社区数")
+    graph_rag_local_search_depth: int = Field(default=2, description="Local Search 实体遍历深度")
+    graph_rag_global_search_max_communities: int = Field(
+        default=5, description="Global Search 最大社区摘要数"
+    )
+
+    # ==================== 分类记忆配置 ====================
+    memory_enabled: bool = Field(default=False, description="启用分类记忆系统")
+    memory_auto_classify: bool = Field(default=True, description="自动分类记忆")
+    memory_max_per_type: int = Field(default=100, description="每类记忆最大存储数")
+    memory_forget_threshold_days: int = Field(default=90, description="记忆遗忘阈值（天）")
+
     # ==================== 生成配置 ====================
     default_image_width: int = Field(default=1024, description="默认图片宽度")
     default_image_height: int = Field(default=1024, description="默认图片高度")

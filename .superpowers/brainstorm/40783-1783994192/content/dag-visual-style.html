@@ -1,0 +1,151 @@
+<h2>Agent 编排 DAG 流程图：视觉风格选择</h2>
+<p class="subtitle">当前工作流的实际拓扑：orchestrator → requirement_analyzer → creative_planner → visual_designer → (分支) image_generator / video_generator → quality_reviewer</p>
+
+<div class="cards">
+  <!-- Option A: 节点卡片流 -->
+  <div class="card" data-choice="card-flow" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="padding:20px;background:#1a1a2e;border-radius:8px;min-height:260px;position:relative;">
+        <!-- Orchestrator -->
+        <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);background:#2d2d4e;border:2px solid #6c5ce7;border-radius:12px;padding:8px 16px;text-align:center;width:120px;">
+          <div style="color:#a29bfe;font-size:11px;">ORCHESTRATOR</div>
+          <div style="color:#fff;font-size:13px;font-weight:600;">编排调度</div>
+          <div style="margin-top:4px;display:flex;gap:4px;justify-content:center;">
+            <span style="background:#6c5ce7;color:#fff;font-size:9px;padding:1px 6px;border-radius:4px;">running</span>
+          </div>
+        </div>
+        <!-- Arrow -->
+        <div style="position:absolute;top:72px;left:50%;width:2px;height:20px;background:#6c5ce7;"></div>
+        <!-- Requirement Analyzer -->
+        <div style="position:absolute;top:92px;left:50%;transform:translateX(-50%);background:#2d2d4e;border:2px solid #00cec9;border-radius:12px;padding:8px 16px;text-align:center;width:120px;">
+          <div style="color:#81ecec;font-size:11px;">ANALYZER</div>
+          <div style="color:#fff;font-size:13px;font-weight:600;">需求分析</div>
+          <div style="margin-top:4px;display:flex;gap:4px;justify-content:center;">
+            <span style="background:#00cec9;color:#1a1a2e;font-size:9px;padding:1px 6px;border-radius:4px;">completed</span>
+          </div>
+          <div style="margin-top:4px;color:#636e72;font-size:10px;">1.2s · 2.3k tokens · ¥0.03</div>
+        </div>
+        <!-- Arrow -->
+        <div style="position:absolute;top:154px;left:50%;width:2px;height:20px;background:#636e72;"></div>
+        <!-- Creative Planner -->
+        <div style="position:absolute;top:174px;left:50%;transform:translateX(-50%);background:#2d2d4e;border:2px solid #fdcb6e;border-radius:12px;padding:8px 16px;text-align:center;width:120px;">
+          <div style="color:#ffeaa7;font-size:11px;">PLANNER</div>
+          <div style="color:#fff;font-size:13px;font-weight:600;">创意策划</div>
+          <div style="margin-top:4px;color:#636e72;font-size:10px;">pending</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 节点卡片流</h3>
+      <p>每个 Agent 是一张信息丰富的卡片节点，展示状态、耗时、token、费用。连线表示数据流。点击节点展开详情面板。</p>
+    </div>
+  </div>
+
+  <!-- Option B: 紧凑芯片流 -->
+  <div class="card" data-choice="chip-flow" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="padding:20px;background:#0d1117;border-radius:8px;min-height:260px;position:relative;">
+        <!-- Orchestrator -->
+        <div style="position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:4px 12px 4px 4px;">
+          <div style="width:24px;height:24px;background:#6c5ce7;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;">⚡</div>
+          <span style="color:#c9d1d9;font-size:12px;font-weight:500;">编排调度</span>
+          <span style="background:#238636;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;">✓</span>
+        </div>
+        <!-- Arrow -->
+        <div style="position:absolute;top:42px;left:50%;width:1px;height:16px;background:#30363d;"></div>
+        <!-- Requirement Analyzer -->
+        <div style="position:absolute;top:58px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:4px 12px 4px 4px;">
+          <div style="width:24px;height:24px;background:#00cec9;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;">🔍</div>
+          <span style="color:#c9d1d9;font-size:12px;font-weight:500;">需求分析</span>
+          <span style="background:#238636;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;">✓</span>
+        </div>
+        <!-- Arrow -->
+        <div style="position:absolute;top:90px;left:50%;width:1px;height:16px;background:#30363d;"></div>
+        <!-- Branch point -->
+        <div style="position:absolute;top:106px;left:50%;width:1px;height:10px;background:#30363d;"></div>
+        <!-- Left branch -->
+        <div style="position:absolute;top:116px;left:25%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:#161b22;border:1px solid #58a6ff;border-radius:20px;padding:4px 12px 4px 4px;box-shadow:0 0 8px rgba(88,166,255,0.3);">
+          <div style="width:24px;height:24px;background:#58a6ff;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;animation:pulse 1.5s infinite;">🖼</div>
+          <span style="color:#c9d1d9;font-size:12px;font-weight:500;">图片生成</span>
+          <span style="background:#1f6feb;color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;">running</span>
+        </div>
+        <!-- Right branch -->
+        <div style="position:absolute;top:116px;left:75%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:4px 12px 4px 4px;">
+          <div style="width:24px;height:24px;background:#fdcb6e;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#1a1a2e;font-size:11px;">🎬</div>
+          <span style="color:#8b949e;font-size:12px;font-weight:500;">视频生成</span>
+          <span style="background:#30363d;color:#8b949e;font-size:9px;padding:1px 6px;border-radius:10px;">queued</span>
+        </div>
+        <!-- Merge arrows -->
+        <div style="position:absolute;top:150px;left:25%;width:1px;height:16px;background:#30363d;"></div>
+        <div style="position:absolute;top:150px;left:75%;width:1px;height:16px;background:#30363d;"></div>
+        <!-- Quality Reviewer -->
+        <div style="position:absolute;top:166px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:#161b22;border:1px solid #30363d;border-radius:20px;padding:4px 12px 4px 4px;">
+          <div style="width:24px;height:24px;background:#636e72;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;">✅</div>
+          <span style="color:#8b949e;font-size:12px;font-weight:500;">质量审核</span>
+          <span style="background:#30363d;color:#8b949e;font-size:9px;padding:1px 6px;border-radius:10px;">pending</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 紧凑芯片流</h3>
+      <p>极简风格，每个 Agent 是一行胶囊芯片。整体占空间小，留更多空间给详情面板。GitHub Actions 风格。适合信息密度高的场景。</p>
+    </div>
+  </div>
+
+  <!-- Option C: 拓扑图 + 侧边详情 -->
+  <div class="card" data-choice="topo-detail" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div style="padding:16px;background:#0f0f23;border-radius:8px;min-height:260px;display:flex;gap:12px;">
+        <!-- Left: Topo graph -->
+        <div style="flex:1;position:relative;background:#1a1a2e;border-radius:6px;padding:12px;">
+          <div style="color:#636e72;font-size:10px;margin-bottom:8px;">WORKFLOW TOPOLOGY</div>
+          <!-- Nodes as small circles with labels -->
+          <div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+            <div style="background:#6c5ce7;width:10px;height:10px;border-radius:50%;margin:0 auto;"></div>
+            <div style="color:#a29bfe;font-size:9px;">orchestrator</div>
+            <div style="width:1px;height:12px;background:#444;"></div>
+            <div style="background:#00cec9;width:10px;height:10px;border-radius:50%;margin:0 auto;"></div>
+            <div style="color:#81ecec;font-size:9px;">analyzer</div>
+            <div style="width:1px;height:12px;background:#444;"></div>
+            <div style="background:#fdcb6e;width:10px;height:10px;border-radius:50%;margin:0 auto;"></div>
+            <div style="color:#ffeaa7;font-size:9px;">planner</div>
+          </div>
+        </div>
+        <!-- Right: Detail panel -->
+        <div style="flex:2;background:#1a1a2e;border-radius:6px;padding:12px;border-left:2px solid #00cec9;">
+          <div style="color:#636e72;font-size:10px;margin-bottom:8px;">AGENT DETAIL — 需求分析</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;">
+            <div style="background:#2d2d4e;border-radius:4px;padding:6px;">
+              <div style="color:#636e72;font-size:9px;">Model</div>
+              <div style="color:#fff;font-size:11px;">qwen-plus</div>
+            </div>
+            <div style="background:#2d2d4e;border-radius:4px;padding:6px;">
+              <div style="color:#636e72;font-size:9px;">Latency</div>
+              <div style="color:#00cec9;font-size:11px;">1.2s</div>
+            </div>
+            <div style="background:#2d2d4e;border-radius:4px;padding:6px;">
+              <div style="color:#636e72;font-size:9px;">Tokens</div>
+              <div style="color:#fff;font-size:11px;">2,341 / 856</div>
+            </div>
+            <div style="background:#2d2d4e;border-radius:4px;padding:6px;">
+              <div style="color:#636e72;font-size:9px;">Cost</div>
+              <div style="color:#fdcb6e;font-size:11px;">¥0.032</div>
+            </div>
+          </div>
+          <div style="background:#2d2d4e;border-radius:4px;padding:8px;margin-bottom:6px;">
+            <div style="color:#636e72;font-size:9px;margin-bottom:4px;">PROMPT TEMPLATE</div>
+            <div style="color:#a29bfe;font-size:10px;font-family:monospace;line-height:1.4;">分析以下商品的视觉需求：{product_info}，生成类型：{task_type}...</div>
+          </div>
+          <div style="background:#2d2d4e;border-radius:4px;padding:8px;">
+            <div style="color:#636e72;font-size:9px;margin-bottom:4px;">OUTPUT → next</div>
+            <div style="color:#81ecec;font-size:10px;font-family:monospace;line-height:1.4;">requirement_report, selling_points[]</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 拓扑图 + 侧边详情</h3>
+      <p>左侧紧凑拓扑图（仅圆点+连线），点击节点在右侧展开完整的参数、提示词、输出详情。LangGraph Studio 风格。</p>
+    </div>
+  </div>
+</div>
