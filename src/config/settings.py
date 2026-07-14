@@ -33,12 +33,14 @@ class Settings(BaseSettings):
     qwen_api_key: str = Field(default="", description="千问 API Key（阿里云百炼）")
     qwen_api_base: str = Field(
         default="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        description="千问 OpenAI 兼容端点"
+        description="千问 OpenAI 兼容端点",
     )
     llm_provider: str = Field(default="dashscope", description="LLM 提供商: dashscope/qwen")
     embedding_provider: str = Field(default="local", description="Embedding 提供商: local/qwen")
     qwen_llm_model: str = Field(default="qwen-plus", description="千问 LLM 模型名称")
-    qwen_embedding_model: str = Field(default="text-embedding-v3", description="千问 Embedding 模型名称")
+    qwen_embedding_model: str = Field(
+        default="text-embedding-v3", description="千问 Embedding 模型名称"
+    )
     qwen_embedding_dimensions: int = Field(default=1024, description="千问 Embedding 向量维度")
 
     @property
@@ -104,11 +106,31 @@ class Settings(BaseSettings):
     # ==================== RAG 配置 ====================
     rag_enabled: bool = Field(default=True, description="启用 RAG 检索增强")
     embedding_model: str = Field(default="BAAI/bge-large-zh", description="Embedding 模型名称")
-    embedding_device: str = Field(default="auto", description="Embedding 设备: auto/cuda/cpu（auto 自动探测可用设备）")
+    embedding_device: str = Field(
+        default="auto", description="Embedding 设备: auto/cuda/cpu（auto 自动探测可用设备）"
+    )
     chunk_size: int = Field(default=512, description="文档分块大小 (tokens)")
     chunk_overlap: int = Field(default=64, description="分块重叠大小 (tokens)")
     retrieval_top_k: int = Field(default=5, description="检索返回文档数量")
     similarity_threshold: float = Field(default=0.7, description="相似度阈值")
+
+    # ==================== Graph RAG 配置 ====================
+    graph_rag_enabled: bool = Field(default=False, description="启用 Graph RAG 知识图谱增强")
+    graph_rag_auto_build: bool = Field(default=True, description="文档入库时自动构建图谱")
+    graph_rag_search_mode: str = Field(
+        default="local", description="Graph RAG 检索模式: local/global/hybrid"
+    )
+    graph_rag_max_communities: int = Field(default=10, description="社区发现最大社区数")
+    graph_rag_local_search_depth: int = Field(default=2, description="Local Search 实体遍历深度")
+    graph_rag_global_search_max_communities: int = Field(
+        default=5, description="Global Search 最大社区摘要数"
+    )
+
+    # ==================== 分类记忆配置 ====================
+    memory_enabled: bool = Field(default=False, description="启用分类记忆系统")
+    memory_auto_classify: bool = Field(default=True, description="自动分类记忆")
+    memory_max_per_type: int = Field(default=100, description="每类记忆最大存储数")
+    memory_forget_threshold_days: int = Field(default=90, description="记忆遗忘阈值（天）")
 
     # ==================== 生成配置 ====================
     default_image_width: int = Field(default=1024, description="默认图片宽度")
