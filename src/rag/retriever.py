@@ -3,6 +3,7 @@
 
 Description:
     封装 RAG 检索逻辑，为 Agent 提供知识增强能力。
+    支持高级 RAG 管道：Query 改写 → 混合检索/向量检索 → 重排序。
 @author ganjianfei
 @version 1.0.0
 2026-04-05
@@ -10,13 +11,18 @@ Description:
 
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.settings import get_settings
 from src.db.vector_store import SearchResult, VectorStore
 from src.rag.embeddings import EmbeddingService, get_embedding_service
+
+if TYPE_CHECKING:
+    from src.rag.hybrid_retriever import HybridRetriever
+    from src.rag.query_rewriter import QueryRewriter
+    from src.rag.reranker import CrossEncoderReranker
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +47,8 @@ class RetrievalResult:
 class KnowledgeRetriever:
     """知识检索器。
 
-    为 Agent 提供知识检索能力。
+    为 Agent 提供知识检索能力。支持高级 RAG 管道：
+    Query 改写 → 混合检索/向量检索 → 重排序。
 
     Example:
         >>> retriever = KnowledgeRetriever()
@@ -49,7 +56,8 @@ class KnowledgeRetriever:
         ...     session,
         ...     query="智能手表产品特点",
         ...     doc_type="category_knowledge",
-        ...     category="digital"
+        ...     category="digital",
+        ...     tenant_id="t1",
         ... )
         >>> print(result.context)
     """
@@ -58,16 +66,205 @@ class KnowledgeRetriever:
         self,
         embedding_service: EmbeddingService | None = None,
         vector_store: VectorStore | None = None,
+        query_rewriter: "QueryRewriter | None" = None,
+        reranker: "CrossEncoderReranker | None" = None,
+        hybrid_retriever: "HybridRetriever | None" = None,
     ) -> None:
         """初始化知识检索器。
 
         Args:
             embedding_service: Embedding 服务实例。
             vector_store: 向量存储实例。
+            query_rewriter: Query 改写服务实例。
+            reranker: 重排序服务实例。
+            hybrid_retriever: 混合检索服务实例。
         """
         self.settings = get_settings()
         self.embedding_service = embedding_service or get_embedding_service()
         self.vector_store = vector_store or VectorStore()
+        self._query_rewriter = query_rewriter
+        self._reranker = reranker
+        self._hybrid_retriever = hybrid_retriever
+
+    @property
+    def query_rewriter(self) -> "QueryRewriter":
+        """懒加载 Query 改写服务。
+
+        Returns:
+            QueryRewriter 实例。
+        """
+        if self._query_rewriter is None:
+            from src.rag.query_rewriter import get_query_rewriter
+
+            self._query_rewriter = get_query_rewriter()
+        return self._query_rewriter
+
+    @property
+    def reranker(self) -> "CrossEncoderReranker":
+        """懒加载重排序服务。
+
+        Returns:
+            CrossEncoderReranker 实例。
+        """
+        if self._reranker is None:
+            from src.rag.reranker import get_reranker
+
+            self._reranker = get_reranker()
+        return self._reranker
+
+    @property
+    def hybrid_retriever(self) -> "HybridRetriever":
+        """懒加载混合检索服务。
+
+        Returns:
+            HybridRetriever 实例。
+        """
+        if self._hybrid_retriever is None:
+            from src.rag.hybrid_retriever import get_hybrid_retriever
+
+            self._hybrid_retriever = get_hybrid_retriever()
+        return self._hybrid_retriever
+
+    def _is_advanced_rag_enabled(self) -> bool:
+        """检查是否启用高级 RAG 管道。
+
+        Returns:
+            是否启用任一高级功能。
+        """
+        return (
+            self.settings.query_rewriting_enabled
+            or self.settings.reranker_enabled
+            or self.settings.hybrid_retrieval_enabled
+        )
+
+    async def _retrieve_advanced(
+        self,
+        session: AsyncSession,
+        query: str,
+        doc_type: str | None = None,
+        category: str | None = None,
+        top_k: int | None = None,
+        similarity_threshold: float | None = None,
+        *,
+        tenant_id: str,
+    ) -> RetrievalResult:
+        """高级 RAG 管道检索。
+
+        流程：Query 改写 → 混合检索/向量检索 → 重排序 → 构建上下文。
+
+        Args:
+            session: 数据库会话。
+            query: 查询文本。
+            doc_type: 文档类型过滤。
+            category: 商品类目过滤。
+            top_k: 返回结果数量。
+            similarity_threshold: 相似度阈值。
+            tenant_id: 租户 ID。
+
+        Returns:
+            检索结果。
+        """
+        # 1. Query 改写
+        if self.settings.query_rewriting_enabled:
+            rewrite_result = await self.query_rewriter.rewrite(query)
+            # 使用第一个改写查询作为主查询
+            effective_query = rewrite_result.queries[0] if rewrite_result.queries else query
+            all_queries = rewrite_result.queries
+            logger.info(
+                f"Query 改写: 原始='{query[:50]}...', "
+                f"改写后={len(all_queries)} 条, 模式={rewrite_result.mode}"
+            )
+        else:
+            effective_query = query
+            all_queries = [query]
+
+        # 2. 检索
+        if self.settings.hybrid_retrieval_enabled:
+            # 混合检索
+            hybrid_result = await self.hybrid_retriever.search(
+                session,
+                effective_query,
+                tenant_id=tenant_id,
+                top_k=top_k,
+                doc_type=doc_type,
+                category=category,
+                similarity_threshold=similarity_threshold,
+            )
+            results = hybrid_result.results
+            retrieval_method = "hybrid"
+
+            # 如果有多个改写查询，对每个额外查询也执行检索并合并
+            if len(all_queries) > 1:
+                for extra_query in all_queries[1:]:
+                    extra_result = await self.hybrid_retriever.search(
+                        session,
+                        extra_query,
+                        tenant_id=tenant_id,
+                        top_k=top_k or self.settings.retrieval_top_k,
+                        doc_type=doc_type,
+                        category=category,
+                        similarity_threshold=similarity_threshold,
+                    )
+                    results.extend(extra_result.results)
+
+                # 去重
+                results = self._deduplicate_results(results)
+        else:
+            # 纯向量检索
+            query_embedding = await self.embedding_service.aembed_single(effective_query)
+            results = await self.vector_store.search(
+                session,
+                query_embedding,
+                top_k=top_k,
+                doc_type=doc_type,
+                category=category,
+                similarity_threshold=similarity_threshold,
+                tenant_id=tenant_id,
+            )
+            retrieval_method = "vector"
+
+            # 如果有多个改写查询，对每个额外查询也执行检索并合并
+            if len(all_queries) > 1:
+                for extra_query in all_queries[1:]:
+                    extra_embedding = await self.embedding_service.aembed_single(extra_query)
+                    extra_results = await self.vector_store.search(
+                        session,
+                        extra_embedding,
+                        top_k=top_k or self.settings.retrieval_top_k,
+                        doc_type=doc_type,
+                        category=category,
+                        similarity_threshold=similarity_threshold,
+                        tenant_id=tenant_id,
+                    )
+                    results.extend(extra_results)
+
+                # 去重
+                results = self._deduplicate_results(results)
+
+        # 3. 重排序
+        if self.settings.reranker_enabled:
+            rerank_result = await self.reranker.rerank(query, results, top_k=top_k)
+            results = rerank_result.results
+            logger.info(
+                f"重排序完成: 原始 {rerank_result.original_count} 条 -> "
+                f"保留 {rerank_result.reranked_count} 条"
+            )
+
+        # 4. 构建上下文
+        context = self._build_context(results)
+        sources = self._extract_sources(results)
+
+        logger.info(
+            f"高级 RAG 检索完成: query='{query[:50]}...', "
+            f"results={len(results)}, method={retrieval_method}"
+        )
+
+        return RetrievalResult(
+            query=query,
+            results=results,
+            context=context,
+            sources=sources,
+        )
 
     async def retrieve(
         self,
@@ -82,6 +279,8 @@ class KnowledgeRetriever:
     ) -> RetrievalResult:
         """检索相关知识。
 
+        当高级 RAG 功能启用时自动走高级管道，否则走原有逻辑。
+
         Args:
             session: 数据库会话。
             query: 查询文本。
@@ -94,6 +293,19 @@ class KnowledgeRetriever:
         Returns:
             检索结果。
         """
+        # 高级 RAG 管道
+        if self._is_advanced_rag_enabled():
+            return await self._retrieve_advanced(
+                session,
+                query,
+                doc_type=doc_type,
+                category=category,
+                top_k=top_k,
+                similarity_threshold=similarity_threshold,
+                tenant_id=tenant_id,
+            )
+
+        # 基础向量检索
         # 生成查询向量
         query_embedding = await self.embedding_service.aembed_single(query)
 
