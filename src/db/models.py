@@ -269,7 +269,9 @@ class GraphRAGEntity(Base):
     entity_type: Mapped[str] = mapped_column(
         String(50), nullable=False, index=True, comment="实体类型"
     )
-    category: Mapped[str] = mapped_column(String(100), nullable=False, index=True, comment="商品类目")
+    category: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="商品类目"
+    )
     description: Mapped[str | None] = mapped_column(Text, comment="实体描述")
     aliases: Mapped[list[str]] = mapped_column(JSONB, default=list)
     extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
@@ -322,7 +324,9 @@ class GraphRAGEdge(Base):
     relationship_type: Mapped[str] = mapped_column(
         String(50), nullable=False, index=True, comment="关系类型"
     )
-    category: Mapped[str] = mapped_column(String(100), nullable=False, index=True, comment="商品类目")
+    category: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="商品类目"
+    )
     weight: Mapped[float] = mapped_column(Float, default=1.0)
     evidence: Mapped[str | None] = mapped_column(Text, comment="关系依据")
     extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
@@ -344,6 +348,107 @@ class GraphRAGEdge(Base):
             f"<GraphRAGEdge(id={self.id}, {self.source_entity_id} "
             f"-[{self.relationship_type}]-> {self.target_entity_id})>"
         )
+
+
+class CommunitySummary(Base):
+    """社区摘要模型。
+
+    存储 Leiden 社区发现算法产出的社区摘要信息。
+
+    Attributes:
+        id: 主键。
+        tenant_id: 租户 ID (可选)。
+        category: 商品类目。
+        community_id: 社区标识。
+        level: 社区层级。
+        entity_ids: 社区内实体 ID 列表。
+        title: 社区标题。
+        summary: 社区摘要文本。
+        rank: 社区重要性排名。
+        created_at: 创建时间。
+        updated_at: 更新时间。
+    """
+
+    __tablename__ = "community_summaries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True, comment="租户 ID"
+    )
+    category: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="商品类目"
+    )
+    community_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="社区标识"
+    )
+    level: Mapped[int] = mapped_column(Integer, default=0, comment="社区层级")
+    entity_ids: Mapped[list[int]] = mapped_column(JSONB, default=list, comment="社区内实体 ID 列表")
+    title: Mapped[str | None] = mapped_column(String(255), comment="社区标题")
+    summary: Mapped[str | None] = mapped_column(Text, comment="社区摘要文本")
+    rank: Mapped[float] = mapped_column(Float, default=0.0, comment="社区重要性排名")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<CommunitySummary(id={self.id}, "
+            f"community_id='{self.community_id}', category='{self.category}')>"
+        )
+
+
+class AgentMemory(Base):
+    """智能体分类记忆模型。
+
+    存储智能体的分类记忆，支持情景记忆、语义记忆和程序记忆三种类型。
+
+    Attributes:
+        id: 主键。
+        tenant_id: 租户 ID (可选)。
+        agent_name: 智能体名称。
+        category: 商品类目。
+        memory_type: 记忆类型 (episodic/semantic/procedural)。
+        content: 记忆内容。
+        key_concepts: 关键概念列表。
+        embedding: 向量嵌入 (BGE-large-zh 1024维)。
+        access_count: 访问计数。
+        last_accessed_at: 最后访问时间。
+        importance: 重要性评分。
+        source_task_id: 来源任务 ID。
+        created_at: 创建时间。
+        updated_at: 更新时间。
+    """
+
+    __tablename__ = "agent_memories"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, index=True, comment="租户 ID"
+    )
+    agent_name: Mapped[str] = mapped_column(
+        String(50), nullable=False, index=True, comment="智能体名称"
+    )
+    category: Mapped[str | None] = mapped_column(String(100), index=True, comment="商品类目")
+    memory_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, index=True, comment="记忆类型"
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False, comment="记忆内容")
+    key_concepts: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="关键概念列表")
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), comment="BGE-large-zh 向量")
+    access_count: Mapped[int] = mapped_column(Integer, default=0, comment="访问计数")
+    last_accessed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, comment="最后访问时间")
+    importance: Mapped[float] = mapped_column(Float, default=0.5, comment="重要性评分")
+    source_task_id: Mapped[str | None] = mapped_column(
+        String(100), index=True, comment="来源任务 ID"
+    )
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    def __repr__(self) -> str:
+        return f"<AgentMemory(id={self.id}, agent='{self.agent_name}', type='{self.memory_type}')>"
 
 
 class CategoryMemory(Base):
@@ -377,9 +482,15 @@ class CategoryMemory(Base):
     )
     summary: Mapped[str | None] = mapped_column(Text, comment="类目摘要")
     best_practices: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="最佳实践")
-    negative_patterns: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="避坑/负面模式")
-    style_guidelines: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, comment="风格指南")
-    performance_hints: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, comment="性能提示")
+    negative_patterns: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, comment="避坑/负面模式"
+    )
+    style_guidelines: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, comment="风格指南"
+    )
+    performance_hints: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, comment="性能提示"
+    )
     extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), comment="BGE-large-zh 向量")
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
@@ -388,6 +499,4 @@ class CategoryMemory(Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<CategoryMemory(id={self.id}, category='{self.category}')>"
-        )
+        return f"<CategoryMemory(id={self.id}, category='{self.category}')>"

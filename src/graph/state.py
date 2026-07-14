@@ -217,6 +217,15 @@ class AgentState(BaseModel):
     rag_reranked: bool = Field(default=False, description="是否经过重排序")
     rag_retrieval_stats: dict[str, Any] | None = Field(default=None, description="检索统计信息")
 
+    # ==================== Graph RAG 增强字段 ====================
+    graph_rag_context: str | None = Field(default=None, description="Graph RAG 检索上下文")
+    graph_rag_answer: str | None = Field(default=None, description="Graph RAG 生成的回答")
+    graph_rag_search_mode: str | None = Field(
+        default=None, description="Graph RAG 搜索模式: local/global/hybrid"
+    )
+    graph_rag_entities_used: int = Field(default=0, description="Graph RAG 使用的实体数")
+    graph_rag_communities_used: int = Field(default=0, description="Graph RAG 使用的社区数")
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def mark_step_completed(self, step: str) -> None:

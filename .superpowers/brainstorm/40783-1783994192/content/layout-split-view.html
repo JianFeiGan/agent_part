@@ -1,0 +1,272 @@
+<h2>Agent 工作台：左右分栏布局设计</h2>
+<p class="subtitle">左侧 60% DAG 流程图 · 右侧 40% 详情面板 · 点击节点联动右侧</p>
+
+<div class="mockup">
+  <div class="mockup-header">Agent 工作台 — 任务 #task_20260714_001</div>
+  <div class="mockup-body" style="display:flex;gap:0;min-height:520px;background:#0f0f23;border-radius:0 0 8px 8px;overflow:hidden;">
+
+    <!-- LEFT: DAG Flow (60%) -->
+    <div style="flex:6;background:#0f0f23;padding:16px;position:relative;overflow-y:auto;border-right:1px solid #2d2d4e;">
+      <!-- Top bar -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="color:#636e72;font-size:11px;">WORKFLOW</span>
+          <span style="background:#1f6feb;color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;">● 运行中</span>
+        </div>
+        <div style="display:flex;gap:12px;color:#8b949e;font-size:11px;">
+          <span>⏱ 12.3s</span>
+          <span>📊 8.2k tokens</span>
+          <span>💰 ¥0.12</span>
+        </div>
+      </div>
+
+      <!-- DAG Nodes -->
+      <!-- 1. Orchestrator - completed -->
+      <div style="display:flex;flex-direction:column;align-items:center;">
+        <div style="background:#1a1a2e;border:2px solid #6c5ce7;border-radius:12px;padding:10px 16px;width:220px;cursor:pointer;position:relative;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="color:#a29bfe;font-size:10px;text-transform:uppercase;letter-spacing:1px;">ORCHESTRATOR</div>
+              <div style="color:#fff;font-size:13px;font-weight:600;">编排调度</div>
+            </div>
+            <div style="background:#238636;color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;">✓ 完成</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:6px;color:#8b949e;font-size:10px;">
+            <span>0.3s</span>
+            <span>·</span>
+            <span>412 tok</span>
+            <span>·</span>
+            <span>¥0.005</span>
+          </div>
+        </div>
+        <!-- Connector -->
+        <div style="width:2px;height:16px;background:#6c5ce7;"></div>
+        <div style="width:6px;height:6px;background:#6c5ce7;border-radius:50%;"></div>
+        <div style="width:2px;height:16px;background:#6c5ce7;"></div>
+
+        <!-- 2. Requirement Analyzer - completed -->
+        <div style="background:#1a1a2e;border:2px solid #00cec9;border-radius:12px;padding:10px 16px;width:220px;cursor:pointer;position:relative;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="color:#81ecec;font-size:10px;text-transform:uppercase;letter-spacing:1px;">ANALYZER</div>
+              <div style="color:#fff;font-size:13px;font-weight:600;">需求分析</div>
+            </div>
+            <div style="background:#238636;color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;">✓ 完成</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:6px;color:#8b949e;font-size:10px;">
+            <span>1.2s</span>
+            <span>·</span>
+            <span>2.3k tok</span>
+            <span>·</span>
+            <span>¥0.032</span>
+          </div>
+        </div>
+        <!-- Connector -->
+        <div style="width:2px;height:16px;background:#00cec9;"></div>
+        <div style="width:6px;height:6px;background:#00cec9;border-radius:50%;"></div>
+        <div style="width:2px;height:16px;background:#00cec9;"></div>
+
+        <!-- 3. Creative Planner - completed -->
+        <div style="background:#1a1a2e;border:2px solid #fdcb6e;border-radius:12px;padding:10px 16px;width:220px;cursor:pointer;position:relative;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="color:#ffeaa7;font-size:10px;text-transform:uppercase;letter-spacing:1px;">PLANNER</div>
+              <div style="color:#fff;font-size:13px;font-weight:600;">创意策划</div>
+            </div>
+            <div style="background:#238636;color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;">✓ 完成</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:6px;color:#8b949e;font-size:10px;">
+            <span>2.8s</span>
+            <span>·</span>
+            <span>3.1k tok</span>
+            <span>·</span>
+            <span>¥0.045</span>
+          </div>
+        </div>
+        <!-- Connector -->
+        <div style="width:2px;height:16px;background:#fdcb6e;"></div>
+        <div style="width:6px;height:6px;background:#fdcb6e;border-radius:50%;"></div>
+        <div style="width:2px;height:16px;background:#fdcb6e;"></div>
+
+        <!-- 4. Visual Designer - completed -->
+        <div style="background:#1a1a2e;border:2px solid #e17055;border-radius:12px;padding:10px 16px;width:220px;cursor:pointer;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="#fab1a0;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#fab1a0;">DESIGNER</div>
+              <div style="color:#fff;font-size:13px;font-weight:600;">视觉设计</div>
+            </div>
+            <div style="background:#238636;color:#fff;font-size:10px;padding:2px 8px;border-radius:10px;">✓ 完成</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:6px;color:#8b949e;font-size:10px;">
+            <span>1.5s</span>
+            <span>·</span>
+            <span>1.8k tok</span>
+            <span>·</span>
+            <span>¥0.025</span>
+          </div>
+        </div>
+        <!-- Branch connector -->
+        <div style="width:2px;height:12px;background:#e17055;"></div>
+        <div style="display:flex;width:220px;position:relative;">
+          <div style="flex:1;height:2px;background:#e17055;position:relative;top:0;"></div>
+          <div style="flex:1;height:2px;background:#e17055;"></div>
+        </div>
+
+        <!-- Parallel: Image Gen (running) + Video Gen (pending) -->
+        <div style="display:flex;gap:12px;justify-content:center;width:100%;">
+          <!-- Image Generator - RUNNING -->
+          <div style="background:#1a1a2e;border:2px solid #58a6ff;border-radius:12px;padding:10px 16px;width:100px;cursor:pointer;box-shadow:0 0 12px rgba(88,166,255,0.3);position:relative;">
+            <div style="color:#58a6ff;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;">IMAGE GEN</div>
+            <div style="color:#fff;font-size:12px;font-weight:600;">图片生成</div>
+            <div style="margin-top:4px;">
+              <div style="background:#2d2d4e;border-radius:4px;height:4px;overflow:hidden;">
+                <div style="background:#58a6ff;height:100%;width:65%;border-radius:4px;animation:pulse 1.5s infinite;"></div>
+              </div>
+            </div>
+            <div style="color:#58a6ff;font-size:9px;margin-top:3px;">65% · 4.2s</div>
+          </div>
+          <!-- Video Generator - PENDING -->
+          <div style="background:#1a1a2e;border:2px solid #30363d;border-radius:12px;padding:10px 16px;width:100px;cursor:pointer;opacity:0.5;">
+            <div style="color:#636e72;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;">VIDEO GEN</div>
+            <div style="color:#8b949e;font-size:12px;font-weight:600;">视频生成</div>
+            <div style="color:#636e72;font-size:9px;margin-top:6px;">等待中</div>
+          </div>
+        </div>
+
+        <!-- Merge connector -->
+        <div style="display:flex;width:220px;position:relative;margin-top:4px;">
+          <div style="flex:1;height:2px;background:#30363d;"></div>
+          <div style="flex:1;height:2px;background:#30363d;"></div>
+        </div>
+        <div style="width:2px;height:12px;background:#30363d;"></div>
+
+        <!-- Quality Reviewer - pending -->
+        <div style="background:#1a1a2e;border:2px solid #30363d;border-radius:12px;padding:10px 16px;width:220px;cursor:pointer;opacity:0.5;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+              <div style="color:#636e72;font-size:10px;text-transform:uppercase;letter-spacing:1px;">REVIEWER1px;">REVIEWER</div>
+              <div style="color:#8b949e;font-size:13px;font-weight:600;">质量审核</div>
+            </div>
+            <div style="background:#30363d;color:#8b949e;font-size:10px;padding:2px 8px;border-radius:10px;">等待中</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Detail Panel (40%) -->
+    <div style="flex:4;background:#161b22;padding:16px;overflow-y:auto;">
+      <!-- Agent header -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #2d2d4e;">
+        <div style="width:32px;height:32px;background:#58a6ff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;">🖼</div>
+        <div>
+          <div style="color:#fff;font-size:14px;font-weight:600;">图片生成</div>
+          <div style="color:#58a6ff;font-size:11px;">IMAGE_GENERATOR · 运行中</div>
+        </div>
+      </div>
+
+      <!-- Metrics grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+        <div style="background:#1a1a2e;border-radius:6px;padding:8px;">
+          <div style="color:#636e72;font-size:10px;">Model</div>
+          <div style="color:#fff;font-size:12px;">qwen-plus-latest</div>
+        </div>
+        <div style="background:#1a1a2e;border-radius:6px;padding:8px;">
+          <div style="color:#636e72;font-size:10px;">Provider</div>
+          <div style="color:#fff;font-size:12px;">阿里百炼</div>
+        </div>
+        <div style="background:#1a1a2e;border-radius:6px;padding:8px;">
+          <div style="color:#636e72;font-size:10px;">Latency</div>
+          <div style="color:#58a6ff;font-size:12px;">4.2s (运行中)</div>
+        </div>
+        <div style="background:#1a1a2e;border-radius:6px;padding:8px;">
+          <div style="color:#636e72;font-size:10px;">Tokens</div>
+          <div style="color:#fff;font-size:12px;">1,234 / 567</div>
+        </div>
+        <div style="background:#1a1a2e;border-radius:6px;padding:8px;">
+          <div style="color:#636e72;font-size:10px;">Cost</div>
+          <div style="color:#fdcb6e;font-size:12px;">¥0.018</div>
+        </div>
+        <div style="background:#1a1a2e;border-radius:6px;padding:8px;">
+          <div style="color:#636e72;font-size:10px;">Progress</div>
+          <div style="color:#58a6ff;font-size:12px;">65%</div>
+        </div>
+      </div>
+
+      <!-- Input Data -->
+      <div style="margin-bottom:12px;">
+        <div style="color:#636e72;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📥 输入参数 (from 视觉设计)</div>
+        <div style="background:#1a1a2e;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;line-height:1.5;color:#c9d1d9;border-left:3px solid #e17055;">
+          <div style="color:#636e72;">// 从上游 Agent 接收的数据</div>
+          <div><span style="color:#ff79c6;">generation_prompts</span>: [</div>
+          <div style="padding-left:12px;"><span style="color:#f1fa8c;">"白色背景，产品居中..."</span>,</div>
+          <div style="padding-left:12px;"><span style="color:#f1fa8c;">"生活场景，厨房台面..."</span></div>
+          <div>]</div>
+          <div><span style="color:#ff79c6;">color_palette</span>: {<span style="color:#f1fa8c;">primary: "#2D3436"</span>, ...}</div>
+        </div>
+      </div>
+
+      <!-- Prompt Template -->
+      <div style="margin-bottom:12px;">
+        <div style="color:#636e72;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">💬 提示词轨迹</div>
+        <div style="background:#1a1a2e;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;line-height:1.5;color:#a29bfe;border-left:3px solid #6c5ce7;">
+          <div style="color:#636e72;">// System Prompt</div>
+          <div>你是一个专业的电商视觉设计师...</div>
+          <div style="margin-top:6px;color:#636e72;">// Variables</div>
+          <div><span style="color:#ff79c6;">{product_info}</span> → <span style="color:#81ecec;">不锈钢保温杯 500ml</span></div>
+          <div><span style="color:#ff79c6;">{creative_plan}</span> → <span style="color:#81ecec;">极简风格，3张图...</span></div>
+        </div>
+      </div>
+
+      <!-- Child Calls -->
+      <div style="margin-bottom:12px;">
+        <div style="color:#636e72;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">🔧 子调用记录</div>
+        <div style="background:#1a1a2e;border-radius:6px;overflow:hidden;">
+          <div style="display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #2d2d4e;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="background:#1f6feb;color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;">LLM</span>
+              <span style="color:#c9d1d9;font-size:11px;">生成图片提示词</span>
+            </div>
+            <span style="color:#8b949e;font-size:10px;">0.8s · 1.2k tok</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 10px;border-bottom:1px solid #2d2d4e;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="background:#e17055;color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;">TOOL</span>
+              <span style="color:#c9d1d9;font-size:11px;">wanx_image_gen</span>
+            </div>
+            <span style="color:#8b949e;font-size:10px;">2.1s · 运行中</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 10px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="background:#00cec9;color:#fff;font-size:9px;padding:1px 5px;border-radius:3px;">RAG</span>
+              <span style="color:#c9d1d9;font-size:11px;">品牌视觉规范检索</span>
+            </div>
+            </div>
+            <span style="color:#8b949e;font-size:10px;">0.3s · 3 docs</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Output Data -->
+      <div>
+        <div style="color:#636e72;font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">📤 输出数据 (→ 质量审核)</div>
+        <div style="background:#1a1a2e;border-radius:6px;padding:10px;font-family:monospace;font-size:11px;line-height:1.5;color:#81ecec;border-left:3px solid #00cec9;">
+          <div style="color:#636e72;">// 尚未完成，部分输出</div>
+          <div><span style="color:#ff79c6;">generated_images</span>: [</div>
+          <div style="padding-left:12px;">ImageResult(url=<span style="color:#f1fa8c;">"..."</span>, status=<span style="color:#f1fa8c;">"generating"</span>)</div>
+          <div>]</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:16px;padding:12px;background:#1a1a2e;border-radius:8px;">
+  <h3 style="color:#fff;font-size:13px;margin-bottom:8px;">设计要点说明</h3>
+  <ul style="color:#8b949e;font-size:11px;line-height:1.8;padding-left:16px;">
+    <li><strong style="color:#c9d1d9;">节点卡片</strong>：每个 Agent 一张卡片，显示角色名、中文名、状态徽章、耗时/token/费用</li>
+    <li><strong style="color:#c9d1d9;">连线</strong>：用颜色区分已完成(彩色)和待执行(灰色)，分支/合并用分叉线表示</li>
+    <li><strong style="color:#c9d1d9;">运行中节点</strong>：蓝色边框 + 发光效果 + 进度条，视觉上突出</li>
+    <li><strong style="color:#c9d1d9;">右侧详情</strong>：6 个指标卡片 + 输入参数 + 提示词轨迹 + 子调用记录 + 输出数据</li>
+    <li><strong style="color:#c9d1d9;">数据流标注</strong>：输入区标注来源 Agent，输出区标注去向 Agent</li>
+  </ul>
+</div>
