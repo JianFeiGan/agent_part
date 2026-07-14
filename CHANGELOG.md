@@ -1,51 +1,39 @@
 # Changelog
 
-## [v1.0.0] - 2026-04-30
+本文件记录项目的所有重要变更。格式遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 
-### 新增功能
+## [0.2.0] - 2026-07-13
 
-#### 刊登工具核心
-- 新增 LangGraph 工作流引擎，支持商品导入 → 素材优化 → 文案生成 → 合规检查全流程
-- 实现 7 个专业 Agent：ImportProduct、AssetOptimizer、Copywriter、ComplianceChecker 等
-- 支持 Amazon、eBay、Shopify 三大平台的刊登推送
+### Added
 
-#### 数据库持久化层
-- 新增 7 张 ORM 模型表：listing_products、listing_tasks、asset_packages、copywriting_packages、compliance_reports、task_results、adapter_configs
-- 实现通用异步 `BaseRepository` 基类，支持 CRUD 操作
-- 将 API 层从内存字典迁移到 PostgreSQL 数据库
+- 千问百炼 API 对接 — OpenAI 兼容模式（ChatOpenAI）+ DashScope SDK（ChatTongyi）双通道路由
+- 百炼平台单一 API Key 同时支持 OpenAI 兼容和 DashScope 原生协议
+- DashScope 新图片模型（wan2.7-image-pro）支持，async_call + wait 模式，旧模型 call 模式自动切换
+- AI 会话追踪系统 — 5 个 API 端点：会话记录查询、详情、内容搜索、使用量概览、费用预算
+- 费用预算系统 — 模型定价表 + 双币种（USD/CNY）+ 日/月预算 + 预估月费
+- AI 会话记录前端页面 — 记录列表 + 使用分析 + 费用预算三 Tab
+- Listing 工作流 — create_task 端点异步触发 ListingWorkflow 执行
+- 前端样式升级 — 深空蓝配色体系、玻璃拟态头部、DM Sans 字体
 
-#### 适配器配置管理
-- 实现 `AdapterConfigManager` 单例 + 5 分钟 TTL 缓存
-- 新增适配器配置 CRUD API（创建、查询、更新、删除）
-- 新增 Vue 3 前端管理页面（AdapterConfig.vue）
+### Changed
 
-#### 平台适配器
-- 实现 `BasePlatformAdapter` 抽象基类 + `AdapterRegistry` 注册表
-- 实现 Amazon SP-API 适配器（LWA OAuth2 认证）
-- 实现 eBay Trading API 适配器（OAuth2 + XML）
-- 实现 Shopify GraphQL 适配器（API Key 认证）
+- 前端样式体系全面升级为深空蓝配色
 
-#### AI 文案生成
-- 实现 `AICopywritingAgent`，支持多 LLM 降级策略（Tongyi → Claude → Rules）
-- 支持多语言文案生成和平台风格适配
+### Fixed
 
-#### 合规检查
-- 实现 `ComplianceCheckerAgent`，支持图片和文本合规检查
-- 支持禁词检测和平台规则验证
+- Visual Designer JSON 解析容错、selling_points 格式兼容
+- SimpleNamespace mock 兼容问题
+- asyncpg SQL 兼容性 — `:param::vector` 改为 `CAST(:param AS vector)`，可空参数显式类型声明
+- Embedding 异步调用 — retriever 中 `embed_single()` 改为 `await aembed_single()`
 
-#### 前端管理界面
-- 新增商品导入页面（ProductImport.vue）
-- 新增任务列表页面（TaskList.vue）
-- 新增任务详情页面（TaskDetail.vue，含合规报告和推送结果）
-- 新增适配器配置管理页面（AdapterConfig.vue）
+## [0.1.0] - 2026-03-23
 
-### 测试覆盖
-- 112 个刊登模块相关测试全部通过
-- API 测试采用 mock 数据库层模式，无需真实数据库
-- 前端构建成功
+### Added
 
-### 技术栈
-- Python 3.13, FastAPI, SQLAlchemy 2.0, Pydantic v2
-- LangGraph, LangChain
-- Vue 3, TypeScript, Element Plus
-- PostgreSQL + pgvector
+- LangGraph 7-Agent 协作视觉生成工作流（Orchestrator → 需求分析 → 创意策划 → 视觉设计 → 图片/视频生成 → 质量审核）
+- RAG 知识库（PGVector + BGE-large-zh Embedding）
+- 合规检查系统（广告法禁词 + 平台规则）
+- 多平台刊登适配器骨架（Amazon / eBay / Shopify）
+- Vue 3 管理后台（商品管理、任务管理、知识库、刊登工具）
+- FastAPI API 服务（40+ REST API 端点）
+- Docker Compose 部署（app + frontend + postgres + redis）
