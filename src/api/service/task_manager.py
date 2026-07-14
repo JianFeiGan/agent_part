@@ -61,6 +61,7 @@ class TaskManager:
     def __init__(self) -> None:
         """初始化任务管理器。"""
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
+        self._ws_subscribers: dict[str, list[Any]] = {}
 
     async def create_task(
         self,
@@ -159,6 +160,29 @@ class TaskManager:
                     tenant_id=tenant_id,
                 )
                 await redis.save_task_state(task_id, state, tenant_id=tenant_id)
+
+                # 推送进度更新事件
+                await self._broadcast_event(task_id, {
+                    "type": "progress_update",
+                    "progress": progress,
+                    "current_step": state.current_step,
+                })
+
+                # 推送 agent 状态变化和日志更新事件
+                if state.agent_logs:
+                    for log in state.agent_logs:
+                        await self._broadcast_event(task_id, {
+                            "type": "agent_status_change",
+                            "agent_name": log.step,
+                            "status": log.status,
+                        })
+                    # 推送最新的完整日志
+                    latest_log = state.agent_logs[-1]
+                    if latest_log.status in ("completed", "failed"):
+                        await self._broadcast_event(task_id, {
+                            "type": "agent_log_update",
+                            "agent_log": latest_log.model_dump(),
+                        })
 
             # 执行工作流
             result = await workflow.run(product, request, thread_id=task_id)
@@ -388,6 +412,46 @@ class TaskManager:
             是否正在运行。
         """
         return task_id in self._running_tasks
+
+    def subscribe_ws(self, task_id: str, websocket: Any) -> None:
+        """订阅任务 WebSocket 事件。
+
+        Args:
+            task_id: 任务 ID。
+            websocket: WebSocket 连接对象。
+        """
+        if task_id not in self._ws_subscribers:
+            self._ws_subscribers[task_id] = []
+        self._ws_subscribers[task_id].append(websocket)
+
+    def unsubscribe_ws(self, task_id: str, websocket: Any) -> None:
+        """取消订阅任务 WebSocket 事件。
+
+        Args:
+            task_id: 任务 ID。
+            websocket: WebSocket 连接对象。
+        """
+        if task_id in self._ws_subscribers:
+            self._ws_subscribers[task_id] = [
+                ws for ws in self._ws_subscribers[task_id] if ws is not websocket
+            ]
+            if not self._ws_subscribers[task_id]:
+                del self._ws_subscribers[task_id]
+
+    async def _broadcast_event(self, task_id: str, event: dict[str, Any]) -> None:
+        """广播 WebSocket 事件给所有订阅者。
+
+        Args:
+            task_id: 任务 ID。
+            event: 事件数据。
+        """
+        subscribers = self._ws_subscribers.get(task_id, [])
+        for ws in subscribers[:]:  # 复制列表避免迭代中修改
+            try:
+                await ws.send_json(event)
+            except Exception:
+                # 连接已断开，移除订阅
+                self.unsubscribe_ws(task_id, ws)
 
 
 # 全局单例
