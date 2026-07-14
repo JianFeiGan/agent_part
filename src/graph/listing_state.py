@@ -32,6 +32,7 @@ class ListingState(BaseModel):
         asset_packages: 各平台的素材包 (platform -> package)。
         copywriting_packages: 各平台的文案包 (platform -> package)。
         compliance_reports: 各平台的合规报告 (platform -> report)。
+        push_results: 各平台推送结果。
         target_platforms: 目标平台列表。
         error: 错误信息（如有）。
         current_step: 当前执行步骤。
@@ -42,6 +43,7 @@ class ListingState(BaseModel):
     asset_packages: dict[Platform, AssetPackage] = Field(default_factory=dict)
     copywriting_packages: dict[Platform, CopywritingPackage] = Field(default_factory=dict)
     compliance_reports: dict[Platform, ComplianceReport] = Field(default_factory=dict)
+    push_results: dict[str, Any] = Field(default_factory=dict, description="各平台推送结果")
     target_platforms: list[Platform] = Field(default_factory=list)
     error: str | None = None
     current_step: str = ""
