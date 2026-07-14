@@ -43,11 +43,6 @@ import { useWorkbenchStore } from '@/stores/workbench'
 import { TaskStatusLabels, TaskTypeLabels } from '@/types/task'
 import type { TaskStatus, TaskType } from '@/types/task'
 
-/**
- * 工作台顶部栏。
- * 展示任务ID、状态、全局指标、WebSocket 连接状态。
- */
-
 const router = useRouter()
 const store = useWorkbenchStore()
 
