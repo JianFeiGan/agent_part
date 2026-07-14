@@ -2,7 +2,12 @@
 
 import pytest
 
-from src.agents.listing_platform_adapter import AdapterRegistry, BasePlatformAdapter, PushResult
+from src.agents.listing_platform_adapter import (
+    AdapterRegistry,
+    BasePlatformAdapter,
+    PushConfig,
+    PushResult,
+)
 from src.models.listing import Platform
 
 
@@ -18,7 +23,7 @@ class TestBasePlatformAdapter:
         """测试不完整的子类会报错。"""
 
         class IncompleteAdapter(BasePlatformAdapter):
-            def authenticate(self) -> str:
+            async def authenticate(self) -> str:
                 return "token"
 
             # 缺少其他抽象方法实现
@@ -41,6 +46,9 @@ class TestPushResult:
         assert result.success is True
         assert result.listing_id == "B08XYZ123"
         assert result.error is None
+        assert result.error_code is None
+        assert result.retry_count == 0
+        assert result.latency_ms == 0.0
 
     def test_failure_result(self) -> None:
         """测试失败结果。"""
@@ -48,9 +56,38 @@ class TestPushResult:
             success=False,
             platform=Platform.EBAY,
             error="API timeout",
+            error_code="RETRY_EXHAUSTED",
+            retry_count=3,
+            latency_ms=1500.0,
         )
         assert result.success is False
         assert result.listing_id is None
+        assert result.error_code == "RETRY_EXHAUSTED"
+        assert result.retry_count == 3
+        assert result.latency_ms == 1500.0
+
+
+class TestPushConfig:
+    """测试推送配置数据类。"""
+
+    def test_default_values(self) -> None:
+        """测试默认值。"""
+        config = PushConfig()
+        assert config.max_retries == 3
+        assert config.retry_base_delay == 1.0
+        assert config.rate_limit_rpm == 60
+        assert config.timeout_seconds == 30.0
+
+    def test_custom_values(self) -> None:
+        """测试自定义值。"""
+        config = PushConfig(
+            max_retries=5,
+            retry_base_delay=2.0,
+            rate_limit_rpm=120,
+            timeout_seconds=60.0,
+        )
+        assert config.max_retries == 5
+        assert config.rate_limit_rpm == 120
 
 
 class TestAdapterRegistry:
@@ -59,51 +96,71 @@ class TestAdapterRegistry:
     def test_register_and_get(self) -> None:
         """测试注册和获取适配器。"""
         registry = AdapterRegistry()
+        registry._instances = {}
+        registry._adapters = {}
 
         class TestAdapter(BasePlatformAdapter):
-            def authenticate(self) -> str:
+            async def authenticate(self) -> str:
                 return "token"
 
-            def transform_assets(self, *a, **k):  # type: ignore
+            async def transform_assets(self, *_a, **_kw):  # type: ignore
                 return {}
 
-            def transform_copywriting(self, *a, **k):  # type: ignore
+            async def transform_copywriting(self, *_a, **_kw):  # type: ignore
                 return {}
 
-            def push_listing(self, *a, **k):  # type: ignore
+            async def push_listing(self, *_a, **_kw):  # type: ignore
                 return PushResult(success=True, platform=Platform.AMAZON, listing_id="1")
 
-            def update_listing(self, *a, **k):  # type: ignore
+            async def update_listing(self, *_a, **_kw):  # type: ignore
                 return PushResult(success=True, platform=Platform.AMAZON, listing_id="1")
 
-            def delete_listing(self, *a, **k):  # type: ignore
+            async def delete_listing(self, *_a, **_kw):  # type: ignore
                 return PushResult(success=True, platform=Platform.AMAZON)
 
         registry.register(Platform.AMAZON, TestAdapter)
         adapter = registry.get(Platform.AMAZON)
         assert isinstance(adapter, TestAdapter)
 
+    def test_get_with_push_config(self) -> None:
+        """测试带 push_config 获取适配器。"""
+        registry = AdapterRegistry()
+        registry._instances = {}
+        registry._adapters = {}
+
+        class TestAdapter(BasePlatformAdapter):
+            async def authenticate(self) -> str:
+                return "token"
+
+            async def transform_assets(self, *_a, **_kw):  # type: ignore
+                return {}
+
+            async def transform_copywriting(self, *_a, **_kw):  # type: ignore
+                return {}
+
+            async def push_listing(self, *_a, **_kw):  # type: ignore
+                return PushResult(success=True, platform=Platform.SHOPIFY, listing_id="1")
+
+            async def update_listing(self, *_a, **_kw):  # type: ignore
+                return PushResult(success=True, platform=Platform.SHOPIFY, listing_id="1")
+
+            async def delete_listing(self, *_a, **_kw):  # type: ignore
+                return PushResult(success=True, platform=Platform.SHOPIFY)
+
+        registry.register(Platform.SHOPIFY, TestAdapter)
+        push_config = PushConfig(max_retries=10, rate_limit_rpm=0)
+        adapter = registry.get(Platform.SHOPIFY, push_config=push_config)
+        assert isinstance(adapter, TestAdapter)
+        assert adapter._push_config.max_retries == 10
+
     def test_get_unregistered_raises(self) -> None:
         """测试获取未注册的适配器会报错。"""
-
-        # 使用一个不可能存在的 Platform 值
-        class FakeRegistry:
-            _adapters = {}
-
-        reg = FakeRegistry()
-        from src.models.listing import Platform
-
-        # 直接测试逻辑：清空后获取未注册的平台
         registry = AdapterRegistry()
-        # 由于单例可能被其他测试污染，直接验证 KeyError 的抛出逻辑
-        # 获取一个确认未注册的平台
-        for p in Platform:
-            if p not in registry._adapters:
-                with pytest.raises(KeyError):
-                    registry.get(p)
-                return
-        # 如果所有平台都注册了，说明测试环境已注册全部平台
-        pytest.skip("All platforms are registered")
+        registry._instances = {}
+        registry._adapters = {}
+
+        with pytest.raises(KeyError):
+            registry.get(Platform.AMAZON)
 
     def test_singleton(self) -> None:
         """测试注册表是单例。"""
