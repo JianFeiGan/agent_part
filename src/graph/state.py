@@ -209,6 +209,14 @@ class AgentState(BaseModel):
     rag_context: str | None = Field(default=None, description="RAG 检索上下文")
     rag_enabled: bool = Field(default=True, description="是否启用 RAG 增强")
 
+    # ==================== RAG 高级增强字段 ====================
+    rag_rewritten_queries: list[str] = Field(
+        default_factory=list, description="Query 改写后的查询列表"
+    )
+    rag_retrieval_method: str | None = Field(default=None, description="检索方法: vector/hybrid")
+    rag_reranked: bool = Field(default=False, description="是否经过重排序")
+    rag_retrieval_stats: dict[str, Any] | None = Field(default=None, description="检索统计信息")
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def mark_step_completed(self, step: str) -> None:

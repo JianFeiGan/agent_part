@@ -33,12 +33,14 @@ class Settings(BaseSettings):
     qwen_api_key: str = Field(default="", description="千问 API Key（阿里云百炼）")
     qwen_api_base: str = Field(
         default="https://dashscope.aliyuncs.com/compatible-mode/v1",
-        description="千问 OpenAI 兼容端点"
+        description="千问 OpenAI 兼容端点",
     )
     llm_provider: str = Field(default="dashscope", description="LLM 提供商: dashscope/qwen")
     embedding_provider: str = Field(default="local", description="Embedding 提供商: local/qwen")
     qwen_llm_model: str = Field(default="qwen-plus", description="千问 LLM 模型名称")
-    qwen_embedding_model: str = Field(default="text-embedding-v3", description="千问 Embedding 模型名称")
+    qwen_embedding_model: str = Field(
+        default="text-embedding-v3", description="千问 Embedding 模型名称"
+    )
     qwen_embedding_dimensions: int = Field(default=1024, description="千问 Embedding 向量维度")
 
     @property
@@ -104,11 +106,35 @@ class Settings(BaseSettings):
     # ==================== RAG 配置 ====================
     rag_enabled: bool = Field(default=True, description="启用 RAG 检索增强")
     embedding_model: str = Field(default="BAAI/bge-large-zh", description="Embedding 模型名称")
-    embedding_device: str = Field(default="auto", description="Embedding 设备: auto/cuda/cpu（auto 自动探测可用设备）")
+    embedding_device: str = Field(
+        default="auto", description="Embedding 设备: auto/cuda/cpu（auto 自动探测可用设备）"
+    )
     chunk_size: int = Field(default=512, description="文档分块大小 (tokens)")
     chunk_overlap: int = Field(default=64, description="分块重叠大小 (tokens)")
     retrieval_top_k: int = Field(default=5, description="检索返回文档数量")
     similarity_threshold: float = Field(default=0.7, description="相似度阈值")
+
+    # ==================== RAG 高级配置 ====================
+    query_rewriting_enabled: bool = Field(default=False, description="启用 Query 改写")
+    query_rewriting_mode: str = Field(
+        default="single", description="Query 改写模式: single/multi_query/hyde"
+    )
+    query_rewriting_max_variants: int = Field(default=3, description="MultiQuery 最大变体数")
+    hyde_enabled: bool = Field(default=False, description="启用 HyDE 假设文档嵌入")
+    reranker_enabled: bool = Field(default=False, description="启用 Cross-Encoder 重排序")
+    reranker_model: str = Field(
+        default="BAAI/bge-reranker-v2-m3", description="Cross-Encoder 重排序模型名称"
+    )
+    reranker_top_k: int = Field(default=5, description="重排序后保留的结果数量")
+    reranker_device: str = Field(default="auto", description="重排序模型设备: auto/cuda/cpu")
+    hybrid_retrieval_enabled: bool = Field(
+        default=False, description="启用混合检索 (Dense+Sparse+ColBERT)"
+    )
+    hybrid_model: str = Field(default="BAAI/bge-m3", description="混合检索模型名称 (BGE-M3)")
+    hybrid_dense_weight: float = Field(default=0.4, description="Dense 向量检索权重")
+    hybrid_sparse_weight: float = Field(default=0.3, description="Sparse 稀疏检索权重")
+    hybrid_colbert_weight: float = Field(default=0.3, description="ColBERT 检索权重")
+    hybrid_rrf_k: int = Field(default=60, description="RRF 融合常数 K")
 
     # ==================== 生成配置 ====================
     default_image_width: int = Field(default=1024, description="默认图片宽度")
