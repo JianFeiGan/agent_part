@@ -95,7 +95,7 @@ class KnowledgeRetriever:
             检索结果。
         """
         # 生成查询向量
-        query_embedding = self.embedding_service.embed_single(query)
+        query_embedding = await self.embedding_service.aembed_single(query)
 
         # 执行向量检索
         results = await self.vector_store.search(
