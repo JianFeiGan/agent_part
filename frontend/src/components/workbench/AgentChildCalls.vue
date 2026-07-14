@@ -35,7 +35,7 @@ import type { AgentLog, ChildCallRecord } from '@/types/task'
  * 展示 LLM/TOOL/RAG 三种类型的子调用。
  */
 
-const props = defineProps<{
+defineProps<{
   log: AgentLog | null
 }>()
 
