@@ -2,14 +2,14 @@
 
 # 🤖 Agent Part
 
-**基于 LangGraph 的多Agent协作商品视觉生成系统**
+**基于 LangGraph 的多 Agent 协作商品视觉生成系统**
 
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://python.org)
-[![Version 0.2.0](https://img.shields.io/badge/Version-0.2.0-blueviolet)]()
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![LangGraph](https://img.shields.io/badge/LangGraph-powered-orange)](https://langchain-ai.github.io/langgraph/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-teal)](https://fastapi.tiangolo.com/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.4-42b883)](https://vuejs.org/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-powered-orange)](https://langchain-ai.github.io/langgraph/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED)](https://www.docker.com/)
 
 [English](#english) | [中文](#中文)
 
@@ -21,81 +21,80 @@
 
 ## ✨ 这是什么？
 
-Agent Part 是一个**多 Agent 协作系统**，能自动完成跨境电商商品的视觉内容生成：
+Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 LangGraph 状态图驱动多个专业 Agent 协同工作，自动完成从商品分析到视觉内容生成、合规检查、多平台刊登的全流程。
 
-- 📦 **商品信息分析** — 自动提取卖点、分析竞品
-- ✍️ **AI 文案生成** — 多语言商品描述、营销文案
-- 🖼️ **图片/视频生成** — 主图、场景图、卖点图 + 分镜视频
+- 📦 **商品信息分析** — Agent 自动提取卖点、分析竞品、识别目标人群
+- ✍️ **AI 文案生成** — 多语言商品描述、平台风格适配、LLM 降级策略
+- 🖼️ **图片生成** — DashScope 万象 API（wanx-v1 / wan2.7-image-pro）
+- 🎬 **视频生成** — 可灵 AI 分镜设计 + 视频生成
 - ✅ **合规检查** — 广告法禁词检测、平台规则验证
-- 🌐 **多平台刊登** — Amazon / eBay / Shopify 适配器
-- 📊 **AI 会话追踪** — Token 消耗统计、费用预算、内容检索
+- 🌐 **多平台刊登** — Amazon / eBay / Shopify 适配器，凭证加密存储
+- 📚 **RAG 知识增强** — PGVector 向量检索 + Graph RAG + CategoryMemory
+- 📊 **AI 会话追踪** — Token 消耗统计、双币种费用预算、内容检索
 
 > 💡 **适合谁？** 跨境电商从业者、AI 应用开发者、LangChain/LangGraph 学习者
+
+---
 
 ## 🚀 核心特性
 
 | 特性 | 描述 |
 |------|------|
-| 🤖 **多Agent协作** | 7个专业Agent协同，LangGraph 状态图驱动 |
-| 🖼️ **图片生成** | DashScope 万象图片生成（wanx-v1 / wan2.7-image-pro） |
-| 🎬 **视频生成** | 可灵 AI 分镜设计 + 视频生成 |
-| ✅ **合规检查** | 广告法禁词检测、平台规则验证 |
-| 📚 **RAG 增强** | PGVector 知识库检索，BGE/千问 Embedding |
-| 🌐 **多平台适配** | Amazon/eBay/Shopify 适配器 |
-| 🔄 **多LLM路由** | 百炼 OpenAI 兼容 / DashScope SDK 双通道 |
-| 📊 **会话追踪** | Token 统计、费用预算、内容搜索 |
-| 🎨 **管理后台** | Vue 3 + Element Plus 全功能前端 |
+| 🤖 **多 Agent 协作** | 7 个视觉生成 Agent + 5 个刊登 Agent + 3 个 RAG 增强 Agent + 3 个知识库 Agent |
+| 🔄 **LangGraph 工作流** | 条件路由、并行执行、状态检查点、RAG 动态注入 |
+| 🖼️ **图片生成** | DashScope 万象（wanx-v1 / wan2.7-image-pro），async_call + wait 模式 |
+| 🎬 **视频生成** | 可灵 AI（kling-v1），HS256 JWT 鉴权 + 异步任务轮询 |
+| 📚 **RAG 增强** | PGVector + BGE-large-zh / 千问 text-embedding-v3 双通道 Embedding |
+| 🕸️ **Graph RAG** | 知识图谱实体/边 + CategoryMemory + 混合检索（RRF 融合） |
+| ✅ **合规检查** | 广告法禁词检测 + 平台规则验证 |
+| 🌐 **多平台刊登** | Amazon / eBay / Shopify 适配器 |
+| 🔄 **双 LLM 通道** | 百炼 OpenAI 兼容（ChatOpenAI）+ DashScope SDK（ChatTongyi） |
+| 📊 **会话追踪** | Token 统计、双币种（USD/CNY）费用预算、内容搜索 |
+| 🔐 **认证鉴权** | API Token（SHA256 + Scope 权限）+ 多租户隔离 |
+| 🛡️ **优雅降级** | 无 API Key 时自动 Mock，LLM 降级链（通义 → Claude → 规则） |
+| 🎨 **管理后台** | Vue 3 + Element Plus，14 个页面 |
 
-## 📋 实现状态
-
-| 功能模块 | 状态 | 说明 |
-|----------|------|------|
-| FastAPI API 服务 | ✅ 已实现 | 40+ REST API 端点 |
-| LangGraph 多 Agent 工作流 | ✅ 已实现 | 7节点状态图 + 条件路由，E2E 验证通过 |
-| 千问百炼 LLM 对接 | ✅ 已实现 | OpenAI 兼容模式 + DashScope SDK 双通道 |
-| 图片生成 | ✅ 已实现 | DashScope 万象，支持新旧模型自动切换 |
-| 视频生成 | ⚠️ Mock | 可灵 AI 客户端已实现，无 Key 时降级为 Mock |
-| RAG 检索 | ✅ 已实现 | PGVector + BGE-large-zh / 千问 text-embedding-v3 |
-| Graph RAG | ⚠️ P0底座 | 轻量知识图谱，无自动实体抽取 |
-| AI 会话追踪 | ✅ 已实现 | Token/费用/延迟统计 + 预算分析 + 内容搜索 |
-| 多平台刊登 | ⚠️ 适配器骨架 | Amazon/eBay/Shopify 接口框架 |
-| 合规检查 | ✅ 已实现 | 广告法禁词 + 平台规则 |
-| 前端界面 | ✅ 已实现 | Vue 3 管理后台（14个页面） |
+---
 
 ## 🏗️ 系统架构
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Vue 3 管理后台                         │
-│  仪表盘 | 商品管理 | 任务管理 | 知识库 | 刊登工具 | AI会话  │
-└────────────────────────┬────────────────────────────────┘
-                         │ REST API / WebSocket
-┌────────────────────────▼────────────────────────────────┐
-│                   FastAPI API 层                          │
-│  /products  /tasks  /knowledge  /listing  /ai  /dashboard│
-└────────────────────────┬────────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────────┐
-│              LangGraph 工作流引擎                         │
-│                                                          │
-│  Orchestrator → RequirementAnalyzer → CreativePlanner   │
-│       → VisualDesigner → [ImageGen | VideoGen]          │
-│       → QualityReviewer → END                            │
-│                                                          │
-│  ListingWorkflow:                                        │
-│  ImportProduct → [AssetOptimizer | Copywriter]           │
-│       → ComplianceCheck → END                            │
-└──────────┬──────────────┬──────────────┬────────────────┘
-           │              │              │
-    ┌──────▼──────┐ ┌─────▼─────┐ ┌─────▼──────┐
-    │  千问百炼    │ │  DashScope │ │  可灵 AI    │
-    │ (OpenAI兼容) │ │  (万象图片) │ │  (视频生成)  │
-    └─────────────┘ └───────────┘ └────────────┘
-           │              │              │
-    ┌──────▼──────────────▼──────────────▼────────┐
-    │     PostgreSQL + PGVector  |  Redis          │
-    └─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                     Vue 3 管理后台 (14 页面)                  │
+│  仪表盘 │ 商品管理 │ 任务管理 │ 知识库 │ 刊登工具 │ AI 会话    │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ REST API / WebSocket
+┌──────────────────────────▼───────────────────────────────────┐
+│                     FastAPI API 层 (40+ 端点)                 │
+│  认证: API Token (SHA256 + Scope)    租户隔离: tenant_id      │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+┌──────────────────────────▼───────────────────────────────────┐
+│                   LangGraph 工作流引擎                         │
+│                                                               │
+│  视觉生成工作流:                                                │
+│  Orchestrator → ReqAnalyzer → CreativePlanner → VisualDesigner│
+│       → [ImageGen | VideoGen] → QualityReviewer → END         │
+│                                                               │
+│  刊登工作流:                                                    │
+│  ImportProduct → [AssetOptimizer | Copywriter] → Compliance   │
+│                                                               │
+│  知识库 Agent 工作流:                                           │
+│  QueryAnalyzer → StrategyRouter → HybridRetriever → Fuser     │
+└───────┬──────────────┬──────────────┬────────────────────────┘
+        │              │              │
+ ┌──────▼──────┐ ┌─────▼─────┐ ┌─────▼──────┐
+ │  千问百炼    │ │  DashScope │ │  可灵 AI    │
+ │ (OpenAI兼容) │ │  (万象图片) │ │  (视频生成)  │
+ └──────┬──────┘ └─────┬─────┘ └─────┬──────┘
+        │              │              │
+ ┌──────▼──────────────▼──────────────▼────────┐
+ │  PostgreSQL + PGVector  │  Redis  │  Storage │
+ │  15+ 表 (向量/图谱/记忆)  │  缓存   │  本地/OSS │
+ └─────────────────────────────────────────────┘
 ```
+
+---
 
 ## ⚡ 快速开始
 
@@ -108,82 +107,142 @@ cd agent_part
 
 # 2. 配置环境变量
 cp .env.example .env
-# 编辑 .env，填入你的 API Key
+# 编辑 .env，至少配置 QWEN_API_KEY
 
 # 3. 启动所有服务
 docker compose up -d
 
 # 4. 访问
 # 前端: http://localhost:3000
-# 后端: http://localhost:8000
-# API 文档: http://localhost:8000/docs
+# 后端 API 文档: http://localhost:8000/docs
 ```
 
-### 方式二：手动安装（开发）
+### 方式二：本地开发
 
 ```bash
-# 1. 克隆仓库
+# 后端
 git clone https://github.com/JianFeiGan/agent_part.git
 cd agent_part
-
-# 2. 安装依赖
 uv sync
-
-# 3. 配置环境变量
-cp .env.example .env
-# 编辑 .env，填入你的 API Key
-
-# 4. 启动 API 服务
+cp .env.example .env  # 编辑 .env
 uv run python main.py
+
+# 前端
+cd frontend
+npm install
+npm run dev
 ```
 
-### 环境变量
+---
 
-```bash
-# ===== 必填 =====
-# LLM 提供商: qwen (百炼 OpenAI 兼容) 或 dashscope
-LLM_PROVIDER=qwen
-QWEN_API_KEY=your_qwen_api_key
-QWEN_API_BASE=https://your-bailian-endpoint/compatible-mode/v1
+## ⚙️ 环境变量
 
-# ===== 可选 =====
-DASHSCOPE_API_KEY=your_dashscope_api_key
-KLING_ACCESS_KEY=your_kling_access_key
-KLING_SECRET_KEY=your_kling_secret_key
-DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/agent_part
-REDIS_URL=redis://localhost:6379/0
+### 必填
+
+| 变量 | 说明 |
+|------|------|
+| `LLM_PROVIDER` | LLM 提供商：`qwen`（百炼 OpenAI 兼容）或 `dashscope` |
+| `QWEN_API_KEY` | 百炼 API Key（同时支持 OpenAI 兼容和 DashScope 原生协议） |
+| `QWEN_API_BASE` | 百炼 OpenAI 兼容端点 |
+
+### 可选
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `DASHSCOPE_API_KEY` | — | DashScope API Key（可与 QWEN_API_KEY 共用） |
+| `QWEN_LLM_MODEL` | `qwen-plus` | LLM 模型名称 |
+| `KLING_ACCESS_KEY` | — | 可灵 AI Access Key |
+| `KLING_SECRET_KEY` | — | 可灵 AI Secret Key |
+| `EMBEDDING_PROVIDER` | `qwen` | Embedding 提供商：`local`（BGE-large-zh）或 `qwen` |
+| `EMBEDDING_MODEL` | `BAAI/bge-large-zh` | 本地 Embedding 模型名称 |
+| `RAG_ENABLED` | `true` | 启用 RAG 知识检索 |
+| `RETRIEVAL_TOP_K` | `5` | 检索返回数量 |
+| `SIMILARITY_THRESHOLD` | `0.5` | 相似度阈值 |
+| `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL 连接 URL |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis 连接 URL |
+| `STORAGE_TYPE` | `local` | 存储类型：`local` 或 `oss` |
+| `ALLOW_MOCK_ASSETS` | `true` | 无 API Key 时允许 Mock 降级 |
+
+---
+
+## 📁 项目结构
+
+```
+agent_part/
+├── src/                          # 后端源码
+│   ├── agents/                   # Agent 实现
+│   │   ├── orchestrator.py       #   编排调度 Agent
+│   │   ├── requirement_analyzer.py  # 需求分析 Agent
+│   │   ├── creative_planner.py   #   创意策划 Agent
+│   │   ├── visual_designer.py    #   视觉设计 Agent
+│   │   ├── image_generator.py    #   图片生成 Agent
+│   │   ├── video_generator.py    #   视频生成 Agent
+│   │   ├── quality_reviewer.py   #   质量审核 Agent
+│   │   ├── rag_*.py              #   RAG 增强 Agent (3个)
+│   │   └── listing_*.py          #   刊登 Agent (5个)
+│   ├── graph/                    # LangGraph 状态图与工作流
+│   │   ├── workflow.py           #   视觉生成工作流
+│   │   └── listing_workflow.py   #   刊登工作流
+│   ├── api/                      # FastAPI 路由 + Schema + Service
+│   │   ├── router/               #   路由模块 (12个)
+│   │   ├── schema/               #   请求/响应模型
+│   │   └── service/              #   业务服务
+│   ├── clients/                  # 外部服务客户端
+│   │   ├── dashscope_image_client.py  # DashScope 图片生成
+│   │   ├── kling_video_client.py      # 可灵 AI 视频生成
+│   │   ├── qwen_llm_client.py         # 千问 LLM
+│   │   └── qwen_embedding_client.py   # 千问 Embedding
+│   ├── rag/                      # RAG 检索管道
+│   │   ├── retriever.py          #   知识检索器
+│   │   ├── embeddings.py         #   双通道 Embedding
+│   │   ├── chunker.py            #   语义分块
+│   │   └── graph_memory.py       #   Graph RAG 记忆
+│   ├── knowledge/                # 知识图谱 + 混合检索
+│   │   ├── hybrid_retriever.py   #   RRF 融合检索
+│   │   ├── agent_workflow.py     #   知识库 Agent 工作流
+│   │   └── agents/               #   查询分析/策略路由/结果融合
+│   ├── config/                   # 配置管理 (pydantic-settings)
+│   ├── db/                       # 数据库 (15+ 表)
+│   ├── auth/                     # API Token 认证 + 多租户
+│   ├── models/                   # Pydantic 数据模型
+│   └── storage/                  # 文件存储 (本地/OSS)
+├── frontend/                     # Vue 3 前端
+│   └── src/
+│       ├── views/                # 页面组件 (14个)
+│       ├── api/                  # API 调用层
+│       ├── types/                # TypeScript 类型
+│       ├── stores/               # Pinia 状态管理
+│       └── styles/               # 全局样式 (CSS 变量设计系统)
+├── tests/                        # 测试用例
+├── docs-site/                    # 文档站
+├── docker-compose.yml            # Docker 编排
+├── Dockerfile                    # 后端镜像
+├── Dockerfile.frontend           # 前端镜像
+└── pyproject.toml                # 项目配置
 ```
 
-## 📊 版本历史
+---
 
-### v0.2.0 (2026-07-13)
+## 🛠️ 技术栈
 
-**千问百炼全链路对接 + AI 会话追踪 + 前端升级**
+| 层级 | 技术 |
+|------|------|
+| **工作流引擎** | LangChain, LangGraph |
+| **后端框架** | FastAPI, Pydantic v2, SQLAlchemy 2.0 (async) |
+| **语言模型** | 千问百炼 (OpenAI 兼容 + DashScope SDK) |
+| **图片生成** | DashScope 万象 (wanx-v1, wan2.7-image-pro) |
+| **视频生成** | 可灵 AI (kling-v1) |
+| **向量检索** | PGVector, BGE-large-zh, 千问 text-embedding-v3 |
+| **前端框架** | Vue 3, TypeScript, Element Plus, Pinia |
+| **数据库** | PostgreSQL 16 + PGVector, Redis 6 |
+| **部署** | Docker Compose, Nginx |
 
-- 🔌 **千问百炼 API 对接** — OpenAI 兼容模式 (ChatOpenAI) + DashScope SDK (ChatTongyi) 双通道路由
-- 🔑 **API Key 统一** — 百炼平台单一 Key 同时支持 OpenAI 兼容和 DashScope 原生协议
-- 🖼️ **图片生成升级** — DashScope 新模型 (wan2.7-image-pro) async_call + wait 模式，旧模型 call 模式自动切换
-- 📊 **AI 会话追踪** — 新增 5 个 API 端点：会话记录查询、详情、内容搜索、使用量概览、费用预算
-- 💰 **费用预算系统** — 模型定价表 + 双币种 (USD/CNY) + 日/月预算 + 预估月费
-- 🎨 **前端样式升级** — 深空蓝配色体系、玻璃拟态头部、DM Sans 字体、精致微交互
-- 📄 **新增页面** — AI 会话记录页（记录列表 + 使用分析 + 费用预算三 Tab）
-- 🛡️ **防御性修复** — Visual Designer JSON 解析容错、selling_points 格式兼容、SimpleNamespace mock 兼容
-- 🔄 **Listing 工作流** — create_task 端点异步触发 ListingWorkflow 执行
+---
 
-### v0.1.0 (2026-03-23)
-
-**初始版本**
-
-- 🏗️ LangGraph 7-Agent 协作工作流
-- 📚 RAG 知识库 (PGVector + BGE-large-zh)
-- ✅ 合规检查系统
-- 🌐 多平台刊登适配器骨架
-- 🖥️ Vue 3 管理后台
-
-## 🧪 运行测试
+## 🧪 开发
 
 ```bash
-# 运行所有测试
+# 运行测试
 uv run pytest
 
 # 带覆盖率报告
@@ -194,51 +253,18 @@ uv run ruff format .
 
 # Lint 检查
 uv run ruff check .
+
+# 类型检查
+uv run mypy src/
 ```
 
-## 📁 项目结构
+详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
-```
-agent_part/
-├── src/                          # 后端源码
-│   ├── agents/                   # Agent 实现 (7核心 + 3 RAG + 5 Listing)
-│   ├── graph/                    # LangGraph 状态图与工作流
-│   ├── api/                      # FastAPI 路由 + Schema + Service
-│   │   ├── router/               #   路由模块 (conversation, knowledge, listing...)
-│   │   ├── schema/               #   请求/响应模型
-│   │   └── service/              #   业务服务 (conversation_recorder...)
-│   ├── clients/                  # 外部服务客户端
-│   │   ├── dashscope_image_client.py  # DashScope 图片生成
-│   │   ├── qwen_llm_client.py        # 千问 LLM
-│   │   └── qwen_embedding_client.py  # 千问 Embedding
-│   ├── config/                   # 配置管理 (pydantic-settings)
-│   ├── db/                       # 数据库模型 + 连接池
-│   ├── rag/                      # RAG 检索管道
-│   ├── knowledge/                # 知识图谱 + 混合检索
-│   ├── models/                   # Pydantic 数据模型
-│   └── storage/                  # 文件存储 (本地/OSS)
-├── frontend/                     # Vue 3 前端
-│   └── src/
-│       ├── views/                # 页面组件 (14个)
-│       ├── components/Layout/    # 布局 (Sidebar + Header)
-│       ├── api/                  # API 调用层
-│       ├── types/                # TypeScript 类型
-│       ├── stores/               # Pinia 状态管理
-│       └── styles/               # 全局样式 (CSS 变量设计系统)
-├── tests/                        # 测试用例 (223+)
-├── docker-compose.yml            # Docker 编排
-├── Dockerfile                    # 后端镜像
-├── Dockerfile.frontend           # 前端镜像
-└── pyproject.toml                # 项目配置
-```
-
-## 🤝 贡献
-
-我们欢迎各种形式的贡献！请查看 [CONTRIBUTING.md](CONTRIBUTING.md) 了解详情。
+---
 
 ## 📄 License
 
-MIT License — 详见 [LICENSE](LICENSE)
+[MIT License](LICENSE)
 
 ## ⭐ Star History
 
@@ -252,19 +278,71 @@ MIT License — 详见 [LICENSE](LICENSE)
 
 **Multi-Agent E-commerce Visual Content Generator powered by LangGraph**
 
-A multi-agent collaboration system that automates the generation of marketing visual content for cross-border e-commerce products.
+A multi-agent collaboration system that automates the generation of marketing visual content for cross-border e-commerce products — from product analysis to image/video generation, compliance checking, and multi-platform listing.
+
+- 📦 **Product Analysis** — Agents extract selling points, analyze competitors, identify target audiences
+- ✍️ **AI Copywriting** — Multi-language descriptions, platform-style adaptation, LLM fallback chain
+- 🖼️ **Image Generation** — DashScope Wanx API (wanx-v1 / wan2.7-image-pro)
+- 🎬 **Video Generation** — Kling AI storyboard design + video generation
+- ✅ **Compliance Check** — Ad law forbidden words, platform rule validation
+- 🌐 **Multi-Platform Listing** — Amazon / eBay / Shopify adapters with encrypted credentials
+- 📚 **RAG Enhancement** — PGVector + Graph RAG + CategoryMemory
+- 📊 **Conversation Tracking** — Token stats, dual-currency (USD/CNY) budgeting, content search
 
 ### Key Features
 
-- 🤖 **Multi-Agent Architecture** — 7 specialized agents orchestrated by LangGraph
-- 🖼️ **Image Generation** — DashScope Wanx (wanx-v1 / wan2.7-image-pro)
-- 🎬 **Video Generation** — Kling AI storyboard + video generation
-- ✅ **Compliance Check** — Ad law forbidden words, platform rule validation
-- 📚 **RAG Enhancement** — PGVector + BGE/Qwen Embedding
-- 🌐 **Multi-Platform** — Amazon / eBay / Shopify adapters
-- 🔄 **Dual LLM Channel** — Bailian OpenAI-compatible + DashScope SDK
-- 📊 **Conversation Tracking** — Token stats, cost budgeting, content search
-- 🎨 **Admin Dashboard** — Vue 3 + Element Plus (14 pages)
+| Feature | Description |
+|---------|-------------|
+| 🤖 **Multi-Agent** | 7 visual + 5 listing + 3 RAG + 3 knowledge agents |
+| 🔄 **LangGraph Workflows** | Conditional routing, parallel execution, state checkpoints |
+| 🖼️ **Image Gen** | DashScope Wanx (wanx-v1 / wan2.7-image-pro), async_call + wait |
+| 🎬 **Video Gen** | Kling AI (kling-v1), JWT auth + async task polling |
+| 📚 **RAG** | PGVector + BGE-large-zh / Qwen text-embedding-v3 |
+| 🕸️ **Graph RAG** | Knowledge graph entities/edges + CategoryMemory + RRF fusion |
+| ✅ **Compliance** | Ad law forbidden words + platform rule validation |
+| 🌐 **Multi-Platform** | Amazon / eBay / Shopify adapters |
+| 🔄 **Dual LLM** | Bailian OpenAI-compatible (ChatOpenAI) + DashScope SDK (ChatTongyi) |
+| 📊 **Tracking** | Token stats, dual-currency budgeting, content search |
+| 🔐 **Auth** | API Token (SHA256 + Scope) + Multi-tenant isolation |
+| 🛡️ **Graceful Degradation** | Auto-mock without API keys, LLM fallback chain |
+| 🎨 **Dashboard** | Vue 3 + Element Plus, 14 pages |
+
+### Architecture
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                     Vue 3 Dashboard (14 pages)                │
+│  Dashboard │ Products │ Tasks │ Knowledge │ Listing │ AI Chat │
+└──────────────────────────┬───────────────────────────────────┘
+                           │ REST API / WebSocket
+┌──────────────────────────▼───────────────────────────────────┐
+│                     FastAPI API Layer (40+ endpoints)          │
+│  Auth: API Token (SHA256 + Scope)   Tenant: tenant_id         │
+└──────────────────────────┬───────────────────────────────────┘
+                           │
+┌──────────────────────────▼───────────────────────────────────┐
+│                   LangGraph Workflow Engine                    │
+│                                                               │
+│  Visual Generation:                                            │
+│  Orchestrator → ReqAnalyzer → CreativePlanner → VisualDesigner│
+│       → [ImageGen | VideoGen] → QualityReviewer → END         │
+│                                                               │
+│  Listing:                                                      │
+│  ImportProduct → [AssetOptimizer | Copywriter] → Compliance   │
+│                                                               │
+│  Knowledge Agent:                                              │
+│  QueryAnalyzer → StrategyRouter → HybridRetriever → Fuser     │
+└───────┬──────────────┬──────────────┬────────────────────────┘
+        │              │              │
+ ┌──────▼──────┐ ┌─────▼─────┐ ┌─────▼──────┐
+ │ Qwen/Bailian│ │  DashScope │ │  Kling AI   │
+ │ (OpenAI cmp)│ │  (Wanx)    │ │  (Video)    │
+ └──────┬──────┘ └─────┬─────┘ └─────┬──────┘
+        │              │              │
+ ┌──────▼──────────────▼──────────────▼────────┐
+ │  PostgreSQL + PGVector  │  Redis  │  Storage │
+ └─────────────────────────────────────────────┘
+```
 
 ### Quick Start
 
@@ -277,18 +355,56 @@ docker compose up -d
 # API Docs: http://localhost:8000/docs
 ```
 
+### Environment Variables
+
+**Required:**
+
+| Variable | Description |
+|----------|-------------|
+| `LLM_PROVIDER` | LLM provider: `qwen` (Bailian OpenAI-compatible) or `dashscope` |
+| `QWEN_API_KEY` | Bailian API Key (supports both OpenAI-compatible and DashScope) |
+| `QWEN_API_BASE` | Bailian OpenAI-compatible endpoint |
+
+**Optional:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DASHSCOPE_API_KEY` | — | DashScope API Key (can share QWEN_API_KEY) |
+| `KLING_ACCESS_KEY` | — | Kling AI Access Key |
+| `KLING_SECRET_KEY` | — | Kling AI Secret Key |
+| `EMBEDDING_PROVIDER` | `qwen` | `local` (BGE-large-zh) or `qwen` |
+| `RAG_ENABLED` | `true` | Enable RAG retrieval |
+| `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL connection |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis connection |
+| `STORAGE_TYPE` | `local` | `local` or `oss` |
+| `ALLOW_MOCK_ASSETS` | `true` | Allow mock fallback without API keys |
+
 ### Tech Stack
 
-- **Python 3.11+** | **LangChain** | **LangGraph** | **FastAPI**
-- **Qwen/Bailian** | **DashScope** | **Kling AI**
-- **Vue 3** | **TypeScript** | **Element Plus**
-- **PostgreSQL** | **PGVector** | **Redis**
+| Layer | Technology |
+|-------|-----------|
+| **Workflow** | LangChain, LangGraph |
+| **Backend** | FastAPI, Pydantic v2, SQLAlchemy 2.0 (async) |
+| **LLM** | Qwen/Bailian (OpenAI-compatible + DashScope SDK) |
+| **Image** | DashScope Wanx (wanx-v1, wan2.7-image-pro) |
+| **Video** | Kling AI (kling-v1) |
+| **Vector** | PGVector, BGE-large-zh, Qwen text-embedding-v3 |
+| **Frontend** | Vue 3, TypeScript, Element Plus, Pinia |
+| **Database** | PostgreSQL 16 + PGVector, Redis 6 |
+| **Deploy** | Docker Compose, Nginx |
 
-### Version History
+### Development
 
-- **v0.2.0** — Bailian API integration, AI conversation tracking, frontend upgrade
-- **v0.1.0** — Initial release with LangGraph workflow, RAG, compliance check
+```bash
+uv run pytest                    # Run tests
+uv run pytest --cov=src          # With coverage
+uv run ruff format .             # Format code
+uv run ruff check .              # Lint
+uv run mypy src/                 # Type check
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ### License
 
-MIT
+[MIT License](LICENSE)
