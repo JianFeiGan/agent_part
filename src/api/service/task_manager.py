@@ -15,7 +15,7 @@ from uuid import uuid4
 
 from src.api.schema.task import TaskStatus, TaskType
 from src.api.service.redis_client import RedisClient, get_redis
-from src.graph.state import AgentState, GenerationRequest
+from src.graph.state import AgentState, GenerationRequest, create_initial_state
 from src.graph.workflow import ProductVisualWorkflow
 from src.models.product import Product
 
@@ -184,11 +184,32 @@ class TaskManager:
                             "agent_log": latest_log.model_dump(),
                         })
 
-            # 执行工作流
-            result = await workflow.run(product, request, thread_id=task_id)
+            # 执行工作流（使用 stream 模式，逐步获取节点输出）
+            initial_state = create_initial_state(product, request)
+            config = {"configurable": {"thread_id": task_id}}
 
-            # 触发进度回调
-            await progress_callback(result)
+            async for event in workflow.app.astream(initial_state, config=config):
+                # event 是每个节点的输出 dict，key 为节点名
+                # 获取最新状态并触发回调
+                latest_state = await workflow.app.aget_state(config)
+                if latest_state and latest_state.values:
+                    state_values = latest_state.values
+                    if isinstance(state_values, dict):
+                        state = AgentState(**state_values)
+                    else:
+                        state = state_values
+                    await progress_callback(state)
+
+            # 获取最终结果
+            final_state = await workflow.app.aget_state(config)
+            if final_state and final_state.values:
+                state_values = final_state.values
+                if isinstance(state_values, dict):
+                    result = AgentState(**state_values)
+                else:
+                    result = state_values
+            else:
+                result = AgentState(product_info=product, generation_request=request)
 
             # 保存最终状态
             await redis.save_task_state(task_id, result, tenant_id=tenant_id)
