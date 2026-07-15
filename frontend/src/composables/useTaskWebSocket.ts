@@ -21,7 +21,8 @@ export function useTaskWebSocket(taskId: string) {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
     const token = localStorage.getItem('token')
-    return `${protocol}//${host}/api/v1/tasks/${taskId}/ws?token=${token}`
+    const baseUrl = `${protocol}//${host}/api/v1/tasks/${taskId}/ws`
+    return token ? `${baseUrl}?token=${token}` : baseUrl
   }
 
   /** 连接 WebSocket */
