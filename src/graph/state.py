@@ -38,6 +38,18 @@ class AgentLog(BaseModel):
         status: 状态: pending/running/completed/failed。
         message: 执行消息/错误原因。
         output_summary: 输出摘要。
+        input_data: 输入参数快照（用于 Trace 展示）。
+        output_data: 输出数据快照（用于 Trace 展示）。
+        prompt_template: 使用的提示词模板（用于 Trace 展示）。
+        prompt_variables: 提示词变量（用于 Trace 展示）。
+        input_tokens: 输入 token 数。
+        output_tokens: 输出 token 数。
+        total_tokens: 总 token 数。
+        cost_cny: 估算费用（人民币）。
+        latency_ms: 响应延迟（毫秒）。
+        model_name: 使用的模型名称。
+        provider: LLM 提供商。
+        child_calls: 子调用记录（如工具调用、嵌套 LLM 调用）。
 
     Example:
         >>> log = AgentLog(
@@ -55,6 +67,20 @@ class AgentLog(BaseModel):
     status: str = Field(default="pending", description="状态: pending/running/completed/failed")
     message: str | None = Field(default=None, description="执行消息/错误原因")
     output_summary: str | None = Field(default=None, description="输出摘要")
+
+    # ==================== Trace 可观测性字段 ====================
+    input_data: dict[str, Any] | None = Field(default=None, description="输入参数快照")
+    output_data: dict[str, Any] | None = Field(default=None, description="输出数据快照")
+    prompt_template: str | None = Field(default=None, description="提示词模板")
+    prompt_variables: dict[str, Any] | None = Field(default=None, description="提示词变量")
+    input_tokens: int = Field(default=0, description="输入 token 数")
+    output_tokens: int = Field(default=0, description="输出 token 数")
+    total_tokens: int = Field(default=0, description="总 token 数")
+    cost_cny: float = Field(default=0.0, description="估算费用（人民币）")
+    latency_ms: int | None = Field(default=None, description="响应延迟（毫秒）")
+    model_name: str | None = Field(default=None, description="使用的模型名称")
+    provider: str | None = Field(default=None, description="LLM 提供商")
+    child_calls: list[dict[str, Any]] = Field(default_factory=list, description="子调用记录")
 
     def mark_running(self) -> None:
         """标记为运行中。"""
