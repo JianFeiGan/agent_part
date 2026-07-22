@@ -90,6 +90,57 @@
           </el-select>
         </el-form-item>
 
+        <!-- 模型厂商指定 -->
+        <el-divider>模型厂商（可选）</el-divider>
+
+        <el-form-item label="LLM 厂商">
+          <el-select
+            v-model="formData.llm_provider_id"
+            placeholder="使用默认厂商"
+            clearable
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="p in llmProviders"
+              :key="p.id"
+              :label="`${p.display_name} (${p.default_model})`"
+              :value="p.id"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="图片厂商" v-if="formData.task_type === 'image_only' || formData.task_type === 'image_and_video'">
+          <el-select
+            v-model="formData.image_provider_id"
+            placeholder="使用默认厂商"
+            clearable
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="p in imageProviders"
+              :key="p.id"
+              :label="`${p.display_name} (${p.default_model})`"
+              :value="p.id"
+            />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="视频厂商" v-if="formData.task_type === 'video_only' || formData.task_type === 'image_and_video'">
+          <el-select
+            v-model="formData.video_provider_id"
+            placeholder="使用默认厂商"
+            clearable
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="p in videoProviders"
+              :key="p.id"
+              :label="`${p.display_name} (${p.default_model})`"
+              :value="p.id"
+            />
+          </el-select>
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" :loading="submitting" @click="handleSubmit">
             创建任务
@@ -108,8 +159,10 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import type { Product } from '@/types/product'
 import type { TaskCreateRequest } from '@/types/task'
+import type { ModelProviderResponse } from '@/types/provider'
 import { getProducts } from '@/api/products'
 import { createTask } from '@/api/tasks'
+import { listModelProviders } from '@/api/providers'
 
 /**
  * 创建任务页面
@@ -127,6 +180,11 @@ const submitting = ref(false)
 // 商品列表
 const productList = ref<Product[]>([])
 
+// 厂商列表
+const llmProviders = ref<ModelProviderResponse[]>([])
+const imageProviders = ref<ModelProviderResponse[]>([])
+const videoProviders = ref<ModelProviderResponse[]>([])
+
 // 表单数据
 const formData = reactive<TaskCreateRequest>({
   product_id: '',
@@ -137,7 +195,10 @@ const formData = reactive<TaskCreateRequest>({
   video_style: 'professional',
   style_preference: '',
   color_preference: '',
-  quality_level: 'standard'
+  quality_level: 'standard',
+  llm_provider_id: null,
+  image_provider_id: null,
+  video_provider_id: null
 })
 
 // 表单验证规则
@@ -171,6 +232,23 @@ const loadProducts = async () => {
   }
 }
 
+// 加载模型厂商列表
+const loadProviders = async () => {
+  try {
+    const [llmRes, imageRes, videoRes] = await Promise.all([
+      listModelProviders('llm'),
+      listModelProviders('image'),
+      listModelProviders('video'),
+    ])
+    if (llmRes.data.data) llmProviders.value = llmRes.data.data
+    if (imageRes.data.data) imageProviders.value = imageRes.data.data
+    if (videoRes.data.data) videoProviders.value = videoRes.data.data
+  } catch {
+    // 厂商列表加载失败不影响创建任务
+    console.warn('加载模型厂商列表失败，将使用默认厂商')
+  }
+}
+
 // 提交表单
 const handleSubmit = async () => {
   if (!formRef.value) return
@@ -200,6 +278,7 @@ const handleCancel = () => {
 
 onMounted(() => {
   loadProducts()
+  loadProviders()
 })
 </script>
 

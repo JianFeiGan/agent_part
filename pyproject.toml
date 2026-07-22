@@ -10,8 +10,7 @@ dependencies = [
     "langchain-community>=0.3.0",
     "langgraph>=0.2.0",
     "langchain-core>=0.3.0",
-    # 阿里云通义系列
-    "dashscope>=1.14.0",
+    "langchain-openai>=0.2.0",
     # JWT 鉴权（Kling AI HS256）
     "pyjwt>=2.8.0",
     # 数据验证
@@ -37,9 +36,7 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.0",
     "pgvector>=0.2.0",
     "psycopg[binary]>=3.1.0",
-    # RAG Embedding
-    "sentence-transformers>=2.2.0",
-    "FlagEmbedding>=1.2.0",
+
     # 图片处理
     "pillow>=10.0.0",
     "langchain-openai>=1.3.5",
@@ -49,6 +46,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+rag = [
+    "sentence-transformers>=2.2.0",
+    "FlagEmbedding>=1.2.0",
+]
 dev = [
     # 测试
     "pytest>=8.0.0",
@@ -116,8 +117,8 @@ show_error_codes = true
 
 [[tool.mypy.overrides]]
 module = [
-    "dashscope.*",
     "langchain.*",
+    "langchain_openai.*",
     "langgraph.*",
     "pydantic.*",
     "redis.*",

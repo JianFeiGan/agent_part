@@ -4,7 +4,8 @@
 Description:
     负责调用图像生成API产出商品图片。
     主要功能：
-    - 调用通义万象API生成图片
+    - 通过 ProviderFactory 动态获取图片生成 Provider
+    - 支持任务级指定厂商（image_provider_id）
     - 管理图片规格和质量
     - 处理批量生成请求
 @author ganjianfei
@@ -21,8 +22,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
-from src.clients import get_image_client
-from src.clients.dashscope_image_client import DashScopeImageClient
+from src.clients.protocols import ImageProviderProtocol
 from src.clients.provider_result import ProviderUnavailableError
 from src.db.asset_repository import AssetRepository
 from src.models.assets import AssetStatus, GeneratedImage, ImageFormat
@@ -54,7 +54,8 @@ _EMPTY_PNG_BASE64 = (
 class ImageGeneratorAgent(BaseAgent[AgentState]):
     """图片生成Agent。
 
-    调用图像生成服务生成商品图片。
+    通过 ProviderFactory 动态获取图片生成 Provider，
+    支持任务级指定厂商（image_provider_id）。
 
     Example:
         >>> agent = ImageGeneratorAgent()
@@ -78,7 +79,8 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         super().__init__(role=AgentRole.IMAGE_GENERATOR, **kwargs)
         self._storage_backend = storage_backend
         self._session_factory = session_factory
-        self._image_client: DashScopeImageClient | None = get_image_client(settings=self.settings)
+        # 不再在初始化时创建 image_client，改为执行时通过 ProviderFactory 动态获取
+        self._image_provider: ImageProviderProtocol | None = None
         self._setup_prompts()
 
     def _setup_prompts(self) -> None:
@@ -395,13 +397,16 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
     ) -> list[GeneratedImage]:
         """调用图片生成API。
 
+        通过 ProviderFactory 动态获取图片 Provider，
+        优先使用任务级指定的 image_provider_id，否则使用全局默认。
+
         Args:
             prompt: 提示词。
             negative_prompt: 负向提示词。
             width: 宽度。
             height: 高度。
             image_type: 图片类型。
-            state: 当前 AgentState（用于获取 tenant_id）。
+            state: 当前 AgentState（用于获取 tenant_id 和 provider_id）。
             session: 可选的 AsyncSession（用于写 DB）。
 
         Returns:
@@ -410,15 +415,30 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         # 生成图片ID
         image_id = f"img_{uuid.uuid4().hex[:8]}"
 
-        # 解析 tenant_id
+        # 解析 tenant_id 和 provider_id
         tenant_id = "system"
+        image_provider_id: int | None = None
         if state is not None:
             tenant_id = self._resolve_tenant_id(state)
+            image_provider_id = getattr(state, "image_provider_id", None)
 
-        # 真实路径：调用 DashScope 通义万象
-        if self._image_client is not None:
+        # 通过 ProviderFactory 动态获取图片 Provider
+        image_provider: ImageProviderProtocol | None = None
+        try:
+            from src.clients.provider_factory import ProviderFactory
+
+            image_provider = await ProviderFactory.get_image_provider(
+                session=session,
+                tenant_id=tenant_id,
+                provider_id=image_provider_id,
+            )
+        except Exception as exc:
+            logger.warning("ProviderFactory 获取图片 Provider 失败: %s", exc)
+
+        # 真实路径：调用图片生成 Provider
+        if image_provider is not None and image_provider.is_available():
             try:
-                result = await self._image_client.generate(
+                result = await image_provider.generate(
                     prompt=prompt,
                     negative_prompt=negative_prompt,
                     width=width,
@@ -434,7 +454,8 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
                     image_id,
                     "image/png",
                 )
-                model_name = self.settings.image_model
+                # 从 Provider 获取模型名
+                model_name = getattr(image_provider, "_model", "") or self.settings.image_model
                 if session is not None:
                     await self._create_asset_po(
                         session=session,
@@ -472,21 +493,21 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
                 )
                 return [image]
             except ProviderUnavailableError as exc:
-                logger.error("provider=dashscope 真实图片生成失败: %s", exc)
+                logger.error("图片生成 Provider 失败: %s", exc)
                 if not self.settings.allow_mock_assets:
                     raise
         else:
             logger.warning(
-                "provider=dashscope 未配置 API Key，回退 mock 占位行为 "
+                "图片生成 Provider 不可用，回退 mock 占位行为 "
                 "(tenant=%s, allow_mock_assets=%s)",
                 tenant_id,
                 self.settings.allow_mock_assets,
             )
             if not self.settings.allow_mock_assets:
                 raise ProviderUnavailableError(
-                    "真实图片生成 Provider 不可用（未配置 DASHSCOPE_API_KEY），"
+                    "真实图片生成 Provider 不可用，"
                     "且 mock 占位已禁用 (ALLOW_MOCK_ASSETS=false)。"
-                    "请配置 API Key，或在本地/开发环境显式开启 mock。"
+                    "请在模型厂商管理页面配置，或设置 DASHSCOPE_API_KEY 环境变量。"
                 )
 
         # 降级 / Mock 占位路径（与无 key 的 CI / 本地行为逐字节一致）

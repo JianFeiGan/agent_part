@@ -18,6 +18,7 @@ from sqlalchemy import (
     Boolean,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -25,6 +26,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from src.db.encrypted_json import EncryptedJSONB
 from src.db.postgres import Base
 
 
@@ -449,6 +451,98 @@ class AgentMemory(Base):
 
     def __repr__(self) -> str:
         return f"<AgentMemory(id={self.id}, agent='{self.agent_name}', type='{self.memory_type}')>"
+
+
+class ModelProviderPO(Base):
+    """模型厂商配置表。
+
+    存储各模型厂商的 API 配置信息，支持通过前端管理和任务级指定厂商。
+    凭证使用 EncryptedJSONB 加密存储。
+
+    Attributes:
+        id: 主键。
+        tenant_id: 租户 ID。
+        name: 厂商标识（如 sensenova / dashscope / kling）。
+        display_name: 显示名称（如 商汤科技 / 阿里云通义）。
+        provider_type: 厂商类型（llm / image / video）。
+        base_url: API 基址。
+        api_key: API Key（加密存储）。
+        extra_credentials: 额外凭证（如 secret_key）。
+        default_model: 默认模型 ID。
+        supported_models: 支持的模型列表。
+        model_config_extra: 模型额外配置。
+        protocol: 协议类型（openai_compatible / custom_rest）。
+        is_active: 是否启用。
+        is_default: 是否为该类型的默认厂商。
+        created_at: 创建时间。
+        updated_at: 更新时间。
+    """
+
+    __tablename__ = "model_providers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
+    name: Mapped[str] = mapped_column(
+        String(50), nullable=False, comment="厂商标识: sensenova/dashscope/kling"
+    )
+    display_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="显示名称: 商汤科技/阿里云通义"
+    )
+    provider_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, index=True, comment="类型: llm/image/video"
+    )
+    base_url: Mapped[str] = mapped_column(
+        String(500), nullable=False, comment="API 基址"
+    )
+    api_key: Mapped[dict] = mapped_column(
+        EncryptedJSONB, default=dict, comment="API Key（加密存储）"
+    )
+    extra_credentials: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, comment="额外凭证（如 secret_key）"
+    )
+    default_model: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="默认模型 ID"
+    )
+    supported_models: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, comment="支持的模型列表"
+    )
+    model_config_extra: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, comment="模型额外配置"
+    )
+    protocol: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="openai_compatible",
+        comment="协议: openai_compatible/custom_rest"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, default=True, comment="是否启用"
+    )
+    is_default: Mapped[bool] = mapped_column(
+        Boolean, default=False, comment="是否为该类型的默认厂商"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_model_providers_tenant_name_type",
+            "tenant_id",
+            "name",
+            "provider_type",
+            unique=True,
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<ModelProviderPO(id={self.id}, name='{self.name}', "
+            f"type='{self.provider_type}', default_model='{self.default_model}')>"
+        )
 
 
 class CategoryMemory(Base):

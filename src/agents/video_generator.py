@@ -4,10 +4,11 @@
 Description:
     负责生成商品营销视频。
     主要功能：
+    - 通过 ProviderFactory 动态获取视频生成 Provider
+    - 支持任务级指定厂商（video_provider_id）
     - 分镜脚本解析
     - 场景素材生成
     - 视频合成输出
-    - 调用可灵AI API
 @author ganjianfei
 @version 1.0.0
 2026-03-23
@@ -22,8 +23,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
-from src.clients import get_video_client
-from src.clients.kling_video_client import KlingVideoClient
+from src.clients.protocols import VideoProviderProtocol
 from src.clients.provider_result import ProviderUnavailableError
 from src.db.asset_repository import AssetRepository
 from src.models.assets import AssetStatus, GeneratedVideo, VideoFormat
@@ -43,7 +43,8 @@ _EMPTY_MP4_BASE64 = (
 class VideoGeneratorAgent(BaseAgent[AgentState]):
     """视频生成Agent。
 
-    根据分镜脚本生成商品营销视频。
+    通过 ProviderFactory 动态获取视频生成 Provider，
+    支持任务级指定厂商（video_provider_id）。
 
     Example:
         >>> agent = VideoGeneratorAgent()
@@ -67,9 +68,8 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         super().__init__(role=AgentRole.VIDEO_GENERATOR, **kwargs)
         self._storage_backend = storage_backend
         self._session_factory = session_factory
-        self._video_client: KlingVideoClient | None = get_video_client(
-            settings=self.settings
-        )
+        # 不再在初始化时创建 video_client，改为执行时通过 ProviderFactory 动态获取
+        self._video_provider: VideoProviderProtocol | None = None
         self._setup_prompts()
 
     def _setup_prompts(self) -> None:
@@ -392,36 +392,54 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
     ) -> GeneratedVideo:
         """调用视频生成API。
 
+        通过 ProviderFactory 动态获取视频 Provider，
+        优先使用任务级指定的 video_provider_id，否则使用全局默认。
+
         Args:
             video_id: 视频ID。
             storyboard: 分镜脚本。
             scene_prompts: 场景提示词列表。
             width: 宽度。
             height: 高度。
-            state: 当前 AgentState（用于获取 tenant_id）。
+            state: 当前 AgentState（用于获取 tenant_id 和 provider_id）。
             session: 可选的 AsyncSession（用于写 DB）。
 
         Returns:
             生成的视频。
         """
-        # 解析 tenant_id
+        # 解析 tenant_id 和 provider_id
         tenant_id = "system"
+        video_provider_id: int | None = None
         if state is not None:
             tenant_id = self._resolve_tenant_id(state)
+            video_provider_id = getattr(state, "video_provider_id", None)
+
+        # 通过 ProviderFactory 动态获取视频 Provider
+        video_provider: VideoProviderProtocol | None = None
+        try:
+            from src.clients.provider_factory import ProviderFactory
+
+            video_provider = await ProviderFactory.get_video_provider(
+                session=session,
+                tenant_id=tenant_id,
+                provider_id=video_provider_id,
+            )
+        except Exception as exc:
+            logger.warning("ProviderFactory 获取视频 Provider 失败: %s", exc)
 
         # Kling 模型时长上限保护：超过则裁剪并打 info 日志
         duration = float(storyboard.total_duration)
         if duration > 10.0:
             logger.info(
-                "provider=kling 视频时长 %.1fs 超过模型上限，裁剪为 10.0s", duration
+                "视频时长 %.1fs 超过模型上限，裁剪为 10.0s", duration
             )
             duration = 10.0
 
-        # 真实路径：调用 Kling 可灵 AI
-        if self._video_client is not None:
+        # 真实路径：调用视频生成 Provider
+        if video_provider is not None and video_provider.is_available():
             try:
                 visual_prompt = self._build_video_prompt(scene_prompts)
-                result = await self._video_client.generate(
+                result = await video_provider.generate(
                     prompt=visual_prompt,
                     image=None,
                     duration=duration,
@@ -437,7 +455,8 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
                     video_id,
                     "video/mp4",
                 )
-                model_name = self.settings.video_model
+                # 从 Provider 获取模型名
+                model_name = getattr(video_provider, "_model", "") or self.settings.video_model
                 if session is not None:
                     await self._create_asset_po(
                         session=session,
@@ -479,21 +498,21 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
                 )
                 return video
             except ProviderUnavailableError as exc:
-                logger.error("provider=kling 真实视频生成失败: %s", exc)
+                logger.error("视频生成 Provider 失败: %s", exc)
                 if not self.settings.allow_mock_assets:
                     raise
         else:
             logger.warning(
-                "provider=kling 未配置 API Key，回退 mock 占位行为 "
+                "视频生成 Provider 不可用，回退 mock 占位行为 "
                 "(tenant=%s, allow_mock_assets=%s)",
                 tenant_id,
                 self.settings.allow_mock_assets,
             )
             if not self.settings.allow_mock_assets:
                 raise ProviderUnavailableError(
-                    "真实视频生成 Provider 不可用（未配置可灵 API Key），"
+                    "真实视频生成 Provider 不可用，"
                     "且 mock 占位已禁用 (ALLOW_MOCK_ASSETS=false)。"
-                    "请配置 API Key，或在本地/开发环境显式开启 mock。"
+                    "请在模型厂商管理页面配置，或设置可灵 API Key 环境变量。"
                 )
 
         # 降级 / Mock 占位路径（与无 key 的 CI / 本地行为逐字节一致）
