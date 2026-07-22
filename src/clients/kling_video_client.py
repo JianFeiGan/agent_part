@@ -89,6 +89,8 @@ class KlingVideoClient:
         httpx_client: httpx.AsyncClient | None = None,
         poll_interval: float = 5.0,
         poll_timeout: float = 300.0,
+        access_key: str | None = None,
+        secret_key: str | None = None,
     ) -> None:
         """初始化视频客户端。
 
@@ -98,19 +100,22 @@ class KlingVideoClient:
             httpx_client: 可注入的 httpx 异步客户端；为 None 时懒创建。
             poll_interval: 初始轮询间隔（秒）。
             poll_timeout: 轮询总超时（秒）。
+            access_key: 可灵 Access Key（优先于 settings 读取）。
+            secret_key: 可灵 Secret Key（优先于 settings 读取）。
         """
         self._settings = settings or get_settings()
         self._base_url = base_url.rstrip("/")
         self._httpx = httpx_client
         self._poll_interval = poll_interval
         self._poll_timeout = poll_timeout
-        self._access_key = self._settings.kling_access_key
-        self._secret_key = self._settings.kling_secret_key
+        # 优先使用直接传入的凭据，否则从 settings 读取
+        self._access_key = access_key or self._settings.kling_access_key
+        self._secret_key = secret_key or self._settings.kling_secret_key
         self._token_cache: tuple[str, float] | None = None
 
     def is_available(self) -> bool:
         """是否已配置 Kling Access / Secret Key。"""
-        return is_video_provider_configured(self._settings)
+        return bool(self._access_key) and bool(self._secret_key)
 
     async def generate(
         self,

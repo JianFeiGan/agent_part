@@ -2,9 +2,12 @@
 Provider 客户端包。
 
 提供真实图片 / 视频生成 provider 的客户端封装与工厂函数：
-- ``DashScopeImageClient``：通义万象（wanx-v1）图片生成。
+- ``DashScopeImageClient``：通义万象（wanx-v1）图片生成（纯 HTTP）。
 - ``KlingVideoClient``：可灵 AI（kling-v1）视频生成。
-- ``get_image_client`` / ``get_video_client``：读配置创建客户端，未配置则返回 None 表示降级。
+- ``OpenAICompatibleLLMProvider``：OpenAI 兼容 LLM Provider。
+- ``OpenAICompatibleImageProvider``：OpenAI 兼容图片生成 Provider。
+- ``ProviderFactory``：DB 驱动的 Provider 工厂。
+- ``get_image_client`` / ``get_video_client``：向后兼容工厂函数（委托 ProviderFactory）。
 """
 
 from __future__ import annotations
@@ -13,6 +16,8 @@ from typing import TYPE_CHECKING
 
 from src.clients.dashscope_image_client import DashScopeImageClient
 from src.clients.kling_video_client import KLING_API_BASE, KlingVideoClient
+from src.clients.openai_compatible_image import OpenAICompatibleImageProvider
+from src.clients.openai_compatible_llm import OpenAICompatibleLLMProvider, SettingsFallbackLLMProvider
 from src.clients.provider_result import (
     ImageGenerationResult,
     ProviderUnavailableError,
@@ -29,6 +34,10 @@ if TYPE_CHECKING:
 __all__ = [
     "DashScopeImageClient",
     "KlingVideoClient",
+    "OpenAICompatibleLLMProvider",
+    "OpenAICompatibleImageProvider",
+    "SettingsFallbackLLMProvider",
+    "ProviderFactory",
     "ImageGenerationResult",
     "SingleImageResult",
     "VideoGenerationResult",
@@ -39,12 +48,22 @@ __all__ = [
     "get_video_client",
 ]
 
+# 延迟导入 ProviderFactory，避免循环依赖
+def __getattr__(name: str) -> object:
+    """延迟导入 ProviderFactory。"""
+    if name == "ProviderFactory":
+        from src.clients.provider_factory import ProviderFactory
+        return ProviderFactory
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 def get_image_client(
     settings: Settings | None = None,
     httpx_client: httpx.AsyncClient | None = None,
 ) -> DashScopeImageClient | None:
     """创建图片客户端；未配置 DashScope API Key 时返回 None（降级）。
+
+    向后兼容函数，新版请使用 ProviderFactory.get_image_provider()。
 
     Args:
         settings: 应用配置，默认从 ``get_settings()`` 读取。
@@ -54,7 +73,11 @@ def get_image_client(
         已配置的 ``DashScopeImageClient`` 实例，未配置时返回 None。
     """
     client_settings = settings or get_settings()
-    client = DashScopeImageClient(settings=client_settings, httpx_client=httpx_client)
+    client = DashScopeImageClient(
+        api_key=client_settings.dashscope_api_key,
+        model=client_settings.image_model,
+        httpx_client=httpx_client,
+    )
     if client.is_available():
         return client
     return None
@@ -66,6 +89,8 @@ def get_video_client(
     httpx_client: httpx.AsyncClient | None = None,
 ) -> KlingVideoClient | None:
     """创建视频客户端；未配置 Kling Key 时返回 None（降级）。
+
+    向后兼容函数，新版请使用 ProviderFactory.get_video_provider()。
 
     Args:
         settings: 应用配置，默认从 ``get_settings()`` 读取。

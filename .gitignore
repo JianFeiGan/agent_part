@@ -221,3 +221,5 @@ knowledge/
 migrations/
 .flow/
 .claude/
+output/
+.DS_Store

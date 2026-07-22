@@ -71,6 +71,11 @@ class TaskCreateRequest(BaseModel):
     # 质量配置
     quality_level: str = Field(default="standard", description="质量等级")
 
+    # 模型厂商指定（空则使用全局默认厂商）
+    llm_provider_id: int | None = Field(default=None, description="LLM 厂商 ID（空则用默认）")
+    image_provider_id: int | None = Field(default=None, description="图片厂商 ID（空则用默认）")
+    video_provider_id: int | None = Field(default=None, description="视频厂商 ID（空则用默认）")
+
     model_config = {
         "json_schema_extra": {
             "examples": [
@@ -84,6 +89,9 @@ class TaskCreateRequest(BaseModel):
                     "style_preference": "简约现代",
                     "color_preference": "蓝色系",
                     "quality_level": "standard",
+                    "llm_provider_id": None,
+                    "image_provider_id": None,
+                    "video_provider_id": None,
                 }
             ]
         }

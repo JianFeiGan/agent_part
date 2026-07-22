@@ -124,6 +124,16 @@ const routes: RouteRecordRaw[] = [
           title: '适配器配置',
           icon: 'Setting'
         }
+      },
+      // 模型厂商管理
+      {
+        path: 'providers',
+        name: 'ModelProviders',
+        component: () => import('@/views/providers/index.vue'),
+        meta: {
+          title: '模型厂商',
+          icon: 'Cpu'
+        }
       }
     ]
   }
