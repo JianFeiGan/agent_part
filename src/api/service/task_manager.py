@@ -10,14 +10,19 @@ Description:
 
 import asyncio
 import contextlib
+import logging
 from typing import Any
 from uuid import uuid4
 
 from src.api.schema.task import TaskStatus, TaskType
+from src.api.service.asset_persister import AssetPersister
 from src.api.service.redis_client import RedisClient, get_redis
+from src.db.postgres import get_db_session
 from src.graph.state import AgentState, GenerationRequest, create_initial_state
 from src.graph.workflow import ProductVisualWorkflow
 from src.models.product import Product
+
+logger = logging.getLogger(__name__)
 
 # 工作流步骤配置
 WORKFLOW_STEPS = [
@@ -213,6 +218,25 @@ class TaskManager:
 
             # 保存最终状态
             await redis.save_task_state(task_id, result, tenant_id=tenant_id)
+
+            # 将生成产物落库到 generated_assets，供刊登工作流复用
+            if not result.has_error() and result.product_info:
+                product_id = result.product_info.product_id or ""
+                if product_id and result.generated_images:
+                    try:
+                        async with get_db_session() as session:
+                            persister = AssetPersister(session=session)
+                            persisted = await persister.persist_images(
+                                tenant_id=tenant_id,
+                                product_id=product_id,
+                                task_id=task_id,
+                                images=result.generated_images,
+                            )
+                            logger.info(
+                                f"任务 {task_id} 产物落库: {persisted} 张图片"
+                            )
+                    except Exception as e:
+                        logger.error(f"任务 {task_id} 产物落库失败: {e}")
 
             # 更新任务状态为完成
             if result.has_error():

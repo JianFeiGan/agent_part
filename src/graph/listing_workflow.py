@@ -17,10 +17,12 @@ from typing import Any
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
+from src.agents.listing_asset_loader import ListingAssetLoader
 from src.agents.listing_asset_optimizer import AssetOptimizerAgent
 from src.agents.listing_compliance_checker import ComplianceCheckerAgent
 from src.agents.listing_copywriter import AICopywritingAgent
 from src.agents.listing_push_service import ListingPushService
+from src.db.postgres import get_db_session
 from src.graph.listing_state import ListingState
 from src.models.listing import ListingProduct, ListingTask, Platform, TaskStatus
 
@@ -59,10 +61,33 @@ class ListingWorkflow:
         self._builder.add_edge("platform_push", END)
 
     async def _import_node(self, state: ListingState) -> dict:
-        """商品导入节点。"""
-        if state.product:
-            return {"product": state.product}
-        return {"error": "No product provided"}
+        """商品导入节点。
+
+        若商品 attributes 中包含 source_product_id，从 generated_assets
+        表拉取 AI 生成图片填充到 source_images，实现视觉生成产物的复用。
+        """
+        if not state.product:
+            return {"error": "No product provided"}
+
+        product = state.product
+        source_product_id = product.attributes.get("source_product_id")
+        if source_product_id and not product.source_images:
+            try:
+                async with get_db_session() as session:
+                    loader = ListingAssetLoader(session=session)
+                    image_refs = await loader.load_images(
+                        tenant_id=state.tenant_id,
+                        product_id=source_product_id,
+                    )
+                if image_refs:
+                    product.source_images = image_refs
+                    logger.info(
+                        f"商品 {product.sku} 加载 {len(image_refs)} 张 AI 生成图"
+                    )
+            except Exception as e:
+                logger.error(f"加载 AI 生成图失败: {e}")
+
+        return {"product": product}
 
     async def _asset_optimize_node(self, state: ListingState) -> dict:
         """素材优化节点：调用 AssetOptimizerAgent。"""
