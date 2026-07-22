@@ -125,6 +125,7 @@ class BaseAgent(ABC, Generic[StateT]):
         self._session_id = session_id
         self._tools: list[Any] = []
         self._prompts: dict[str, ChatPromptTemplate] = {}
+        self._last_trace: dict[str, Any] | None = None
 
     @property
     def llm(self) -> BaseChatModel:
@@ -286,7 +287,9 @@ class BaseAgent(ABC, Generic[StateT]):
         input_vars: dict[str, Any],
         **kwargs: Any,
     ) -> str:
-        """调用LLM生成响应，并自动记录会话信息。
+        """调用LLM生成响应，并自动记录会话信息和 Trace 数据。
+
+        Trace 数据会存储到 self._last_trace 中，供 Agent 节点回写到 AgentLog。
 
         Args:
             prompt: 提示模板。
@@ -304,6 +307,13 @@ class BaseAgent(ABC, Generic[StateT]):
         # 获取模型名称
         model_name = getattr(self.llm, "model_name", getattr(self.llm, "model", "unknown"))
 
+        # 提取提示词模板文本
+        prompt_text = ""
+        try:
+            prompt_text = prompt.format(**{k: f"{{{k}}}" for k in input_vars.keys()})
+        except Exception:
+            prompt_text = str(prompt)
+
         async with ConversationRecorder(
             tenant_id=self._tenant_id,
             task_id=self._task_id,
@@ -316,6 +326,26 @@ class BaseAgent(ABC, Generic[StateT]):
             chain = prompt | self.llm
             response = await chain.ainvoke(input_vars, **kwargs)
             recorder.set_response(response)
+
+            # 保存 Trace 数据，供 Agent 节点回写到 AgentLog
+            self._last_trace = {
+                "prompt_template": prompt_text[:5000],
+                "prompt_variables": {k: str(v)[:500] for k, v in input_vars.items()},
+                "input_tokens": recorder._input_tokens,
+                "output_tokens": recorder._output_tokens,
+                "total_tokens": recorder._input_tokens + recorder._output_tokens,
+                "cost_cny": 0.0,
+                "model_name": model_name,
+                "provider": self.settings.llm_provider,
+                "latency_ms": int((recorder._start_time and __import__("time").monotonic() - recorder._start_time) * 1000) if recorder._start_time else None,
+            }
+            # 计算费用
+            from src.api.service.conversation_recorder import _calculate_cost
+            cost_usd, cost_cny = _calculate_cost(
+                model_name, recorder._input_tokens, recorder._output_tokens
+            )
+            self._last_trace["cost_cny"] = round(cost_cny, 4)
+
             return response.content if hasattr(response, "content") else str(response)
 
     def __repr__(self) -> str:
