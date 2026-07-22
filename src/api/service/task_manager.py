@@ -74,7 +74,7 @@ class TaskManager:
 
         Args:
             product_id: 商品 ID。
-            request_data: 任务配置数据。
+            request_data: 任务配置数据（含 provider_id 字段）。
             redis: Redis 客户端。
             tenant_id: 租户 ID。
 
@@ -100,6 +100,13 @@ class TaskManager:
             quality_level=request_data.get("quality_level", "standard"),
         )
 
+        # 提取任务级 provider_id
+        provider_ids = {
+            "llm_provider_id": request_data.get("llm_provider_id"),
+            "image_provider_id": request_data.get("image_provider_id"),
+            "video_provider_id": request_data.get("video_provider_id"),
+        }
+
         # 在 Redis 中创建任务记录
         await redis.create_task(task_id, product_id, generation_request, tenant_id=tenant_id)
 
@@ -110,7 +117,9 @@ class TaskManager:
 
         # 启动后台任务执行工作流
         task = asyncio.create_task(
-            self._execute_workflow(task_id, product, generation_request, tenant_id=tenant_id)
+            self._execute_workflow(
+                task_id, product, generation_request, tenant_id=tenant_id, **provider_ids
+            )
         )
         self._running_tasks[task_id] = task
 
@@ -123,6 +132,9 @@ class TaskManager:
         request: GenerationRequest,
         *,
         tenant_id: str,
+        llm_provider_id: int | None = None,
+        image_provider_id: int | None = None,
+        video_provider_id: int | None = None,
     ) -> None:
         """执行工作流（后台任务）。
 
@@ -131,6 +143,9 @@ class TaskManager:
             product: 商品信息。
             request: 生成请求。
             tenant_id: 租户 ID。
+            llm_provider_id: 任务级指定的 LLM 厂商 ID。
+            image_provider_id: 任务级指定的图片厂商 ID。
+            video_provider_id: 任务级指定的视频厂商 ID。
         """
         redis = await get_redis()
 
@@ -161,7 +176,14 @@ class TaskManager:
                 await redis.save_task_state(task_id, state, tenant_id=tenant_id)
 
             # 执行工作流
-            result = await workflow.run(product, request, thread_id=task_id)
+            result = await workflow.run(
+                product,
+                request,
+                thread_id=task_id,
+                llm_provider_id=llm_provider_id,
+                image_provider_id=image_provider_id,
+                video_provider_id=video_provider_id,
+            )
 
             # 触发进度回调
             await progress_callback(result)

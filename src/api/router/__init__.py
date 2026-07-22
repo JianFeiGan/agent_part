@@ -18,6 +18,7 @@ from src.api.router.health import router as health_router
 from src.api.router.knowledge import router as knowledge_router
 from src.api.router.listing import router as listing_router
 from src.api.router.listing_push import router as listing_push_router
+from src.api.router.model_providers import router as model_providers_router
 from src.api.router.products import router as products_router
 from src.api.router.tasks import router as tasks_router
 
@@ -35,6 +36,7 @@ api_router.include_router(listing_push_router, prefix="/listing", tags=["刊登�
 api_router.include_router(adapter_config_router, prefix="/listing", tags=["适配器配置"])
 api_router.include_router(dashboard_router, prefix="/dashboard", tags=["仪表盘"])
 api_router.include_router(assets_router, prefix="/assets", tags=["资产管理"])
+api_router.include_router(model_providers_router, prefix="/model-providers", tags=["模型厂商"])
 
 __all__ = [
     "api_router",
@@ -46,4 +48,5 @@ __all__ = [
     "listing_router",
     "dashboard_router",
     "assets_router",
+    "model_providers_router",
 ]

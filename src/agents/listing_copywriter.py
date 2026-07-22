@@ -53,27 +53,28 @@ class AICopywritingAgent:
         self._llm: BaseChatModel | None = None
         self._current_provider: LLMProvider = LLMProvider.TONGYI
 
-    def _create_llm(self, provider: LLMProvider) -> BaseChatModel:
-        """创建指定 LLM 实例。"""
-        if provider == LLMProvider.TONGYI:
-            from langchain_community.chat_models import ChatTongyi
+    def _create_llm(self, provider: LLMProvider | None = None) -> BaseChatModel:
+        """创建指定 LLM 实例（配置驱动）。
 
-            return ChatTongyi(
-                model=self._settings.llm_model,
-                dashscope_api_key=self._settings.dashscope_api_key,
-                temperature=0.7,
-                request_timeout=10,
-            )
-        elif provider == LLMProvider.CLAUDE:
-            from langchain_anthropic import ChatAnthropic
+        通过 SettingsFallbackLLMProvider 获取 LLM，
+        不再硬编码 ChatTongyi / ChatAnthropic。
 
-            return ChatAnthropic(
-                model="claude-sonnet-4-20250514",
-                temperature=0.7,
-                timeout=10,
-            )
-        else:
-            raise ValueError(f"Unknown LLM provider: {provider}")
+        Args:
+            provider: LLM 提供商（当前仅用于兼容旧枚举，实际走统一 Provider）。
+
+        Returns:
+            LangChain BaseChatModel 实例。
+
+        Raises:
+            ValueError: 未配置任何 LLM Provider 时抛出。
+        """
+        from src.clients.openai_compatible_llm import SettingsFallbackLLMProvider
+
+        fallback = SettingsFallbackLLMProvider(settings=self._settings)
+        if fallback.is_available():
+            return fallback.create_chat_model()
+
+        raise ValueError("未配置任何 LLM Provider，请设置 DASHSCOPE_API_KEY 或 SENSENOVA_API_KEY")
 
     @property
     def llm(self) -> BaseChatModel:

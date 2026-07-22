@@ -84,6 +84,11 @@
           <template #title>适配器配置</template>
         </el-menu-item>
       </el-sub-menu>
+
+      <el-menu-item index="/providers">
+        <el-icon><Cpu /></el-icon>
+        <template #title>模型厂商</template>
+      </el-menu-item>
     </el-menu>
   </div>
 </template>

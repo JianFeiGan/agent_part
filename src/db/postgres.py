@@ -133,6 +133,9 @@ async def init_db() -> None:
         _db_manager = DatabaseManager()
         await _db_manager.init()
 
+        # 确保所有 ORM 模型被注册到 Base.metadata
+        import src.db.models  # noqa: F401
+
         # 创建表
         async with _db_manager.get_engine().begin() as conn:
             await conn.run_sync(Base.metadata.create_all)

@@ -209,6 +209,11 @@ class AgentState(BaseModel):
     rag_context: str | None = Field(default=None, description="RAG 检索上下文")
     rag_enabled: bool = Field(default=True, description="是否启用 RAG 增强")
 
+    # ==================== 模型厂商指定 ====================
+    llm_provider_id: int | None = Field(default=None, description="LLM 厂商 ID（空则用默认）")
+    image_provider_id: int | None = Field(default=None, description="图片厂商 ID（空则用默认）")
+    video_provider_id: int | None = Field(default=None, description="视频厂商 ID（空则用默认）")
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def mark_step_completed(self, step: str) -> None:
@@ -258,12 +263,19 @@ class AgentState(BaseModel):
 def create_initial_state(
     product: Product,
     request: GenerationRequest | None = None,
+    *,
+    llm_provider_id: int | None = None,
+    image_provider_id: int | None = None,
+    video_provider_id: int | None = None,
 ) -> AgentState:
     """创建初始状态。
 
     Args:
         product: 商品信息。
         request: 生成请求，可选。
+        llm_provider_id: 任务级指定的 LLM 厂商 ID。
+        image_provider_id: 任务级指定的图片厂商 ID。
+        video_provider_id: 任务级指定的视频厂商 ID。
 
     Returns:
         初始化的Agent状态。
@@ -272,4 +284,7 @@ def create_initial_state(
         product_info=product,
         generation_request=request or GenerationRequest(),
         current_step="init",
+        llm_provider_id=llm_provider_id,
+        image_provider_id=image_provider_id,
+        video_provider_id=video_provider_id,
     )

@@ -176,24 +176,27 @@ class BaseAgent(ABC, Generic[StateT]):
         return []
 
     def _create_llm(self) -> BaseChatModel:
-        """创建LLM实例。
+        """创建LLM实例（配置驱动）。
 
-        子类可重写此方法以使用不同的LLM。
+        通过 ProviderFactory 获取 LLM Provider，优先"优"先从数据库配置，
+        兜底使用 Settings 环境变量。不再硬编码 ChatTongyi。
 
         Returns:
             语言模型实例。
-        """
-        # 默认使用通义千问
-        try:
-            from langchain_community.chat_models import ChatTongyi
 
-            return ChatTongyi(
-                model=self.settings.llm_model,
-                dashscope_api_key=self.settings.dashscope_api_key,
-                temperature=0.7,
-            )
-        except ImportError:
-            raise ImportError("请安装 langchain-community: pip install langchain-community")
+        Raises:
+            ImportError: 未配置任何 LLM# Provider 时抛出。
+        """
+        from src.clients.openai_compatible_llm import SettingsFallbackLLMProvider
+
+        provider = SettingsFallbackLLMProvider(settings=self.settings)
+        if provider.is_available():
+            return provider.create_chat_model()
+
+        raise ImportError(
+            "未配置任何 LLM Provider。"
+            "请在模型厂商管理页面配置，或设置 DASHSCOPE_API_KEY / SENSENOVA_API_KEY 环境变量。"
+        )
 
     def register_tool(self, tool: Any) -> None:
         """注册工具。
