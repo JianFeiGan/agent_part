@@ -188,6 +188,9 @@ export interface TaskCreateRequest {
   style_preference?: string
   color_preference?: string
   quality_level?: string
+  llm_provider_id?: number | null
+  image_provider_id?: number | null
+  video_provider_id?: number | null
 }
 
 /**

@@ -1,23 +1,20 @@
-"""
-DashScope 通义万象图片生成客户端。
+"""DashScope 通义万象图片生成客户端（纯 HTTP 实现）。
 
-封装 ``dashscope.ImageSynthesis`` 的异步调用模式（async_call + wait），
-支持 wanx-v1、wan2.7-image-pro 等模型，使用 ``asyncio.to_thread``
-包裹以防止阻塞事件循环。
-
-设计要点：
-- ``dashscope`` 在方法内部懒加载导入，避免模块顶层副作用。
-- 使用 async_call + wait 模式，兼容所有万相系列模型。
-- ``httpx.AsyncClient`` 默认懒创建，构造时可注入以便测试替换。
-- API Key 使用 effective_dashscope_api_key，兼容百炼平台统一 Key。
+Description:
+    封装阿里云 DashScope wanx-v1 图片生成的异步流程，
+    使用 httpx 直接调用 REST API，不依赖 dashscope SDK。
+    支持同步生成和异步任务两种模式，自动适配。
+@author ganjianfei
+@version 1.0.0
+2026-07-22
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from http import HTTPStatus
-from typing import Any, Protocol, TypedDict, cast, runtime_checkable
+import time
+from typing import Any
 
 import httpx
 
@@ -25,34 +22,19 @@ from src.clients.provider_result import (
     ImageGenerationResult,
     ProviderUnavailableError,
     SingleImageResult,
-    is_image_provider_configured,
 )
 from src.config.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
-
-class _WanxOutputResult(TypedDict, total=False):
-    """单条图片结果（output.results 元素）。"""
-
-    url: str
-    seed: int
-
-
-class _WanxOutput(TypedDict):
-    """图片生成输出体。"""
-
-    results: list[_WanxOutputResult]
-
-
-@runtime_checkable
-class _WanxResponse(Protocol):
-    """收敛后的 DashScope 响应结构（等价于 SDK 返回对象的可访问属性）。"""
-
-    status_code: int
-    code: str
-    message: str
-    output: _WanxOutput
+# DashScope 图片生成 API 端点
+_DASHSCOPE_IMAGE_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+# DashScope 异步任务查询端点
+_DASHSCOPE_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}"
+# 轮询退避上限（秒）
+_MAX_POLL_INTERVAL = 10.0
+# 轮询总超时（秒）
+_POLL_TIMEOUT = 300.0
 
 
 # 支持同步 call 的模型列表（无需异步轮询）
@@ -68,29 +50,44 @@ _SUPPORTED_SIZES = {
 
 
 class DashScopeImageClient:
-    """DashScope 通义万象图片生成客户端。
+    """DashScope 通义万象（wanx-v1）图片生成客户端。
 
-    支持万相系列模型（wanx-v1, wan2.7-image-pro 等）。
-    自动选择同步/异步调用模式。
+    使用纯 HTTP REST 调用替代 dashscope SDK，
+    支持 DashScope 的同步和异步两种图片生成模式。
+
+    Example:
+        >>> client = DashScopeImageClient(api_key="sk-xxx", model="wanx-v1")
+        >>> result = await client.generate(prompt="一只可爱的猫咪")
     """
 
     def __init__(
         self,
-        settings: Settings | None = None,
+        api_key: str = "",
+        model: str = "wanx-v1",
+        base_url: str = "",
         httpx_client: httpx.AsyncClient | None = None,
+        settings: Settings | None = None,
     ) -> None:
         """初始化图片客户端。
 
         Args:
-            settings: 应用配置，默认从 ``get_settings()`` 读取。
+            api_key: DashScope API Key。
+            model: 图片生成模型名称。
+            base_url: API 基址（兼容旧接口，实际使用硬编码端点）。
             httpx_client: 可注入的 httpx 异步客户端；为 None 时懒创建。
+            settings: 应用配置（向后兼容）。
         """
-        self._settings = settings or get_settings()
+        if settings and not api_key:
+            api_key = settings.dashscope_api_key
+        if settings and model == "wanx-v1" and settings.image_model:
+            model = settings.image_model
+        self._api_key = api_key
+        self._model = model
         self._httpx = httpx_client
 
     def is_available(self) -> bool:
         """是否已配置 DashScope API Key。"""
-        return is_image_provider_configured(self._settings)
+        return bool(self._api_key)
 
     async def generate(
         self,
@@ -101,7 +98,7 @@ class DashScopeImageClient:
         n: int = 1,
         seed: int | None = None,
     ) -> ImageGenerationResult:
-        """生成图片并返回 ``ImageGenerationResult``。
+        """生成图片并返回 ImageGenerationResult。
 
         Args:
             prompt: 正向提示词。
@@ -119,20 +116,10 @@ class DashScopeImageClient:
         """
         client = self._httpx or httpx.AsyncClient()
         try:
-            response = await self._call_api(
-                prompt, negative_prompt, width, height, n, seed
+            result = await self._call_api(
+                client, prompt, negative_prompt, width, height, n, seed
             )
-            results = response.output.get("results", [])
-            if not results:
-                raise ProviderUnavailableError("DashScope 返回的图片列表为空")
-            images: list[SingleImageResult] = []
-            for item in results:
-                url = item["url"]
-                data = await self._download(client, url)
-                images.append(
-                    SingleImageResult(data=data, url=url, seed=item.get("seed"))
-                )
-            return ImageGenerationResult(images=images)
+            return result
         finally:
             if self._httpx is None:
                 await client.aclose()
@@ -165,20 +152,22 @@ class DashScopeImageClient:
 
     async def _call_api(
         self,
+        client: httpx.AsyncClient,
         prompt: str,
         negative_prompt: str | None,
         width: int,
         height: int,
         n: int,
         seed: int | None,
-    ) -> _WanxResponse:
-        """调用 DashScope 图片生成 API。
+    ) -> ImageGenerationResult:
+        """调用 DashScope REST API 生成图片。
 
-        根据模型类型自动选择同步/异步调用模式：
-        - wanx-v1 等旧模型使用同步 call
-        - wan2.7-image-pro 等新模型使用 async_call + wait
+        DashScope 图片生成支持同步和异步两种模式：
+        - 同步模式：设置 X-DashScope-Async=disable，直接返回结果
+        - 异步模式：返回 task_id，需轮询获取结果
 
         Args:
+            client: httpx 异步客户端。
             prompt: 正向提示词。
             negative_prompt: 负向提示词。
             width: 宽度。
@@ -187,66 +176,152 @@ class DashScopeImageClient:
             seed: 种子。
 
         Returns:
-            收敛为 ``_WanxResponse`` 的响应对象。
+            ImageGenerationResult。
 
         Raises:
-            ProviderUnavailableError: 调用失败或返回非 200 时抛出。
+            ProviderUnavailableError: 调用失败时抛出。
         """
-        from dashscope import ImageSynthesis
-
-        api_key = getattr(
-            self._settings,
-            "effective_dashscope_api_key",
-            None,
-        ) or getattr(self._settings, "dashscope_api_key", "") or getattr(self._settings, "qwen_api_key", "")
-        model = self._settings.image_model
-        size = self._normalize_size(width, height)
-
-        kwargs: dict[str, Any] = {
-            "api_key": api_key,
-            "model": model,
-            "prompt": prompt,
-            "n": n,
-            "size": size,
+        body: dict[str, Any] = {
+            "model": self._model,
+            "input": {
+                "prompt": prompt,
+            },
+            "parameters": {
+                "size": f"{width}*{height}",
+                "n": n,
+            },
         }
         if negative_prompt:
-            kwargs["negative_prompt"] = negative_prompt
+            body["input"]["negative_prompt"] = negative_prompt
         if seed is not None:
-            kwargs["seed"] = seed
+            body["parameters"]["seed"] = seed
 
-        logger.info(f"调用 DashScope 图片生成: model={model}, size={size}")
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            "X-DashScope-Async": "enable",  # 使用异步模式
+        }
 
-        # 根据模型选择调用模式
-        if model in _SYNC_MODELS:
-            raw = await asyncio.to_thread(ImageSynthesis.call, **kwargs)
-        else:
-            # 新模型使用异步调用 + 轮询等待
-            task = await asyncio.to_thread(ImageSynthesis.async_call, **kwargs)
-            raw = await asyncio.to_thread(ImageSynthesis.wait, task)
-
-        response = cast("_WanxResponse", raw)
-        if response.status_code != HTTPStatus.OK.value:
-            raise ProviderUnavailableError(
-                f"DashScope 图片生成失败: code={response.code}, message={response.message}"
+        try:
+            resp = await client.post(
+                _DASHSCOPE_IMAGE_URL,
+                headers=headers,
+                json=body,
+                timeout=60.0,
             )
-        return response
+            resp.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise ProviderUnavailableError(
+                f"DashScope 图片生成提交失败: {exc}"
+            ) from exc
 
-    async def _download(self, client: httpx.AsyncClient, url: str) -> bytes:
-        """下载结果字节。
+        data = resp.json()
+
+        # 检查是否直接返回了结果（同步模式）
+        output = data.get("output", {})
+        if output.get("results"):
+            return self._parse_results(client, output["results"])
+
+        # 异步模式：获取 task_id 并轮询
+        task_id = output.get("task_id")
+        if not task_id:
+            # 也可能在 data.task_status 中
+            task_id = data.get("task_id") or data.get("output", {}).get("task_id")
+
+        if task_id:
+            return await self._poll_task(client, task_id)
+
+        raise ProviderUnavailableError(
+            f"DashScope 图片生成未返回结果或 task_id: {data}"
+        )
+
+    async def _poll_task(
+        self, client: httpx.AsyncClient, task_id: str
+    ) -> ImageGenerationResult:
+        """轮询异步任务状态直到成功或失败。
 
         Args:
             client: httpx 异步客户端。
-            url: 远端图片 URL。
+            task_id: 异步任务 ID。
 
         Returns:
-            图片字节。
+            ImageGenerationResult。
+
+        Raises:
+            ProviderUnavailableError: 任务失败或超时时抛出。
+        """
+        url = _DASHSCOPE_TASK_URL.format(task_id=task_id)
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+        start = time.time()
+        interval = 2.0
+
+        while True:
+            try:
+                resp = await client.get(url, headers=headers, timeout=30.0)
+                resp.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise ProviderUnavailableError(
+                    f"DashScope 任务查询失败: {exc}"
+                ) from exc
+
+            data = resp.json()
+            output = data.get("output", {})
+            status = output.get("task_status", "")
+
+            if status == "SUCCEEDED":
+                results = output.get("results", [])
+                if not results:
+                    raise ProviderUnavailableError("DashScope 任务成功但返回空图片列表")
+                return await self._parse_results(client, results)
+
+            if status == "FAILED":
+                msg = output.get("message", "未知错误")
+                code = output.get("code", "")
+                raise ProviderUnavailableError(
+                    f"DashScope 图片生成任务失败: code={code}, message={msg}"
+                )
+
+            if time.time() - start > _POLL_TIMEOUT:
+                raise ProviderUnavailableError(
+                    f"DashScope 任务 {task_id} 轮询超时（{_POLL_TIMEOUT}s）"
+                )
+
+            remaining = max(0.0, _POLL_TIMEOUT - (time.time() - start))
+            await asyncio.sleep(min(interval, remaining))
+            interval = min(interval * 1.5, _MAX_POLL_INTERVAL)
+
+    async def _parse_results(
+        self, client: httpx.AsyncClient, results: list[dict[str, Any]]
+    ) -> ImageGenerationResult:
+        """解析图片生成结果并下载图片字节。
+
+        Args:
+            client: httpx 异步客户端。
+            results: DashScope 返回的图片结果列表。
+
+        Returns:
+            ImageGenerationResult。
 
         Raises:
             ProviderUnavailableError: 下载失败时抛出。
         """
-        try:
-            resp = await client.get(url, timeout=60.0)
-            resp.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise ProviderUnavailableError(f"下载图片失败: {exc}") from exc
-        return resp.content
+        images: list[SingleImageResult] = []
+        for item in results:
+            url = item.get("url", "")
+            if not url:
+                continue
+            try:
+                img_resp = await client.get(url, timeout=60.0)
+                img_resp.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise ProviderUnavailableError(
+                    f"下载 DashScope 图片失败: {exc}"
+                ) from exc
+            images.append(
+                SingleImageResult(data=img_resp.content, url=url, seed=item.get("seed"))
+            )
+
+        if not images:
+            raise ProviderUnavailableError("DashScope 返回的图片列表为空或下载全部失败")
+
+        return ImageGenerationResult(images=images)

@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """应用生命周期管理。
 
-    启动时初始化 Redis 连接和数据库，关闭时清理资源。
+    启动时初始化 Redis 连接、数据库和 seed 模型厂商预置数据，关闭时清理资源。
     """
     # 启动时
     logger.info("正在启动应用...")
@@ -50,6 +50,19 @@ async def lifespan(app: FastAPI):
         logger.info("数据库初始化成功")
     except Exception as e:
         logger.warning(f"数据库初始化失败: {e}")
+
+    # Seed 模型厂商预置数据
+    try:
+        from src.db.postgres import get_db
+        from src.db.model_provider_seeder import seed_model_providers
+
+        async with get_db() as session:
+            # 为 system 租户 seed 预置厂商配置
+            await seed_model_providers(session, "system")
+            await session.commit()
+            logger.info("模型厂商预置数据 seed 完成")
+    except Exception as e:
+        logger.warning(f"模型厂商预置数据 seed 失败: {e}，可手动在前端配置")
 
     yield
 

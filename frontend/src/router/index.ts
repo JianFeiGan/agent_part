@@ -134,6 +134,16 @@ const routes: RouteRecordRaw[] = [
           title: 'AI 会话记录',
           icon: 'ChatDotRound'
         }
+      },
+      // 模型厂商管理
+      {
+        path: 'providers',
+        name: 'ModelProviders',
+        component: () => import('@/views/providers/index.vue'),
+        meta: {
+          title: '模型厂商',
+          icon: 'Cpu'
+        }
       }
     ]
   }

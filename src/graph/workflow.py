@@ -657,6 +657,10 @@ class ProductVisualWorkflow:
         product: Product,
         request: GenerationRequest | None = None,
         thread_id: str = "default",
+        *,
+        llm_provider_id: int | None = None,
+        image_provider_id: int | None = None,
+        video_provider_id: int | None = None,
     ) -> AgentState:
         """运行工作流。
 
@@ -664,11 +668,20 @@ class ProductVisualWorkflow:
             product: 商品信息。
             request: 生成请求。
             thread_id: 会话线程ID。
+            llm_provider_id: 任务级指定的 LLM 厂商 ID。
+            image_provider_id: 任务级指定的图片厂商 ID。
+            video_provider_id: 任务级指定的视频厂商 ID。
 
         Returns:
             最终状态。
         """
-        initial_state = create_initial_state(product, request)
+        initial_state = create_initial_state(
+            product,
+            request,
+            llm_provider_id=llm_provider_id,
+            image_provider_id=image_provider_id,
+            video_provider_id=video_provider_id,
+        )
         config = {"configurable": {"thread_id": thread_id}}
 
         result = await self.app.ainvoke(initial_state, config=config)

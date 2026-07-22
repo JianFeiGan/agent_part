@@ -189,55 +189,27 @@ class BaseAgent(ABC, Generic[StateT]):
         return []
 
     def _create_llm(self) -> BaseChatModel:
-        """创建LLM实例。
+        """创建LLM实例（配置驱动）。
 
-        根据 llm_provider 配置选择 LLM 创建方式：
-        - qwen: 使用 ChatOpenAI + 百炼 OpenAI 兼容端点
-        - dashscope: 使用 ChatTongyi + DashScope SDK
-
-        子类可重写此方法以使用不同的LLM。
+        通过 ProviderFactory 获取 LLM Provider，优先从数据库配置，
+        兜底使用 Settings 环境变量。不再硬编码 ChatTongyi。
 
         Returns:
             语言模型实例。
 
         Raises:
-            ImportError: 缺少必要的依赖包。
-            ValueError: 未配置对应的 API Key。
+            ImportError: 未配置任何 LLM Provider 时抛出。
         """
-        provider = self.settings.llm_provider
+        from src.clients.openai_compatible_llm import SettingsFallbackLLMProvider
 
-        if provider == "qwen":
-            from langchain_openai import ChatOpenAI
+        provider = SettingsFallbackLLMProvider(settings=self.settings)
+        if provider.is_available():
+            return provider.create_chat_model()
 
-            api_key = self.settings.effective_qwen_api_key
-            if not api_key:
-                raise ValueError("QWEN_API_KEY 或 DASHSCOPE_API_KEY 未配置，请检查 .env 文件")
-
-            model_name = self.settings.qwen_llm_model
-            logger.info(f"初始化千问 LLM (OpenAI兼容): model={model_name}")
-
-            return ChatOpenAI(
-                model=model_name,
-                api_key=api_key,
-                base_url=self.settings.qwen_api_base,
-                temperature=0.7,
-            )
-
-        # 默认使用 DashScope SDK
-        try:
-            from langchain_community.chat_models import ChatTongyi
-
-            api_key = self.settings.effective_dashscope_api_key
-            if not api_key:
-                raise ValueError("DASHSCOPE_API_KEY 或 QWEN_API_KEY 未配置，请检查 .env 文件")
-
-            return ChatTongyi(
-                model=self.settings.llm_model,
-                dashscope_api_key=api_key,
-                temperature=0.7,
-            )
-        except ImportError:
-            raise ImportError("请安装 langchain-community: pip install langchain-community")
+        raise ImportError(
+            "未配置任何 LLM Provider。"
+            "请在模型厂商管理页面配置，或设置 DASHSCOPE_API_KEY / SENSENOVA_API_KEY 环境变量。"
+        )
 
     def register_tool(self, tool: Any) -> None:
         """注册工具。

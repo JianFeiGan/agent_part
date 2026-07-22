@@ -224,9 +224,9 @@ migrations/
 .flow/
 .claude/
 .output/
-.output/
 .github/
 .codex/
 .trae/
 output/
 frontend/package-lock.json
+.DS_Store

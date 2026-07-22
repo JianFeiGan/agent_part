@@ -70,6 +70,8 @@ class ProviderUnavailableError(Exception):
 def is_image_provider_configured(settings: Settings) -> bool:
     """判断图片 provider（DashScope）是否已配置 API Key。
 
+    向后兼容函数。新版 Provider 配置存入数据库，
+    此函数仅用于无 DB 场景的环境变量兜底检查。
     百炼平台的 API Key 是统一的，检查 dashscope_api_key 或 qwen_api_key。
 
     Args:
@@ -90,6 +92,9 @@ def is_image_provider_configured(settings: Settings) -> bool:
 def is_video_provider_configured(settings: Settings) -> bool:
     """判断视频 provider（Kling）是否已配置 Access / Secret Key。
 
+    向后兼容函数。新版 Provider 配置存入数据库，
+    此函数仅用于无 DB 场景的环境变量兜底检查。
+
     Args:
         settings: 应用配置实例。
 
@@ -99,3 +104,23 @@ def is_video_provider_configured(settings: Settings) -> bool:
     access_key = getattr(settings, "kling_access_key", "")
     secret_key = getattr(settings, "kling_secret_key", "")
     return bool(access_key) and bool(secret_key)
+
+
+def get_api_key_value(api_key_field: dict | str | None) -> str:
+    """从 EncryptedJSONB 或字符串中提取 API Key 明文。
+
+    ModelProviderPO.api_key 字段使用 EncryptedJSONB 存储，
+    解密后为 {"key": "sk-xxx"} 或直接为字符串。
+    此函数统一提取明文 API Key。
+
+    Args:
+        api_key_field: EncryptedJSONB 解密后的 dict 或原始字符串。
+
+    Returns:
+        API Key 明文字符串。
+    """
+    if not api_key_field:
+        return ""
+    if isinstance(api_key_field, dict):
+        return str(api_key_field.get("key", ""))
+    return str(api_key_field)

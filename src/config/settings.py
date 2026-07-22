@@ -26,6 +26,10 @@ class Settings(BaseSettings):
 
     # ==================== API Keys ====================
     dashscope_api_key: str = Field(default="", description="阿里云 DashScope API Key")
+    sensenova_api_key: str = Field(default="", description="商汤科技 SenseNova API Key")
+    sensenova_base_url: str = Field(
+        default="https://token.sensenova.cn/v1", description="商汤科技 SenseNova API 基址"
+    )
     kling_access_key: str = Field(default="", description="可灵AI Access Key")
     kling_secret_key: str = Field(default="", description="可灵AI Secret Key")
 
@@ -167,8 +171,8 @@ class Settings(BaseSettings):
     image_rag_quality_threshold: float = Field(default=0.7, description="自动入库的质量评分阈值")
 
     # ==================== 模型配置 ====================
-    llm_model: str = Field(default="qwen-plus", description="LLM 模型名称")
-    image_model: str = Field(default="wanx-v1", description="图像生成模型")
+    llm_model: str = Field(default="deepseek-v4-flash", description="LLM 模型名称")
+    image_model: str = Field(default="sensenova-u1-fast", description="图像生成模型")
     video_model: str = Field(default="kling-v1", description="视频生成模型")
 
     # ==================== 占位资产降级配置 ====================
