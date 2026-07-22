@@ -23,6 +23,7 @@ from src.api.schema.listing import (
     ComplianceIssueResponse,
     ComplianceReportResponse,
     CreateListingTaskRequest,
+    FromVisualListingTaskRequest,
     ListingTaskResponse,
     ProductImportRequest,
     ProductResponse,
@@ -37,6 +38,8 @@ from src.db.listing_models import (
 from src.db.postgres import get_db, get_db_session
 from src.db.repository import BaseRepository
 from src.models.listing import ComplianceReport, ComplianceStatus, ListingProduct, Platform
+from src.models.listing_converter import product_to_listing
+from src.api.service.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +232,104 @@ async def create_task(
         data=ListingTaskResponse(
             task_id=task_po.id,
             product_sku=request.product_sku,
+            target_platforms=[p.value for p in request.target_platforms],
+            status="running",
+        ),
+    )
+
+
+@router.post(
+    "/tasks/from-visual",
+    response_model=ApiResponse[ListingTaskResponse],
+    status_code=status.HTTP_201_CREATED,
+    summary="基于视觉生成商品创建刊登任务（一键刊登）",
+)
+async def create_task_from_visual(
+    request: FromVisualListingTaskRequest,
+    auth: AuthContext = Depends(require_auth),
+) -> ApiResponse[ListingTaskResponse]:
+    """基于视觉生成商品创建刊登任务。
+
+    通过 product_id 从 Redis 获取视觉生成商品，转换为 ListingProduct
+    （attributes 记录 source_product_id），创建刊登任务并异步启动
+    ListingWorkflow。工作流导入节点会自动从 generated_assets 拉取
+    AI 生成图填充到 source_images。
+
+    Args:
+        request: 一键刊登请求。
+        auth: 认证上下文。
+
+    Returns:
+        创建的刊登任务信息。
+    """
+    redis = await get_redis()
+    product = await redis.get_product(request.product_id, tenant_id=auth.tenant_id)
+    if not product:
+        return ApiResponse(
+            code=404, message=f"视觉商品 {request.product_id} 不存在", data=None
+        )
+
+    listing_product = product_to_listing(product)
+
+    async with get_db_session() as session:
+        product_repo = BaseRepository(ListingProductPO, session)
+        try:
+            product_po = await product_repo.create(
+                tenant_id=auth.tenant_id,
+                sku=listing_product.sku,
+                title=listing_product.title,
+                description=listing_product.description,
+                category=listing_product.category,
+                brand=listing_product.brand,
+                source_images=[img.model_dump() for img in listing_product.source_images],
+                attributes=listing_product.attributes,
+            )
+        except Exception:
+            existing = await product_repo.get_by_field("sku", listing_product.sku)
+            if existing:
+                product_po = existing
+            else:
+                raise
+
+        task_repo = BaseRepository(ListingTaskPO, session)
+        task_po = await task_repo.create(
+            tenant_id=auth.tenant_id,
+            product_sku=listing_product.sku,
+            target_platforms=[p.value for p in request.target_platforms],
+            status="running",
+        )
+
+    import asyncio
+
+    from src.graph.listing_workflow import ListingWorkflow
+
+    workflow = ListingWorkflow()
+
+    async def _run_workflow() -> None:
+        """后台执行刊登工作流。"""
+        try:
+            await workflow.run(
+                product=listing_product,
+                target_platforms=request.target_platforms,
+                thread_id=f"listing_{task_po.id}",
+            )
+            async with get_db_session() as session:
+                task_repo = BaseRepository(ListingTaskPO, session)
+                await task_repo.update(task_po.id, status="completed")
+        except Exception as e:
+            logger.error(f"刊登任务 {task_po.id} 失败: {e}")
+            async with get_db_session() as session:
+                task_repo = BaseRepository(ListingTaskPO, session)
+                await task_repo.update(task_po.id, status="failed")
+
+    asyncio.create_task(_run_workflow())
+
+    return ApiResponse(
+        code=200,
+        message="一键刊登任务已创建，正在加载 AI 生成图并执行刊登流程",
+        data=ListingTaskResponse(
+            task_id=task_po.id,
+            product_sku=listing_product.sku,
             target_platforms=[p.value for p in request.target_platforms],
             status="running",
         ),
