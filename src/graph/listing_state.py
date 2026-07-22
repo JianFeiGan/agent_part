@@ -40,6 +40,7 @@ class ListingState(BaseModel):
     """
 
     product: ListingProduct | None = None
+    tenant_id: str = Field(default="", description="租户 ID")
     asset_packages: dict[Platform, AssetPackage] = Field(default_factory=dict)
     copywriting_packages: dict[Platform, CopywritingPackage] = Field(default_factory=dict)
     compliance_reports: dict[Platform, ComplianceReport] = Field(default_factory=dict)
