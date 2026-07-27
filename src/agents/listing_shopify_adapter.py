@@ -4,18 +4,24 @@ Shopify GraphQL 刊登适配器。
 Description:
     实现 Shopify Admin GraphQL API 的刊登推送。
     使用 API Key 认证 + GraphQL mutations。
-    Phase 3-5 使用 HTTP 请求模拟，后续可接入真实 Shopify SDK。
+    集成速率限制、重试策略和 GraphQL cost tracking。
 @author ganjianfei
-@version 1.0.0
-2026-04-25
+@version 2.0.0
+2026-07-14
 """
 
+import contextlib
 import logging
+import time
 from typing import Any
 
-import requests
-
-from src.agents.listing_platform_adapter import BasePlatformAdapter, PushResult
+from src.agents.listing_platform_adapter import BasePlatformAdapter, PushConfig, PushResult
+from src.agents.listing_rate_limiter import RateLimiter
+from src.agents.listing_retry import (
+    PermanentPushError,
+    RetryablePushError,
+    create_push_retry_decorator,
+)
 from src.models.listing import (
     AssetPackage,
     CopywritingPackage,
@@ -56,6 +62,12 @@ mutation productDelete($id: ID!) {
 }
 """
 
+SHOP_HEALTH_QUERY = """
+query {
+  shop { name }
+}
+"""
+
 
 class ShopifyAdapter(BasePlatformAdapter):
     """Shopify Admin GraphQL API 刊登适配器。
@@ -64,39 +76,64 @@ class ShopifyAdapter(BasePlatformAdapter):
     - API Key 认证（X-Shopify-Access-Token）
     - JSON 格式素材/文案转换
     - 刊登推送/更新/删除（productCreate / productUpdate / productDelete）
+    - GraphQL cost tracking
+    - 速率限制和重试策略
 
     Attributes:
         _config: 平台配置（shop_url, api_key, api_version 等）。
         _auth_token: API Key 访问令牌。
+        _rate_limiter: 速率限制器。
+        _retry_decorator: 重试装饰器。
+        _graphql_cost_remaining: GraphQL 操作剩余额度。
     """
 
-    def authenticate(self) -> str:
+    def __init__(
+        self,
+        config: dict[str, Any] | None = None,
+        push_config: PushConfig | None = None,
+    ) -> None:
+        """初始化 Shopify 适配器。
+
+        Args:
+            config: 平台配置。
+            push_config: 推送配置。
+        """
+        super().__init__(config=config, push_config=push_config)
+        self._rate_limiter = RateLimiter(rpm=self._push_config.rate_limit_rpm)
+        self._retry_decorator = create_push_retry_decorator(
+            max_retries=self._push_config.max_retries,
+            base_delay=self._push_config.retry_base_delay,
+        )
+        self._graphql_cost_remaining: float | None = None
+
+    async def authenticate(self) -> str:
         """执行 Shopify API Key 认证。
 
         Shopify 使用 API Key（shpat_xxx）作为访问令牌，无需 OAuth 交换。
 
         Returns:
             API Key 令牌字符串。
+
+        Raises:
+            PermanentPushError: API Key 未配置。
         """
         api_key = self._config.get("api_key", "")
         if not api_key:
-            error_msg = "Shopify authentication failed: api_key is not configured"
-            logger.error(error_msg)
-            raise RuntimeError(error_msg)
+            raise PermanentPushError("Shopify authentication failed: api_key is not configured")
 
         self._auth_token = api_key
         logger.info("Shopify API Key authentication successful")
         return self._auth_token
 
-    def transform_assets(
+    async def transform_assets(
         self,
-        product: ListingProduct,
+        _product: ListingProduct,
         asset_package: AssetPackage,
     ) -> dict[str, Any]:
         """将素材转换为 Shopify 要求的格式。
 
         Args:
-            product: 源商品。
+            _product: 源商品（Shopify 素材转换不使用此参数）。
             asset_package: 优化后的素材包。
 
         Returns:
@@ -112,7 +149,7 @@ class ShopifyAdapter(BasePlatformAdapter):
 
         return {"images": images}
 
-    def transform_copywriting(
+    async def transform_copywriting(
         self,
         copywriting: CopywritingPackage,
     ) -> dict[str, Any]:
@@ -140,7 +177,7 @@ class ShopifyAdapter(BasePlatformAdapter):
             "search_terms": copywriting.search_terms,
         }
 
-    def push_listing(
+    async def push_listing(
         self,
         product: ListingProduct,
         asset_package: AssetPackage,
@@ -159,29 +196,64 @@ class ShopifyAdapter(BasePlatformAdapter):
             推送结果。
         """
         try:
-            if not self._auth_token:
-                self.authenticate()
-
-            assets = self.transform_assets(product, asset_package)
-            copy = self.transform_copywriting(copywriting)
-
-            # 构建 product input
-            shopify_input = self._build_product_input(product, assets, copy)
-
-            response = self._execute_graphql(CREATE_PRODUCT_MUTATION, {"input": shopify_input})
-
-            return self._parse_product_response(response, "productCreate", Platform.SHOPIFY)
-
-        except Exception as e:
-            error_msg = f"Shopify push_listing error: {e}"
-            logger.exception(error_msg)
+            return await self._retry_decorator(self._do_push_listing)(
+                product, asset_package, copywriting, task
+            )
+        except RetryablePushError as e:
             return PushResult(
                 success=False,
                 platform=Platform.SHOPIFY,
-                error=error_msg,
+                error=str(e),
+                error_code="RETRY_EXHAUSTED",
+            )
+        except PermanentPushError as e:
+            return PushResult(
+                success=False,
+                platform=Platform.SHOPIFY,
+                error=str(e),
+                error_code="PERMANENT_ERROR",
             )
 
-    def update_listing(
+    async def _do_push_listing(
+        self,
+        product: ListingProduct,
+        asset_package: AssetPackage,
+        copywriting: CopywritingPackage,
+        _task: ListingTask,
+    ) -> PushResult:
+        """执行刊登推送（内部方法，被重试装饰器包装）。
+
+        Args:
+            product: 源商品。
+            asset_package: 优化后的素材。
+            copywriting: 优化后的文案。
+            _task: 刊登任务（Shopify 推送不使用此参数）。
+
+        Returns:
+            推送结果。
+
+        Raises:
+            RetryablePushError: 可重试错误。
+            PermanentPushError: 不可重试错误。
+        """
+        if not self._auth_token:
+            await self.authenticate()
+
+        assets = await self.transform_assets(product, asset_package)
+        copy = await self.transform_copywriting(copywriting)
+
+        # 构建 product input
+        shopify_input = self._build_product_input(product, assets, copy)
+
+        start_time = time.monotonic()
+        response = await self._execute_graphql(CREATE_PRODUCT_MUTATION, {"input": shopify_input})
+        latency_ms = (time.monotonic() - start_time) * 1000
+
+        return self._parse_product_response(
+            response, "productCreate", Platform.SHOPIFY, latency_ms=latency_ms
+        )
+
+    async def update_listing(
         self,
         listing_id: str,
         product: ListingProduct,
@@ -200,33 +272,67 @@ class ShopifyAdapter(BasePlatformAdapter):
             更新结果。
         """
         try:
-            if not self._auth_token:
-                self.authenticate()
-
-            assets = self.transform_assets(product, asset_package)
-            copy = self.transform_copywriting(copywriting)
-
-            shopify_input = self._build_product_input(product, assets, copy, product_id=listing_id)
-
-            response = self._execute_graphql(UPDATE_PRODUCT_MUTATION, {"input": shopify_input})
-
-            return self._parse_product_response(
-                response,
-                "productUpdate",
-                Platform.SHOPIFY,
-                existing_id=listing_id,
+            return await self._retry_decorator(self._do_update_listing)(
+                listing_id, product, asset_package, copywriting
             )
-
-        except Exception as e:
-            error_msg = f"Shopify update_listing error: {e}"
-            logger.exception(error_msg)
+        except RetryablePushError as e:
             return PushResult(
                 success=False,
                 platform=Platform.SHOPIFY,
-                error=error_msg,
+                error=str(e),
+                error_code="RETRY_EXHAUSTED",
+            )
+        except PermanentPushError as e:
+            return PushResult(
+                success=False,
+                platform=Platform.SHOPIFY,
+                error=str(e),
+                error_code="PERMANENT_ERROR",
             )
 
-    def delete_listing(self, listing_id: str) -> PushResult:
+    async def _do_update_listing(
+        self,
+        listing_id: str,
+        product: ListingProduct,
+        asset_package: AssetPackage,
+        copywriting: CopywritingPackage,
+    ) -> PushResult:
+        """执行刊登更新（内部方法，被重试装饰器包装）。
+
+        Args:
+            listing_id: 平台刊登ID（Shopify GID）。
+            product: 源商品。
+            asset_package: 优化后的素材。
+            copywriting: 优化后的文案。
+
+        Returns:
+            更新结果。
+
+        Raises:
+            RetryablePushError: 可重试错误。
+            PermanentPushError: 不可重试错误。
+        """
+        if not self._auth_token:
+            await self.authenticate()
+
+        assets = await self.transform_assets(product, asset_package)
+        copy = await self.transform_copywriting(copywriting)
+
+        shopify_input = self._build_product_input(product, assets, copy, product_id=listing_id)
+
+        start_time = time.monotonic()
+        response = await self._execute_graphql(UPDATE_PRODUCT_MUTATION, {"input": shopify_input})
+        latency_ms = (time.monotonic() - start_time) * 1000
+
+        return self._parse_product_response(
+            response,
+            "productUpdate",
+            Platform.SHOPIFY,
+            existing_id=listing_id,
+            latency_ms=latency_ms,
+        )
+
+    async def delete_listing(self, listing_id: str) -> PushResult:
         """删除 Shopify 已有刊登。
 
         Args:
@@ -236,40 +342,75 @@ class ShopifyAdapter(BasePlatformAdapter):
             删除结果。
         """
         try:
-            if not self._auth_token:
-                self.authenticate()
-
-            response = self._execute_graphql(DELETE_PRODUCT_MUTATION, {"id": listing_id})
-
-            data = response.get("data", {})
-            result_data = data.get("productDelete", {})
-            user_errors = result_data.get("userErrors", [])
-
-            if user_errors:
-                error_msg = "; ".join(err.get("message", "Unknown error") for err in user_errors)
-                logger.error(f"Shopify delete_listing failed: {error_msg}")
-                return PushResult(
-                    success=False,
-                    platform=Platform.SHOPIFY,
-                    error=error_msg,
-                    raw_response=response,
-                )
-
-            return PushResult(
-                success=True,
-                platform=Platform.SHOPIFY,
-                listing_id=listing_id,
-                raw_response=response,
-            )
-
-        except Exception as e:
-            error_msg = f"Shopify delete_listing error: {e}"
-            logger.exception(error_msg)
+            return await self._retry_decorator(self._do_delete_listing)(listing_id)
+        except RetryablePushError as e:
             return PushResult(
                 success=False,
                 platform=Platform.SHOPIFY,
-                error=error_msg,
+                error=str(e),
+                error_code="RETRY_EXHAUSTED",
             )
+        except PermanentPushError as e:
+            return PushResult(
+                success=False,
+                platform=Platform.SHOPIFY,
+                error=str(e),
+                error_code="PERMANENT_ERROR",
+            )
+
+    async def _do_delete_listing(self, listing_id: str) -> PushResult:
+        """执行刊登删除（内部方法，被重试装饰器包装）。
+
+        Args:
+            listing_id: 平台刊登ID（Shopify GID）。
+
+        Returns:
+            删除结果。
+
+        Raises:
+            RetryablePushError: 可重试错误。
+            PermanentPushError: 不可重试错误。
+        """
+        if not self._auth_token:
+            await self.authenticate()
+
+        start_time = time.monotonic()
+        response = await self._execute_graphql(DELETE_PRODUCT_MUTATION, {"id": listing_id})
+        latency_ms = (time.monotonic() - start_time) * 1000
+
+        data = response.get("data", {})
+        result_data = data.get("productDelete", {})
+        user_errors = result_data.get("userErrors", [])
+
+        if user_errors:
+            error_msg = "; ".join(err.get("message", "Unknown error") for err in user_errors)
+            raise PermanentPushError(f"Shopify delete_listing failed: {error_msg}")
+
+        return PushResult(
+            success=True,
+            platform=Platform.SHOPIFY,
+            listing_id=listing_id,
+            latency_ms=latency_ms,
+            raw_response=response,
+        )
+
+    async def health_check(self) -> bool:
+        """检查 Shopify API 健康状态。
+
+        执行 { shop { name } } 查询来验证连通性和认证。
+
+        Returns:
+            True 表示健康，False 表示不可用。
+        """
+        try:
+            if not self._auth_token:
+                await self.authenticate()
+
+            response = await self._execute_graphql(SHOP_HEALTH_QUERY)
+            shop_data = response.get("data", {}).get("shop", {})
+            return bool(shop_data.get("name"))
+        except Exception:
+            return False
 
     # ------------------------------------------------------------------
     # GraphQL 辅助方法
@@ -297,12 +438,14 @@ class ShopifyAdapter(BasePlatformAdapter):
             "X-Shopify-Access-Token": self._auth_token or "",
         }
 
-    def _execute_graphql(
+    async def _execute_graphql(
         self,
         query: str,
         variables: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """执行 GraphQL 请求。
+
+        使用速率限制器控制请求频率，并跟踪 GraphQL cost。
 
         Args:
             query: GraphQL 查询/mutation 字符串。
@@ -312,27 +455,60 @@ class ShopifyAdapter(BasePlatformAdapter):
             解析后的 JSON 响应。
 
         Raises:
-            RuntimeError: HTTP 请求失败时。
+            RetryablePushError: 429 限流或 5xx 服务端错误。
+            PermanentPushError: userErrors 导致的不可重试错误。
         """
+        await self._rate_limiter.acquire()
+
         payload: dict[str, Any] = {"query": query}
         if variables:
             payload["variables"] = variables
 
-        response = requests.post(
-            self.graphql_url,
-            json=payload,
-            headers=self._build_headers(),
-        )
-
-        if response.status_code != 200:
-            error_msg = (
-                f"Shopify GraphQL request failed: "
-                f"status={response.status_code}, body={response.text}"
+        try:
+            client = self._get_client()
+            response = await client.post(
+                self.graphql_url,
+                json=payload,
+                headers=self._build_headers(),
             )
-            logger.error(error_msg)
-            raise RuntimeError(error_msg)
 
-        return response.json()
+            # 更新 GraphQL cost tracking
+            cost_remaining = response.headers.get("X-Shopify-Shop-Api-Call-Limit")
+            if cost_remaining:
+                with contextlib.suppress(ValueError, IndexError):
+                    # 格式如 "32/40"，取当前值
+                    self._graphql_cost_remaining = float(cost_remaining.split("/")[1])
+
+            if response.status_code == 429:
+                raise RetryablePushError(
+                    f"Shopify GraphQL rate limited: status=429, body={response.text}"
+                )
+
+            if response.status_code >= 500:
+                raise RetryablePushError(
+                    f"Shopify GraphQL server error: status={response.status_code}, body={response.text}"
+                )
+
+            if response.status_code != 200:
+                raise PermanentPushError(
+                    f"Shopify GraphQL request failed: status={response.status_code}, body={response.text}"
+                )
+
+            result = response.json()
+
+            # 检查 GraphQL 层面的限流
+            extensions = result.get("extensions", {})
+            cost = extensions.get("cost", {})
+            throttle_status = cost.get("throttleStatus", {})
+            if throttle_status.get("currentlyAvailable", 1) <= 0:
+                raise RetryablePushError("Shopify GraphQL cost limit reached")
+
+            return result
+
+        except (RetryablePushError, PermanentPushError):
+            raise
+        except Exception as e:
+            raise RetryablePushError(f"Shopify GraphQL request error: {e}") from e
 
     def _build_product_input(
         self,
@@ -384,6 +560,7 @@ class ShopifyAdapter(BasePlatformAdapter):
         mutation_key: str,
         platform: Platform,
         existing_id: str | None = None,
+        latency_ms: float = 0.0,
     ) -> PushResult:
         """解析产品 mutation 响应。
 
@@ -392,9 +569,13 @@ class ShopifyAdapter(BasePlatformAdapter):
             mutation_key: mutation 结果键（productCreate/productUpdate）。
             platform: 平台枚举。
             existing_id: 已有 ID（更新时使用）。
+            latency_ms: 请求耗时。
 
         Returns:
             PushResult 推送结果。
+
+        Raises:
+            PermanentPushError: userErrors 导致的不可重试错误。
         """
         data = response.get("data", {})
         result_data = data.get(mutation_key, {})
@@ -403,13 +584,7 @@ class ShopifyAdapter(BasePlatformAdapter):
 
         if user_errors:
             error_msg = "; ".join(err.get("message", "Unknown error") for err in user_errors)
-            logger.error(f"Shopify {mutation_key} failed: {error_msg}")
-            return PushResult(
-                success=False,
-                platform=platform,
-                error=error_msg,
-                raw_response=response,
-            )
+            raise PermanentPushError(f"Shopify {mutation_key} failed: {error_msg}")
 
         shopify_id = product_data.get("id", existing_id)
         handle = product_data.get("handle", "")
@@ -421,6 +596,7 @@ class ShopifyAdapter(BasePlatformAdapter):
             platform=platform,
             listing_id=shopify_id,
             url=url,
+            latency_ms=latency_ms,
             raw_response=response,
         )
 

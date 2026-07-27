@@ -68,6 +68,13 @@ class CreateListingTaskRequest(BaseModel):
     target_platforms: list[Platform] = Field(..., min_length=1, description="目标平台")
 
 
+class FromVisualListingTaskRequest(BaseModel):
+    """基于视觉生成商品创建刊登任务请求。"""
+
+    product_id: str = Field(..., description="视觉生成商品的 product_id")
+    target_platforms: list[Platform] = Field(..., min_length=1, description="目标平台")
+
+
 class ListingTaskResponse(BaseModel):
     """刊登任务响应。"""
 

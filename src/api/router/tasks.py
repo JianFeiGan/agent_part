@@ -8,6 +8,8 @@ Description:
 2026-03-25
 """
 
+import contextlib
+
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 
 from src.api.deps import AuthDep, RedisDep
@@ -307,8 +309,9 @@ async def task_websocket(
 ) -> None:
     """任务状态实时推送 WebSocket。
 
-    WebSocket 鉴权在 accept 之前执行，鉴权失败关闭连接并返回。
-    Scope 不足时以 WS_1008_POLICY_VIOLATION 关闭连接。
+    支持两种事件格式：
+    1. 新格式（有 type 字段）：agent_status_change / agent_log_update / progress_update
+    2. 旧格式（兼容）：直接推送 status_data
 
     Args:
         websocket: WebSocket 连接。
@@ -333,32 +336,53 @@ async def task_websocket(
     redis = await get_redis_client()
     task_manager = get_task_manager()
 
+    # 订阅事件
+    task_manager.subscribe_ws(task_id, websocket)
+
     try:
+        # 发送初始状态（兼容旧格式）
+        try:
+            status_data = await task_manager.get_task_status(
+                task_id, redis, tenant_id=auth.tenant_id
+            )
+            await websocket.send_json(status_data)
+
+            # 发送当前所有 agent_logs 的状态（新格式）
+            detail = await task_manager.get_task_detail(task_id, redis, tenant_id=auth.tenant_id)
+            for log in detail.get("agent_logs", []):
+                await websocket.send_json({
+                    "type": "agent_status_change",
+                    "agent_name": log.get("step"),
+                    "status": log.get("status"),
+                })
+                if log.get("status") in ("completed", "failed"):
+                    await websocket.send_json({
+                        "type": "agent_log_update",
+                        "agent_log": log,
+                    })
+
+            # 如果任务已完成或失败，关闭连接
+            if status_data.get("status") in ["completed", "failed"]:
+                return
+
+        except ValueError:
+            await websocket.send_json({"error": "任务不存在"})
+            return
+
+        # 保持连接，等待事件广播
         while True:
-            # 获取任务状态
             try:
-                status_data = await task_manager.get_task_status(
-                    task_id, redis, tenant_id=auth.tenant_id
-                )
-                await websocket.send_json(status_data)
-
-                # 如果任务已完成或失败，关闭连接
-                if status_data.get("status") in ["completed", "failed"]:
-                    break
-
-            except ValueError:
-                await websocket.send_json({"error": "任务不存在"})
+                # 接收客户端消息（心跳等）
+                await websocket.receive_text()
+            except WebSocketDisconnect:
                 break
 
-            # 等待一段时间后再次查询
-            import asyncio
-
-            await asyncio.sleep(1)
-
-    except WebSocketDisconnect:
+    except Exception:
         pass
     finally:
-        await websocket.close()
+        task_manager.unsubscribe_ws(task_id, websocket)
+        with contextlib.suppress(Exception):
+            await websocket.close()
 
 
 async def get_redis_client() -> RedisClient:

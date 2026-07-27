@@ -142,6 +142,27 @@ def create_agent_log(agent_key: str, status: str = "running") -> AgentLog:
     )
 
 
+def _apply_trace_to_log(agent: Any, log: AgentLog) -> None:
+    """将 Agent 的 Trace 数据应用到日志。
+
+    Args:
+        agent: Agent 实例。
+        log: AgentLog 实例。
+    """
+    trace = getattr(agent, "_last_trace", None)
+    if not trace:
+        return
+    log.prompt_template = trace.get("prompt_template")
+    log.prompt_variables = trace.get("prompt_variables")
+    log.input_tokens = trace.get("input_tokens", 0)
+    log.output_tokens = trace.get("output_tokens", 0)
+    log.total_tokens = trace.get("total_tokens", 0)
+    log.cost_cny = trace.get("cost_cny", 0.0)
+    log.latency_ms = trace.get("latency_ms")
+    log.model_name = trace.get("model_name")
+    log.provider = trace.get("provider")
+
+
 class WorkflowBuilder:
     """工作流构建器。
 
@@ -258,6 +279,25 @@ class WorkflowBuilder:
 
         return QualityReviewerAgent()
 
+    def _create_image_generator(self) -> Any:
+        """创建图片生成 Agent。
+
+        根据 RAG 配置选择普通或 RAG 增强版本。
+
+        Returns:
+            Agent 实例。
+        """
+        if self._rag_enabled and self._retriever:
+            from src.agents.rag_image_generator import RAGEnhancedImageGenerator
+
+            return RAGEnhancedImageGenerator(
+                retriever=self._retriever,
+                session=self._session,
+            )
+        from src.agents.image_generator import ImageGeneratorAgent
+
+        return ImageGeneratorAgent()
+
     def add_agent_nodes(self) -> "WorkflowBuilder":
         """添加所有Agent节点。
 
@@ -265,7 +305,6 @@ class WorkflowBuilder:
             self，支持链式调用。
         """
         # 延迟导入以避免循环导入
-        from src.agents.image_generator import ImageGeneratorAgent
         from src.agents.orchestrator import OrchestratorAgent
         from src.agents.video_generator import VideoGeneratorAgent
         from src.agents.visual_designer import VisualDesignerAgent
@@ -275,7 +314,7 @@ class WorkflowBuilder:
         requirement_analyzer = self._create_requirement_analyzer()
         creative_planner = self._create_creative_planner()
         visual_designer = VisualDesignerAgent()
-        image_generator = ImageGeneratorAgent()
+        image_generator = self._create_image_generator()
         video_generator = VideoGeneratorAgent()
         quality_reviewer = self._create_quality_reviewer()
 
@@ -307,9 +346,11 @@ class WorkflowBuilder:
             start_log = create_agent_log("requirement_analyzer", "running")
 
             result = await requirement_analyzer.execute(state)
+            _apply_trace_to_log(requirement_analyzer, start_log)
 
             if not result.success:
                 start_log.mark_failed(result.error or "执行失败")
+                start_log.input_data = {"product_info": str(state.product_info)[:500]} if state.product_info else None
                 return {
                     "error": result.error,
                     "current_step": "requirement_analysis",
@@ -318,6 +359,11 @@ class WorkflowBuilder:
             start_log.mark_completed(
                 f"分析完成，发现 {len(result.data.get('selling_points', []))} 个卖点"
             )
+            start_log.input_data = {"product_info": str(state.product_info)[:500]} if state.product_info else None
+            start_log.output_data = {
+                "selling_points_count": len(result.data.get("selling_points", [])),
+                "key_features_count": len(result.data.get("requirement_report", {}).get("key_features", [])) if result.data.get("requirement_report") else 0,
+            }
             return {
                 "current_step": "requirement_analysis",
                 "requirement_report": result.data.get("requirement_report"),
@@ -331,6 +377,7 @@ class WorkflowBuilder:
             start_log = create_agent_log("creative_planner", "running")
 
             result = await creative_planner.execute(state)
+            _apply_trace_to_log(creative_planner, start_log)
 
             if not result.success:
                 start_log.mark_failed(result.error or "执行失败")
@@ -340,6 +387,7 @@ class WorkflowBuilder:
                     "agent_logs": [start_log],
                 }
             start_log.mark_completed("创意方案生成完成")
+            start_log.input_data = {"selling_points_count": len(state.selling_points)} if state.selling_points else None
             return {
                 "current_step": "creative_planning",
                 "creative_plan": result.data.get("creative_plan"),
@@ -353,6 +401,7 @@ class WorkflowBuilder:
             start_log = create_agent_log("visual_designer", "running")
 
             result = await visual_designer.execute(state)
+            _apply_trace_to_log(visual_designer, start_log)
 
             if not result.success:
                 start_log.mark_failed(result.error or "执行失败")
@@ -363,6 +412,8 @@ class WorkflowBuilder:
                 }
             prompts_count = len(result.data.get("image_prompts", []))
             start_log.mark_completed(f"生成 {prompts_count} 个图片提示词")
+            start_log.input_data = {"creative_plan": str(state.creative_plan)[:500]} if state.creative_plan else None
+            start_log.output_data = {"prompts_count": prompts_count}
             return {
                 "current_step": "visual_design",
                 "generation_prompts": result.data.get("image_prompts", []),
@@ -386,6 +437,8 @@ class WorkflowBuilder:
                 }
             images_count = len(result.data.get("generated_images", []))
             start_log.mark_completed(f"成功生成 {images_count} 张图片")
+            start_log.input_data = {"prompts_count": len(state.generation_prompts)} if state.generation_prompts else None
+            start_log.output_data = {"images_count": images_count}
             return {
                 "current_step": "image_generation",
                 "generated_images": result.data.get("generated_images", []),
@@ -419,6 +472,7 @@ class WorkflowBuilder:
             start_log = create_agent_log("quality_reviewer", "running")
 
             result = await quality_reviewer.execute(state)
+            _apply_trace_to_log(quality_reviewer, start_log)
 
             if not result.success:
                 start_log.mark_failed(result.error or "执行失败")
@@ -429,6 +483,8 @@ class WorkflowBuilder:
                 }
             score = result.data.get("overall_score", 0)
             start_log.mark_completed(f"质量评分: {score}")
+            start_log.input_data = {"images_count": len(state.generated_images), "has_video": state.generated_video is not None}
+            start_log.output_data = {"quality_score": score, "issues_count": len(result.data.get("issues", []))}
             return {
                 "current_step": "quality_review",
                 "quality_reports": result.data.get("quality_reports", []),
@@ -601,6 +657,10 @@ class ProductVisualWorkflow:
         product: Product,
         request: GenerationRequest | None = None,
         thread_id: str = "default",
+        *,
+        llm_provider_id: int | None = None,
+        image_provider_id: int | None = None,
+        video_provider_id: int | None = None,
     ) -> AgentState:
         """运行工作流。
 
@@ -608,11 +668,20 @@ class ProductVisualWorkflow:
             product: 商品信息。
             request: 生成请求。
             thread_id: 会话线程ID。
+            llm_provider_id: 任务级指定的 LLM 厂商 ID。
+            image_provider_id: 任务级指定的图片厂商 ID。
+            video_provider_id: 任务级指定的视频厂商 ID。
 
         Returns:
             最终状态。
         """
-        initial_state = create_initial_state(product, request)
+        initial_state = create_initial_state(
+            product,
+            request,
+            llm_provider_id=llm_provider_id,
+            image_provider_id=image_provider_id,
+            video_provider_id=video_provider_id,
+        )
         config = {"configurable": {"thread_id": thread_id}}
 
         result = await self.app.ainvoke(initial_state, config=config)

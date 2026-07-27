@@ -8,6 +8,7 @@ Description:
 2026-03-23
 """
 
+import logging
 from abc import ABC, abstractmethod
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Generic, TypeVar
@@ -18,6 +19,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 from src.config.settings import Settings, get_settings
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     pass
@@ -98,6 +101,9 @@ class BaseAgent(ABC, Generic[StateT]):
         llm: BaseChatModel | None = None,
         settings: Settings | None = None,
         retriever: Any | None = None,  # KnowledgeRetriever 类型，使用 Any 避免循环导入
+        tenant_id: str = "system",
+        task_id: str | None = None,
+        session_id: str | None = None,
     ) -> None:
         """初始化Agent。
 
@@ -106,13 +112,20 @@ class BaseAgent(ABC, Generic[StateT]):
             llm: 可选的语言模型实例。
             settings: 可选的配置实例。
             retriever: 可选的知识检索器，用于RAG增强。
+            tenant_id: 租户 ID，用于会话记录隔离。
+            task_id: 关联任务 ID，用于会话记录关联。
+            session_id: 会话 ID，用于同一工作流的 LLM 调用关联。
         """
         self.role = role
         self.settings = settings or get_settings()
         self._llm = llm
         self._retriever = retriever
+        self._tenant_id = tenant_id
+        self._task_id = task_id
+        self._session_id = session_id
         self._tools: list[Any] = []
         self._prompts: dict[str, ChatPromptTemplate] = {}
+        self._last_trace: dict[str, Any] | None = None
 
     @property
     def llm(self) -> BaseChatModel:
@@ -176,24 +189,27 @@ class BaseAgent(ABC, Generic[StateT]):
         return []
 
     def _create_llm(self) -> BaseChatModel:
-        """创建LLM实例。
+        """创建LLM实例（配置驱动）。
 
-        子类可重写此方法以使用不同的LLM。
+        通过 ProviderFactory 获取 LLM Provider，优先从数据库配置，
+        兜底使用 Settings 环境变量。不再硬编码 ChatTongyi。
 
         Returns:
             语言模型实例。
-        """
-        # 默认使用通义千问
-        try:
-            from langchain_community.chat_models import ChatTongyi
 
-            return ChatTongyi(
-                model=self.settings.llm_model,
-                dashscope_api_key=self.settings.dashscope_api_key,
-                temperature=0.7,
-            )
-        except ImportError:
-            raise ImportError("请安装 langchain-community: pip install langchain-community")
+        Raises:
+            ImportError: 未配置任何 LLM Provider 时抛出。
+        """
+        from src.clients.openai_compatible_llm import SettingsFallbackLLMProvider
+
+        provider = SettingsFallbackLLMProvider(settings=self.settings)
+        if provider.is_available():
+            return provider.create_chat_model()
+
+        raise ImportError(
+            "未配置任何 LLM Provider。"
+            "请在模型厂商管理页面配置，或设置 DASHSCOPE_API_KEY / SENSENOVA_API_KEY 环境变量。"
+        )
 
     def register_tool(self, tool: Any) -> None:
         """注册工具。
@@ -243,7 +259,9 @@ class BaseAgent(ABC, Generic[StateT]):
         input_vars: dict[str, Any],
         **kwargs: Any,
     ) -> str:
-        """调用LLM生成响应。
+        """调用LLM生成响应，并自动记录会话信息和 Trace 数据。
+
+        Trace 数据会存储到 self._last_trace 中，供 Agent 节点回写到 AgentLog。
 
         Args:
             prompt: 提示模板。
@@ -253,9 +271,54 @@ class BaseAgent(ABC, Generic[StateT]):
         Returns:
             生成的响应文本。
         """
-        chain = prompt | self.llm
-        response = await chain.ainvoke(input_vars, **kwargs)
-        return response.content if hasattr(response, "content") else str(response)
+        from src.api.service.conversation_recorder import ConversationRecorder
+
+        # 构建输入内容摘要
+        input_summary = str(input_vars)[:2000] if input_vars else ""
+
+        # 获取模型名称
+        model_name = getattr(self.llm, "model_name", getattr(self.llm, "model", "unknown"))
+
+        # 提取提示词模板文本
+        prompt_text = ""
+        try:
+            prompt_text = prompt.format(**{k: f"{{{k}}}" for k in input_vars.keys()})
+        except Exception:
+            prompt_text = str(prompt)
+
+        async with ConversationRecorder(
+            tenant_id=self._tenant_id,
+            task_id=self._task_id,
+            session_id=self._session_id,
+            agent_name=self.role.value,
+            model_name=model_name,
+            provider=self.settings.llm_provider,
+            input_content=input_summary,
+        ) as recorder:
+            chain = prompt | self.llm
+            response = await chain.ainvoke(input_vars, **kwargs)
+            recorder.set_response(response)
+
+            # 保存 Trace 数据，供 Agent 节点回写到 AgentLog
+            self._last_trace = {
+                "prompt_template": prompt_text[:5000],
+                "prompt_variables": {k: str(v)[:500] for k, v in input_vars.items()},
+                "input_tokens": recorder._input_tokens,
+                "output_tokens": recorder._output_tokens,
+                "total_tokens": recorder._input_tokens + recorder._output_tokens,
+                "cost_cny": 0.0,
+                "model_name": model_name,
+                "provider": self.settings.llm_provider,
+                "latency_ms": int((recorder._start_time and __import__("time").monotonic() - recorder._start_time) * 1000) if recorder._start_time else None,
+            }
+            # 计算费用
+            from src.api.service.conversation_recorder import _calculate_cost
+            cost_usd, cost_cny = _calculate_cost(
+                model_name, recorder._input_tokens, recorder._output_tokens
+            )
+            self._last_trace["cost_cny"] = round(cost_cny, 4)
+
+            return response.content if hasattr(response, "content") else str(response)
 
     def __repr__(self) -> str:
         """返回Agent描述。

@@ -64,7 +64,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'tasks/:id',
         name: 'TaskDetail',
-        component: () => import('@/views/tasks/Detail.vue'),
+        component: () => import('@/views/tasks/Workbench.vue'),
         meta: {
           title: '任务详情',
           hidden: true
@@ -124,6 +124,26 @@ const routes: RouteRecordRaw[] = [
           title: '适配器配置',
           icon: 'Setting'
         }
+      },
+      // AI 会话记录
+      {
+        path: 'conversation',
+        name: 'Conversation',
+        component: () => import('@/views/conversation/index.vue'),
+        meta: {
+          title: 'AI 会话记录',
+          icon: 'ChatDotRound'
+        }
+      },
+      // 模型厂商管理
+      {
+        path: 'providers',
+        name: 'ModelProviders',
+        component: () => import('@/views/providers/index.vue'),
+        meta: {
+          title: '模型厂商',
+          icon: 'Cpu'
+        }
       }
     ]
   }
@@ -138,7 +158,7 @@ const router = createRouter({
 router.beforeEach((to, _from, next) => {
   const title = to.meta.title as string
   if (title) {
-    document.title = `${title} - 商品视觉生成器`
+    document.title = `${title} - Agent Part`
   }
   next()
 })

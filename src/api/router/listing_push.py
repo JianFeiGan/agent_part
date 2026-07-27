@@ -13,6 +13,7 @@ Description:
 import logging
 
 from fastapi import APIRouter, Depends, status
+from sqlalchemy import select
 
 from src.agents.adapter_config import AdapterConfigManager
 from src.agents.listing_amazon_adapter import AmazonAdapter
@@ -28,7 +29,7 @@ from src.api.schema.listing import (
 from src.auth.api_key import require_auth
 from src.auth.context import AuthContext
 from src.db.listing_models import ListingProductPO, ListingTaskPO, TaskResultPO
-from src.db.postgres import get_db
+from src.db.postgres import get_db, get_db_session
 from src.db.repository import BaseRepository
 from src.models.listing import Platform
 
@@ -57,7 +58,7 @@ async def _load_domain_objects(task_id: int, *, tenant_id: str):
     """
     from src.models.listing import ImageRef, ListingProduct, ListingTask
 
-    async with get_db() as session:
+    async with get_db_session() as session:
         task_repo = BaseRepository(ListingTaskPO, session)
         task_po = await task_repo.get(task_id)
         if not task_po or getattr(task_po, "tenant_id", None) != tenant_id:
@@ -122,7 +123,12 @@ async def push_listing(
 
     results: list[PushResultResponse] = []
 
-    async with get_db() as session:
+    async with get_db_session() as session:
+        from src.db.asset_repository import AssetRepository
+        from src.db.listing_models import CopywritingPackagePO
+        
+        asset_repo = AssetRepository(session)
+        
         for platform in target_platforms:
             try:
                 # 从数据库加载适配器凭证（租户感知）
@@ -131,20 +137,57 @@ async def push_listing(
                 )
                 adapter = registry.get(platform, config=config)
 
+                # 从数据库加载已生成的素材
+                db_assets = await asset_repo.list_by_task(auth.tenant_id, str(task_id))
+                
+                # 构建 AssetPackage
+                main_image = None
+                variant_images = []
+                video_url = None
+                for asset in db_assets:
+                    if asset.asset_type == "image":
+                        if main_image is None:
+                            main_image = asset.url
+                        else:
+                            variant_images.append(asset.url)
+                    elif asset.asset_type == "video":
+                        video_url = asset.url
+                
                 asset_package = AssetPackage(
                     listing_task_id=task_id,
                     platform=platform,
-                    main_image=None,
-                    variant_images=[],
+                    main_image=main_image,
+                    variant_images=variant_images,
+                    video_url=video_url,
                 )
-                copywriting = CopywritingPackage(
-                    listing_task_id=task_id,
-                    platform=platform,
-                    language="en",
-                    title=product.title,
-                    bullet_points=[],
-                    description=product.description or "",
+                
+                # 尝试加载已生成的文案
+                copywriting_result = await session.execute(
+                    select(CopywritingPackagePO).where(
+                        CopywritingPackagePO.task_id == task_id,
+                        CopywritingPackagePO.platform == platform.value,
+                    )
                 )
+                copywriting_po = copywriting_result.scalar_one_or_none()
+                
+                if copywriting_po:
+                    copywriting = CopywritingPackage(
+                        listing_task_id=task_id,
+                        platform=platform,
+                        language=copywriting_po.language,
+                        title=copywriting_po.title,
+                        bullet_points=copywriting_po.bullet_points,
+                        description=copywriting_po.description,
+                    )
+                else:
+                    copywriting = CopywritingPackage(
+                        listing_task_id=task_id,
+                        platform=platform,
+                        language="en",
+                        title=product.title,
+                        bullet_points=[],
+                        description=product.description or "",
+                    )
 
                 push_result = adapter.push_listing(product, asset_package, copywriting, task_obj)
 
@@ -224,7 +267,7 @@ async def get_push_results(
     Returns:
         各平台推送结果（仅当前租户）。
     """
-    async with get_db() as session:
+    async with get_db_session() as session:
         repo = BaseRepository(TaskResultPO, session)
         results_po = await repo.list(task_id=task_id, tenant_id=auth.tenant_id)
         if not results_po:

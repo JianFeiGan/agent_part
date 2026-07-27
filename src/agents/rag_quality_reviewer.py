@@ -13,6 +13,7 @@ Description:
 """
 
 import json
+import logging
 from datetime import datetime
 from typing import Any
 
@@ -29,6 +30,8 @@ from src.models.assets import (
     QualityReport,
     QualityScore,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
@@ -412,8 +415,17 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
                     },
                 )
                 score = self._parse_quality_score(response)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("质量评分 LLM 调用失败，按 fail-closed 处理: %s", exc)
+                score = QualityScore(overall_score=0.0)
+                issues.append(
+                    QualityIssue(
+                        issue_type="scoring_unavailable",
+                        severity="high",
+                        description="质量评分模型调用失败，无法验证内容质量",
+                        suggestion="检查 LLM 配置后重试，或人工审核",
+                    )
+                )
 
         # 合规性检查
         compliance_issues = await self._check_compliance(
@@ -489,8 +501,17 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
                     },
                 )
                 score = self._parse_quality_score(response)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("质量评分 LLM 调用失败，按 fail-closed 处理: %s", exc)
+                score = QualityScore(overall_score=0.0)
+                issues.append(
+                    QualityIssue(
+                        issue_type="scoring_unavailable",
+                        severity="high",
+                        description="质量评分模型调用失败，无法验证内容质量",
+                        suggestion="检查 LLM 配置后重试，或人工审核",
+                    )
+                )
 
         # 合规性检查
         compliance_issues = await self._check_compliance(
@@ -539,7 +560,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
             and len([i for i in issues if i.severity == "high"]) == 0,
         )
 
-    async def _check_compliance(self, content: str, category: str) -> list[QualityIssue]:  # noqa: ARG002
+    async def _check_compliance(self, content: str, _category: str) -> list[QualityIssue]:
         """检查内容合规性。
 
         Args:

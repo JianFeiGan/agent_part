@@ -12,13 +12,16 @@ from fastapi import APIRouter
 
 from src.api.router.adapter_config import router as adapter_config_router
 from src.api.router.assets import router as assets_router
+from src.api.router.conversation import router as conversation_router
 from src.api.router.dashboard import router as dashboard_router
 from src.api.router.evaluation import router as evaluation_router
 from src.api.router.graph_rag import router as graph_rag_router
 from src.api.router.health import router as health_router
 from src.api.router.knowledge import router as knowledge_router
+from src.api.router.knowledge_graph import router as knowledge_graph_router
 from src.api.router.listing import router as listing_router
 from src.api.router.listing_push import router as listing_push_router
+from src.api.router.model_providers import router as model_providers_router
 from src.api.router.products import router as products_router
 from src.api.router.tasks import router as tasks_router
 
@@ -30,6 +33,7 @@ api_router.include_router(health_router, tags=["健康检查"])
 api_router.include_router(products_router, prefix="/products", tags=["商品管理"])
 api_router.include_router(tasks_router, prefix="/tasks", tags=["任务管理"])
 api_router.include_router(knowledge_router, prefix="/knowledge", tags=["知识库管理"])
+api_router.include_router(knowledge_graph_router, prefix="/knowledge", tags=["知识图谱"])
 api_router.include_router(evaluation_router, prefix="/evaluation", tags=["RAG评估"])
 api_router.include_router(listing_router, prefix="/listing", tags=["刊登工具"])
 api_router.include_router(listing_push_router, prefix="/listing", tags=["刊登推送"])
@@ -37,6 +41,8 @@ api_router.include_router(adapter_config_router, prefix="/listing", tags=["适�
 api_router.include_router(dashboard_router, prefix="/dashboard", tags=["仪表盘"])
 api_router.include_router(assets_router, prefix="/assets", tags=["资产管理"])
 api_router.include_router(graph_rag_router, prefix="/graph-rag", tags=["Graph RAG 记忆管理"])
+api_router.include_router(conversation_router, prefix="/ai", tags=["AI会话记录"])
+api_router.include_router(model_providers_router, prefix="/model-providers", tags=["模型厂商"])
 
 __all__ = [
     "api_router",
@@ -49,4 +55,5 @@ __all__ = [
     "dashboard_router",
     "assets_router",
     "graph_rag_router",
+    "model_providers_router",
 ]

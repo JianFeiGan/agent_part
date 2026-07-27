@@ -12,8 +12,23 @@ from fastapi import APIRouter
 
 from src.api.schema.common import HealthResponse
 from src.config.settings import get_settings
+from src.api.service.redis_client import RedisClient
 
 router = APIRouter()
+
+_redis_client: RedisClient | None = None
+
+
+async def _get_redis_client() -> RedisClient | None:
+    """获取或创建 Redis 客户端。"""
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = RedisClient()
+        try:
+            await _redis_client.connect()
+        except Exception:
+            return None
+    return _redis_client
 
 
 @router.get("/health", response_model=HealthResponse, summary="健康检查")
@@ -24,10 +39,23 @@ async def health_check() -> HealthResponse:
         服务健康状态信息，包括版本、Redis 连接状态等。
     """
     settings = get_settings()
+    
+    redis_status = "connected"
+    try:
+        redis_client = await _get_redis_client()
+        if redis_client and redis_client._client:
+            await redis_client._client.ping()
+        else:
+            redis_status = "not_configured"
+    except Exception:
+        redis_status = "disconnected"
+    
+    overall_status = "ok" if redis_status == "connected" else "degraded"
+    
     return HealthResponse(
-        status="ok",
+        status=overall_status,
         version="0.1.0",
-        redis="connected",  # 实际应检查 Redis 连接状态
+        redis=redis_status,
     )
 
 

@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.deps import AuthDep
 from src.api.schema.common import ApiResponse
 from src.db import get_db
 from src.db.models import RAGUsageLog
@@ -73,12 +74,14 @@ class EvaluationReportResponse(BaseModel):
 async def get_hit_rate(
     days: int = Query(default=7, ge=1, le=90, description="统计天数"),
     session: AsyncSession = Depends(get_db),
+    auth: AuthDep = None,
 ) -> ApiResponse[HitRateResponse]:
     """获取 RAG 命中率统计。
 
     Args:
         days: 统计天数。
         session: 数据库会话。
+        auth: 认证上下文。
 
     Returns:
         命中率统计数据。
@@ -87,6 +90,8 @@ async def get_hit_rate(
 
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=days)
+
+    tenant_id = auth.tenant_id if auth else "dev"
 
     # 获取使用统计
     stats = await logger.get_usage_stats(session, start_date, end_date)
@@ -97,7 +102,8 @@ async def get_hit_rate(
     # 获取唯一文档数
     result = await session.execute(
         select(func.count(func.distinct(RAGUsageLog.task_id))).where(
-            RAGUsageLog.created_at >= start_date
+            RAGUsageLog.created_at >= start_date,
+            RAGUsageLog.tenant_id == tenant_id,
         )
     )
     unique_tasks = result.scalar() or 0
@@ -126,17 +132,21 @@ async def get_hit_rate(
 async def compare_rag_vs_non_rag(
     request: ComparisonRequest,
     session: AsyncSession = Depends(get_db),
+    auth: AuthDep = None,
 ) -> ApiResponse[ComparisonResponse]:
     """对比 RAG 与非 RAG 的生成质量。
 
     Args:
         request: 对比请求。
         session: 数据库会话。
+        auth: 认证上下文。
 
     Returns:
         对比分析结果。
     """
     from src.db.models import GenerationTask
+
+    tenant_id = auth.tenant_id if auth else "dev"
 
     # 解析日期
     if request.start_date:
@@ -159,6 +169,7 @@ async def compare_rag_vs_non_rag(
             GenerationTask.created_at <= end_date,
             GenerationTask.rag_enabled == True,
             GenerationTask.status == "completed",
+            GenerationTask.tenant_id == tenant_id,
         )
     )
     rag_row = rag_result.first()
@@ -173,6 +184,7 @@ async def compare_rag_vs_non_rag(
             GenerationTask.created_at <= end_date,
             GenerationTask.rag_enabled == False,
             GenerationTask.status == "completed",
+            GenerationTask.tenant_id == tenant_id,
         )
     )
     non_rag_row = non_rag_result.first()
@@ -215,17 +227,21 @@ async def compare_rag_vs_non_rag(
 async def get_evaluation_report(
     days: int = Query(default=30, ge=1, le=90, description="统计天数"),
     session: AsyncSession = Depends(get_db),
+    auth: AuthDep = None,
 ) -> ApiResponse[EvaluationReportResponse]:
     """生成 RAG 效果评估报告。
 
     Args:
         days: 统计天数。
         session: 数据库会话。
+        auth: 认证上下文。
 
     Returns:
         评估报告。
     """
     logger = get_rag_logger()
+
+    tenant_id = auth.tenant_id if auth else "dev"
 
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=days)
@@ -282,16 +298,20 @@ async def get_evaluation_report(
 @router.get("/optimize-suggestions", response_model=ApiResponse[list[str]])
 async def get_optimize_suggestions(
     session: AsyncSession = Depends(get_db),
+    auth: AuthDep = None,
 ) -> ApiResponse[list[str]]:
     """获取检索参数优化建议。
 
     Args:
         session: 数据库会话。
+        auth: 认证上下文。
 
     Returns:
         优化建议列表。
     """
     logger = get_rag_logger()
+
+    tenant_id = auth.tenant_id if auth else "dev"
 
     # 获取最近 7 天的统计
     end_date = datetime.utcnow()

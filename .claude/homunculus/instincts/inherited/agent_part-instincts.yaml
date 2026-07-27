@@ -1,0 +1,397 @@
+# Instincts generated from https://github.com/JianFeiGan/agent_part
+# Generated: 2026-07-10T14:19:06.233Z
+# Version: 2.0
+# NOTE: This file supplements (does not replace) any existing curated instincts.
+# High-confidence manually curated instincts should be preserved alongside these.
+
+---
+id: agent_part-commit-conventional
+trigger: "when writing a commit message"
+confidence: 0.85
+domain: git
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Commit Conventional
+
+## Action
+
+Use conventional commit format with prefixes: feat, fix
+
+## Evidence
+
+- 2 commits analyzed
+- Detected conventional commit pattern
+- Examples: feat: 接入真实图片/视频生成 provider（DashScope wanx-v1 / Kling kling-v1）, fix: 移除伪造 mock 工具并补齐 mock 熔断开关与质量评分 fail-closed
+
+---
+id: agent_part-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Commit Length
+
+## Action
+
+Write moderate-length commit messages (~55 characters)
+
+## Evidence
+
+- Average commit message length: 55 chars
+- Based on 2 commits
+
+---
+id: agent_part-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Naming Files
+
+## Action
+
+Use snake_case naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: snake_case
+
+---
+id: agent_part-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: agent_part-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: agent_part-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: agent_part-workflow-add-or-update-provider-client
+trigger: "when doing add or update provider client"
+confidence: 0.55
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Workflow Add Or Update Provider Client
+
+## Action
+
+Follow the add-or-update-provider-client workflow:
+1. Create or update client implementation in src/clients/
+2. Update agent(s) in src/agents/ to use the new or updated client
+3. Update or create provider result handling in src/clients/provider_result.py
+4. Add or update tests in tests/test_agents/ to cover real, mock, and failure scenarios
+5. Update documentation (system design, diagrams) to reflect new provider/client
+6. Update dependencies if required (e.g., pyjwt in pyproject.toml)
+7. Update __init__.py files as needed for imports
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~1x per month
+- Files: src/clients/*.py, src/agents/*_generator.py, src/clients/provider_result.py
+
+---
+id: agent_part-workflow-mocking-and-fallback-policy-update
+trigger: "when doing mocking and fallback policy update"
+confidence: 0.55
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/JianFeiGan/agent_part
+---
+
+# Agent_part Workflow Mocking And Fallback Policy Update
+
+## Action
+
+Follow the mocking-and-fallback-policy-update workflow:
+1. Update agent(s) to change fallback or error handling logic
+2. Add or update configuration switches in src/config/settings.py
+3. Update or remove mock tool implementations
+4. Update tests to cover new fallback/mocking/error scenarios
+5. Clean up unused code and parameters in agents
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~1x per month
+- Files: src/agents/*_generator.py, src/agents/quality_reviewer.py, src/agents/rag_quality_reviewer.py
+
+---
+id: agent_part-instinct-file-naming
+trigger: "When creating or renaming a file in the codebase"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct File Naming
+
+## Action
+
+Use snake_case for file names
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.files
+- All files in src/ use snake_case
+
+---
+id: agent_part-instinct-function-naming
+trigger: "When defining a new function"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Function Naming
+
+## Action
+
+Use camelCase for function names
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.functions
+
+---
+id: agent_part-instinct-class-naming
+trigger: "When defining a new class"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Class Naming
+
+## Action
+
+Use PascalCase for class names
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.classes
+
+---
+id: agent_part-instinct-constant-naming
+trigger: "When defining a constant"
+confidence: 0.9
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Constant Naming
+
+## Action
+
+Use SCREAMING_SNAKE_CASE for constant names
+
+## Evidence
+
+- Pattern in codeStyle.namingConventions.constants
+
+---
+id: agent_part-instinct-import-style
+trigger: "When importing modules within the package"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Import Style
+
+## Action
+
+Use relative imports
+
+## Evidence
+
+- Pattern in codeStyle.importStyle
+
+---
+id: agent_part-instinct-export-style
+trigger: "When exporting functions or classes from a module"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Export Style
+
+## Action
+
+Use named exports (explicitly define __all__ or named imports)
+
+## Evidence
+
+- Pattern in codeStyle.exportStyle
+
+---
+id: agent_part-instinct-test-location
+trigger: "When adding or updating tests"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Test Location
+
+## Action
+
+Place tests in the separate tests/ directory, mirroring the src/ structure
+
+## Evidence
+
+- Pattern in architecture.folderStructure.testLocation
+- tests/test_agents/ mirrors src/agents/
+
+---
+id: agent_part-instinct-test-coverage
+trigger: "When adding or updating a provider client or fallback logic"
+confidence: 0.9
+domain: testing
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Test Coverage
+
+## Action
+
+Add or update tests to cover real, mock, and failure scenarios
+
+## Evidence
+
+- Workflows specify test updates for real, mock, and failure scenarios
+- tests/test_agents/test_clients.py
+- tests/test_agents/test_mock_providers.py
+
+---
+id: agent_part-instinct-git-commit-format
+trigger: "When writing a commit message"
+confidence: 0.9
+domain: git
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Git Commit Format
+
+## Action
+
+Use conventional commit prefixes ('feat' or 'fix'), followed by a colon and a brief message (average ~55 characters)
+
+## Evidence
+
+- Pattern in commits.prefixes
+- Example: 'feat: 接入真实图片/视频生成 provider（DashScope wanx-v1 / Kling kling-v1）'
+
+---
+id: agent_part-instinct-add-provider-client
+trigger: "When someone wants to support a new provider API or update provider integration for asset generation"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Add Provider Client
+
+## Action
+
+Follow the add-or-update-provider-client workflow: update/create client in src/clients/, update agent(s), update provider_result.py, add/update tests, update docs, update dependencies if needed, update __init__.py
+
+## Evidence
+
+- Workflow: add-or-update-provider-client
+- Commit sequences and files involved in workflow definition
+
+---
+id: agent_part-instinct-update-fallback-policy
+trigger: "When someone wants to change how the system handles provider unavailability, mock assets, or error/fail-closed policies"
+confidence: 0.85
+domain: workflow
+source: repo-analysis
+source_repo: JianFeiGan/agent_part
+---
+
+# Agent_part Instinct Update Fallback Policy
+
+## Action
+
+Follow the mocking-and-fallback-policy-update workflow: update agent fallback/error logic, update config switches, update/remove mock tools, update tests, clean up unused code
+
+## Evidence
+
+- Workflow: mocking-and-fallback-policy-update
+- Commit sequences and files involved in workflow definition
+

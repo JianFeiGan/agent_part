@@ -130,6 +130,9 @@ class VectorStore:
 
         # 构建向量检索 SQL
         # 使用 pgvector 的余弦相似度
+        # 注意：asyncpg 不支持 :param::type 语法（:: 会被误解析），
+        # 需使用 CAST(:param AS type) 替代
+        # asyncpg 无法推断 NULL 参数的类型，需对可空参数显式 CAST
         query = text("""
             SELECT
                 kc.id as chunk_id,
@@ -138,14 +141,14 @@ class VectorStore:
                 kc.metadata,
                 kd.title as doc_title,
                 kd.doc_type,
-                1 - (kc.embedding <=> :embedding::vector) as similarity
+                1 - (kc.embedding <=> CAST(:embedding AS vector)) as similarity
             FROM knowledge_chunks kc
             JOIN knowledge_docs kd ON kc.doc_id = kd.id
-            WHERE 1 - (kc.embedding <=> :embedding::vector) >= :threshold
+            WHERE 1 - (kc.embedding <=> CAST(:embedding AS vector)) >= :threshold
                 AND kc.tenant_id = :tenant_id
-                AND (:doc_type IS NULL OR kd.doc_type = :doc_type)
-                AND (:category IS NULL OR kd.category = :category)
-            ORDER BY kc.embedding <=> :embedding::vector
+                AND (CAST(:doc_type AS text) IS NULL OR kd.doc_type = CAST(:doc_type AS text))
+                AND (CAST(:category AS text) IS NULL OR kd.category = CAST(:category AS text))
+            ORDER BY kc.embedding <=> CAST(:embedding AS vector)
             LIMIT :top_k
         """)
 

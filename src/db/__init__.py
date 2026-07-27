@@ -24,12 +24,13 @@ from src.db.models import (
     Product,
     RAGUsageLog,
 )
-from src.db.postgres import get_db, init_db
+from src.db.postgres import get_db, get_db_session, init_db
 from src.db.repository import BaseRepository
 from src.db.vector_store import VectorStore
 
 __all__ = [
     "get_db",
+    "get_db_session",
     "init_db",
     "VectorStore",
     "KnowledgeDoc",

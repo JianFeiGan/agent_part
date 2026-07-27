@@ -155,7 +155,7 @@ async def create_document(
 
     # 生成向量
     contents = [chunk["content"] for chunk in chunks]
-    embeddings = embedding_service.embed_batch(contents)
+    embeddings = await embedding_service.aembed_batch(contents)
 
     # 存储向量
     await vector_store.add_vectors(session, doc.id, chunks, embeddings, tenant_id=tenant_id)
@@ -250,7 +250,7 @@ async def upload_document(
             vector_store = VectorStore()
 
             contents = [chunk["content"] for chunk in chunks]
-            embeddings = embedding_service.embed_batch(contents)
+            embeddings = await embedding_service.aembed_batch(contents)
             await vector_store.add_vectors(session, doc.id, chunks, embeddings, tenant_id=tenant_id)
 
         await session.commit()

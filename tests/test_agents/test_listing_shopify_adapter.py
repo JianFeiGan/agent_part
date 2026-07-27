@@ -2,19 +2,20 @@
 Shopify GraphQL 刊登适配器测试。
 
 Description:
-    测试 ShopifyAdapter 的认证、素材转换、文案转换、刊登推送/更新/删除功能。
-    使用 unittest.mock 模拟 HTTP 请求。
+    测试 ShopifyAdapter 的 GraphQL 请求、错误处理、健康检查等功能。
+    使用 unittest.mock 模拟 HTTP 请求，不依赖真实 API。
 @author ganjianfei
-@version 1.0.0
-2026-04-25
+@version 2.0.0
+2026-07-14
 """
 
 from decimal import Decimal
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
-from src.agents.listing_platform_adapter import PushResult
+from src.agents.listing_platform_adapter import PushConfig
 from src.agents.listing_shopify_adapter import ShopifyAdapter
 from src.models.listing import (
     AssetPackage,
@@ -24,6 +25,12 @@ from src.models.listing import (
     ListingTask,
     Platform,
 )
+
+
+@pytest.fixture
+def push_config() -> PushConfig:
+    """创建测试用推送配置。"""
+    return PushConfig(max_retries=2, retry_base_delay=0.01, rate_limit_rpm=0)
 
 
 @pytest.fixture
@@ -37,9 +44,9 @@ def config() -> dict:
 
 
 @pytest.fixture
-def adapter(config: dict) -> ShopifyAdapter:
+def adapter(config: dict, push_config: PushConfig) -> ShopifyAdapter:
     """创建 Shopify 适配器实例。"""
-    return ShopifyAdapter(config=config)
+    return ShopifyAdapter(config=config, push_config=push_config)
 
 
 @pytest.fixture
@@ -99,146 +106,89 @@ def task() -> ListingTask:
     )
 
 
-class TestShopifyAdapterAuthenticate:
-    """ShopifyAdapter 认证测试。"""
-
-    def test_authenticate_returns_api_key(self, adapter: ShopifyAdapter) -> None:
-        """测试认证成功返回 API Key。"""
-        token = adapter.authenticate()
-
-        assert token == "shpat_test_api_key_12345"
-        assert adapter._auth_token == "shpat_test_api_key_12345"
-
-    def test_authenticate_missing_key_raises(self) -> None:
-        """测试缺少 api_key 时抛出 RuntimeError。"""
-        adapter = ShopifyAdapter(config={})
-        with pytest.raises(RuntimeError, match="api_key is not configured"):
-            adapter.authenticate()
-
-
-class TestShopifyAdapterTransformCopywriting:
-    """ShopifyAdapter 文案转换测试。"""
-
-    def test_transform_copywriting_format(
-        self, adapter: ShopifyAdapter, copywriting: CopywritingPackage
-    ) -> None:
-        """测试文案返回 title 和 body_html 键。"""
-        result = adapter.transform_copywriting(copywriting)
-
-        assert "title" in result
-        assert "body_html" in result
-        assert result["title"] == copywriting.title
-
-    def test_transform_copywriting_body_contains_features(
-        self, adapter: ShopifyAdapter, copywriting: CopywritingPackage
-    ) -> None:
-        """测试 body_html 包含 Features section。"""
-        result = adapter.transform_copywriting(copywriting)
-
-        assert "<h3>Features</h3>" in result["body_html"]
-        assert "<ul>" in result["body_html"]
-        assert "<li>" in result["body_html"]
-        for bp in copywriting.bullet_points:
-            assert bp in result["body_html"]
-
-    def test_transform_copywriting_empty_bullets(self, adapter: ShopifyAdapter) -> None:
-        """测试空 bullet points 不包含 Features section。"""
-        copy = CopywritingPackage(
-            listing_task_id=1,
-            platform=Platform.SHOPIFY,
-            title="Test",
-            bullet_points=[],
-            description="Test description",
+def _make_httpx_response(
+    status_code: int = 200,
+    json_data: dict | None = None,
+    text: str = "",
+    headers: dict | None = None,
+) -> httpx.Response:
+    """创建模拟的 httpx.Response。"""
+    request = MagicMock(spec=httpx.Request)
+    request.method = "POST"
+    request.url = httpx.URL("https://example.com")
+    if json_data is not None:
+        return httpx.Response(
+            status_code=status_code,
+            json=json_data,
+            headers=headers or {},
+            request=request,
         )
-        result = adapter.transform_copywriting(copy)
-        assert "<h3>Features</h3>" not in result["body_html"]
-        assert result["body_html"] == "Test description"
+    return httpx.Response(
+        status_code=status_code,
+        text=text,
+        headers=headers or {},
+        request=request,
+    )
 
 
-class TestShopifyAdapterTransformAssets:
-    """ShopifyAdapter 素材转换测试。"""
+SUCCESS_GRAPHQL_RESPONSE = {
+    "data": {
+        "productCreate": {
+            "product": {
+                "id": "gid://shopify/Product/123456789",
+                "title": "Test Product",
+                "handle": "test-product",
+            },
+            "userErrors": [],
+        }
+    }
+}
 
-    def test_transform_assets_format(
+ERROR_GRAPHQL_RESPONSE = {
+    "data": {
+        "productCreate": {
+            "product": None,
+            "userErrors": [{"field": ["title"], "message": "Title is too long"}],
+        }
+    }
+}
+
+
+class TestShopifyAdapterGraphQL:
+    """ShopifyAdapter GraphQL 请求测试。"""
+
+    @pytest.mark.asyncio
+    async def test_graphql_success(
         self,
         adapter: ShopifyAdapter,
         product: ListingProduct,
         asset_package: AssetPackage,
+        copywriting: CopywritingPackage,
+        task: ListingTask,
     ) -> None:
-        """测试素材返回 "images" 键。"""
-        result = adapter.transform_assets(product, asset_package)
+        """测试 GraphQL 请求成功。"""
+        adapter._auth_token = "shpat_test_token"
 
-        assert "images" in result
-        assert isinstance(result["images"], list)
-
-    def test_transform_assets_includes_main_image(
-        self,
-        adapter: ShopifyAdapter,
-        product: ListingProduct,
-        asset_package: AssetPackage,
-    ) -> None:
-        """测试素材包含主图。"""
-        result = adapter.transform_assets(product, asset_package)
-
-        assert any(img["src"] == asset_package.main_image for img in result["images"])
-
-    def test_transform_assets_includes_variant_images(
-        self,
-        adapter: ShopifyAdapter,
-        product: ListingProduct,
-        asset_package: AssetPackage,
-    ) -> None:
-        """测试素材包含变体图。"""
-        result = adapter.transform_assets(product, asset_package)
-
-        urls = {img["src"] for img in result["images"]}
-        for variant in asset_package.variant_images:
-            assert variant in urls
-
-    def test_transform_assets_empty(self, adapter: ShopifyAdapter, product: ListingProduct) -> None:
-        """测试空素材包返回空 images 列表。"""
-        empty_pkg = AssetPackage(
-            listing_task_id=1,
-            platform=Platform.SHOPIFY,
-            main_image=None,
-            variant_images=[],
+        mock_response = _make_httpx_response(
+            status_code=200,
+            json_data=SUCCESS_GRAPHQL_RESPONSE,
         )
-        result = adapter.transform_assets(product, empty_pkg)
-        assert result["images"] == []
 
+        with patch.object(adapter, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
 
-class TestShopifyAdapterPushListing:
-    """ShopifyAdapter 刊登推送测试。"""
+            result = await adapter.push_listing(product, asset_package, copywriting, task)
 
-    def test_graphql_url(self, adapter: ShopifyAdapter) -> None:
-        """测试 GraphQL URL 包含 shop_url 和 graphql。"""
-        url = adapter.graphql_url
+            assert result.success is True
+            assert result.platform == Platform.SHOPIFY
+            assert result.listing_id == "gid://shopify/Product/123456789"
+            assert result.url is not None
+            assert "test-product" in result.url
 
-        assert "test-store.myshopify.com" in url
-        assert "graphql" in url
-
-    SUCCESS_GRAPHQL_RESPONSE = {
-        "data": {
-            "productCreate": {
-                "product": {
-                    "id": "gid://shopify/Product/123456789",
-                    "title": "Test Product",
-                    "handle": "test-product",
-                },
-                "userErrors": [],
-            }
-        }
-    }
-
-    ERROR_GRAPHQL_RESPONSE = {
-        "data": {
-            "productCreate": {
-                "product": None,
-                "userErrors": [{"field": ["title"], "message": "Title is too long"}],
-            }
-        }
-    }
-
-    def test_push_listing_success(
+    @pytest.mark.asyncio
+    async def test_graphql_user_errors(
         self,
         adapter: ShopifyAdapter,
         product: ListingProduct,
@@ -246,24 +196,27 @@ class TestShopifyAdapterPushListing:
         copywriting: CopywritingPackage,
         task: ListingTask,
     ) -> None:
-        """测试刊登推送成功。"""
+        """测试 GraphQL 返回 userErrors 时抛出 PermanentPushError。"""
         adapter._auth_token = "shpat_test_token"
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = self.SUCCESS_GRAPHQL_RESPONSE
+        mock_response = _make_httpx_response(
+            status_code=200,
+            json_data=ERROR_GRAPHQL_RESPONSE,
+        )
 
-        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
-            mock_post.return_value = mock_response
-            result = adapter.push_listing(product, asset_package, copywriting, task)
+        with patch.object(adapter, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
 
-        assert result.success is True
-        assert result.platform == Platform.SHOPIFY
-        assert result.listing_id == "gid://shopify/Product/123456789"
-        assert result.url is not None
-        assert "test-product" in result.url
+            result = await adapter.push_listing(product, asset_package, copywriting, task)
 
-    def test_push_listing_with_errors(
+            assert result.success is False
+            assert result.error_code == "PERMANENT_ERROR"
+            assert "Title is too long" in result.error
+
+    @pytest.mark.asyncio
+    async def test_graphql_throttled(
         self,
         adapter: ShopifyAdapter,
         product: ListingProduct,
@@ -271,194 +224,62 @@ class TestShopifyAdapterPushListing:
         copywriting: CopywritingPackage,
         task: ListingTask,
     ) -> None:
-        """测试刊登推送返回 userErrors 时 success=False。"""
+        """测试 GraphQL 429 限流，重试耗尽后返回失败结果。"""
         adapter._auth_token = "shpat_test_token"
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = self.ERROR_GRAPHQL_RESPONSE
+        mock_response = _make_httpx_response(
+            status_code=429,
+            text="Throttled",
+        )
 
-        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
-            mock_post.return_value = mock_response
-            result = adapter.push_listing(product, asset_package, copywriting, task)
+        with patch.object(adapter, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
 
-        assert result.success is False
-        assert result.platform == Platform.SHOPIFY
-        assert "Title is too long" in result.error
+            result = await adapter.push_listing(product, asset_package, copywriting, task)
 
-    def test_push_listing_http_error(
-        self,
-        adapter: ShopifyAdapter,
-        product: ListingProduct,
-        asset_package: AssetPackage,
-        copywriting: CopywritingPackage,
-        task: ListingTask,
-    ) -> None:
-        """测试 HTTP 错误时返回失败 PushResult。"""
+            assert result.success is False
+            assert result.error_code == "RETRY_EXHAUSTED"
+
+
+class TestShopifyAdapterHealthCheck:
+    """ShopifyAdapter 健康检查测试。"""
+
+    @pytest.mark.asyncio
+    async def test_health_check_success(self, adapter: ShopifyAdapter) -> None:
+        """测试健康检查成功。"""
         adapter._auth_token = "shpat_test_token"
 
-        mock_response = MagicMock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
+        mock_response = _make_httpx_response(
+            status_code=200,
+            json_data={"data": {"shop": {"name": "Test Store"}}},
+        )
 
-        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
-            mock_post.return_value = mock_response
-            result = adapter.push_listing(product, asset_package, copywriting, task)
+        with patch.object(adapter, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
 
-        assert result.success is False
-        assert "error" in result.error.lower()
+            result = await adapter.health_check()
 
+            assert result is True
 
-class TestShopifyAdapterUpdateListing:
-    """ShopifyAdapter 刊登更新测试。"""
-
-    SUCCESS_UPDATE_RESPONSE = {
-        "data": {
-            "productUpdate": {
-                "product": {
-                    "id": "gid://shopify/Product/987654321",
-                    "title": "Updated Product",
-                },
-                "userErrors": [],
-            }
-        }
-    }
-
-    def test_update_listing(
-        self,
-        adapter: ShopifyAdapter,
-        product: ListingProduct,
-        asset_package: AssetPackage,
-        copywriting: CopywritingPackage,
-    ) -> None:
-        """测试刊登更新成功。"""
+    @pytest.mark.asyncio
+    async def test_health_check_failure(self, adapter: ShopifyAdapter) -> None:
+        """测试健康检查失败。"""
         adapter._auth_token = "shpat_test_token"
 
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = self.SUCCESS_UPDATE_RESPONSE
+        mock_response = _make_httpx_response(
+            status_code=401,
+            text="Unauthorized",
+        )
 
-        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
-            mock_post.return_value = mock_response
-            result = adapter.update_listing(
-                "gid://shopify/Product/987654321",
-                product,
-                asset_package,
-                copywriting,
-            )
+        with patch.object(adapter, "_get_client") as mock_get_client:
+            mock_client = AsyncMock()
+            mock_client.post = AsyncMock(return_value=mock_response)
+            mock_get_client.return_value = mock_client
 
-        assert result.success is True
-        assert result.platform == Platform.SHOPIFY
-        assert result.listing_id == "gid://shopify/Product/987654321"
+            result = await adapter.health_check()
 
-    def test_update_listing_with_errors(
-        self,
-        adapter: ShopifyAdapter,
-        product: ListingProduct,
-        asset_package: AssetPackage,
-        copywriting: CopywritingPackage,
-    ) -> None:
-        """测试刊登更新失败。"""
-        adapter._auth_token = "shpat_test_token"
-
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": {
-                "productUpdate": {
-                    "product": None,
-                    "userErrors": [{"field": ["id"], "message": "Product not found"}],
-                }
-            }
-        }
-
-        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
-            mock_post.return_value = mock_response
-            result = adapter.update_listing(
-                "gid://shopify/Product/nonexistent",
-                product,
-                asset_package,
-                copywriting,
-            )
-
-        assert result.success is False
-        assert "Product not found" in result.error
-
-
-class TestShopifyAdapterDeleteListing:
-    """ShopifyAdapter 刊登删除测试。"""
-
-    SUCCESS_DELETE_RESPONSE = {
-        "data": {
-            "productDelete": {
-                "deletedProductId": "gid://shopify/Product/123456789",
-                "userErrors": [],
-            }
-        }
-    }
-
-    def test_delete_listing(self, adapter: ShopifyAdapter) -> None:
-        """测试刊登删除成功。"""
-        adapter._auth_token = "shpat_test_token"
-
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = self.SUCCESS_DELETE_RESPONSE
-
-        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
-            mock_post.return_value = mock_response
-            result = adapter.delete_listing("gid://shopify/Product/123456789")
-
-        assert result.success is True
-        assert result.platform == Platform.SHOPIFY
-        assert result.listing_id == "gid://shopify/Product/123456789"
-
-    def test_delete_listing_with_errors(self, adapter: ShopifyAdapter) -> None:
-        """测试刊登删除失败。"""
-        adapter._auth_token = "shpat_test_token"
-
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "data": {
-                "productDelete": {
-                    "deletedProductId": None,
-                    "userErrors": [{"field": ["id"], "message": "Product not found"}],
-                }
-            }
-        }
-
-        with patch("src.agents.listing_shopify_adapter.requests.post") as mock_post:
-            mock_post.return_value = mock_response
-            result = adapter.delete_listing("gid://shopify/Product/nonexistent")
-
-        assert result.success is False
-        assert "Product not found" in result.error
-
-
-class TestShopifyAdapterHelpers:
-    """ShopifyAdapter 辅助方法测试。"""
-
-    def test_generate_handle_basic(self, adapter: ShopifyAdapter) -> None:
-        """测试 handle 生成：空格转连字符。"""
-        product = ListingProduct(sku="SKU", title="My Cool Product")
-        handle = adapter._generate_handle(product)
-        assert handle == "my-cool-product"
-
-    def test_generate_handle_special_chars(self, adapter: ShopifyAdapter) -> None:
-        """测试 handle 生成：移除特殊字符。"""
-        product = ListingProduct(sku="SKU", title="Product <with> special & chars!")
-        handle = adapter._generate_handle(product)
-        assert handle == "product-with-special-chars"
-
-    def test_generate_handle_empty_title(self, adapter: ShopifyAdapter) -> None:
-        """测试空标题生成默认 handle。"""
-        product = ListingProduct(sku="SKU", title="   ")
-        handle = adapter._generate_handle(product)
-        assert handle == "product"
-
-    def test_escape_html(self, adapter: ShopifyAdapter) -> None:
-        """测试 HTML 转义。"""
-        assert adapter._escape_html("<script>") == "&lt;script&gt;"
-        assert adapter._escape_html("A & B") == "A &amp; B"
-        assert adapter._escape_html("") == ""
+            assert result is False

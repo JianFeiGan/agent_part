@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
 from src.db.models import CategoryMemory, GraphRAGEdge, GraphRAGEntity
+from src.rag.graph_search import GraphSearchResult, get_graph_search
 
 logger = logging.getLogger(__name__)
 
@@ -132,9 +133,8 @@ class GraphMemoryService:
         """
         if tenant_id:
             # 查询条件: (tenant_id == current OR tenant_id IS NULL)，优先 tenant-specific
-            tenant_condition = (
-                (GraphRAGEntity.tenant_id == tenant_id)
-                | (GraphRAGEntity.tenant_id.is_(None))
+            tenant_condition = (GraphRAGEntity.tenant_id == tenant_id) | (
+                GraphRAGEntity.tenant_id.is_(None)
             )
         else:
             tenant_condition = GraphRAGEntity.tenant_id.is_(None)
@@ -197,9 +197,8 @@ class GraphMemoryService:
         target_entity = aliased(GraphRAGEntity)
 
         if tenant_id:
-            edge_tenant_condition = (
-                (GraphRAGEdge.tenant_id == tenant_id)
-                | (GraphRAGEdge.tenant_id.is_(None))
+            edge_tenant_condition = (GraphRAGEdge.tenant_id == tenant_id) | (
+                GraphRAGEdge.tenant_id.is_(None)
             )
         else:
             edge_tenant_condition = GraphRAGEdge.tenant_id.is_(None)
@@ -244,18 +243,20 @@ class GraphMemoryService:
         edges = []
         for row in rows:
             edge = row[0]  # GraphRAGEdge
-            edges.append({
-                "id": edge.id,
-                "source_entity_id": edge.source_entity_id,
-                "target_entity_id": edge.target_entity_id,
-                "relationship_type": edge.relationship_type,
-                "weight": edge.weight,
-                "evidence": edge.evidence,
-                "source_name": row.source_name,
-                "source_type": row.source_type,
-                "target_name": row.target_name,
-                "target_type": row.target_type,
-            })
+            edges.append(
+                {
+                    "id": edge.id,
+                    "source_entity_id": edge.source_entity_id,
+                    "target_entity_id": edge.target_entity_id,
+                    "relationship_type": edge.relationship_type,
+                    "weight": edge.weight,
+                    "evidence": edge.evidence,
+                    "source_name": row.source_name,
+                    "source_type": row.source_type,
+                    "target_name": row.target_name,
+                    "target_type": row.target_type,
+                }
+            )
 
         logger.debug(
             f"Retrieved {len(edges)} edges for category='{category}'"
@@ -286,15 +287,11 @@ class GraphMemoryService:
         Returns:
             GraphMemoryContext 包含实体、边和类目记忆信息。
         """
-        entities = await self.list_entities(
-            session, category, limit=limit, tenant_id=tenant_id
-        )
+        entities = await self.list_entities(session, category, limit=limit, tenant_id=tenant_id)
         edges = await self.list_edges(
             session, category, limit=min(limit * 2, 50), tenant_id=tenant_id
         )
-        category_memory = await self.get_category_memory(
-            session, category, tenant_id=tenant_id
-        )
+        category_memory = await self.get_category_memory(session, category, tenant_id=tenant_id)
 
         entity_dicts = [
             {
@@ -370,10 +367,7 @@ class GraphMemoryService:
         if context.entities:
             parts.append("【相关实体】")
             for i, entity in enumerate(context.entities, 1):
-                parts.append(
-                    f"{i}. **{entity['name']}** "
-                    f"({entity['entity_type']})"
-                )
+                parts.append(f"{i}. **{entity['name']}** ({entity['entity_type']})")
                 if entity.get("description"):
                     parts.append(f"   {entity['description']}")
                 if entity.get("aliases"):
@@ -396,3 +390,29 @@ class GraphMemoryService:
             parts.append("")
 
         return "\n".join(parts)
+
+    async def search(
+        self,
+        session: AsyncSession,
+        query: str,
+        category: str,
+        *,
+        mode: str | None = None,
+        tenant_id: str | None = None,
+    ) -> GraphSearchResult:
+        """执行 Graph RAG 搜索。
+
+        委托给 GraphSearchService 执行搜索。
+
+        Args:
+            session: 数据库会话。
+            query: 查询文本。
+            category: 商品类目。
+            mode: 搜索模式 (local/global/hybrid)，默认使用配置。
+            tenant_id: 租户 ID（可选）。
+
+        Returns:
+            GraphSearchResult 搜索结果。
+        """
+        search_service = get_graph_search()
+        return await search_service.search(session, query, category, mode=mode, tenant_id=tenant_id)

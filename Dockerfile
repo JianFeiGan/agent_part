@@ -1,21 +1,21 @@
-FROM python:3.13-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install uv
-RUN pip install uv
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
+RUN pip install uv -i https://pypi.tuna.tsinghua.edu.cn/simple
 
-# Install dependencies
+COPY pyproject.toml uv.lock README.md ./
+
 RUN uv sync --frozen --no-dev
 
-# Copy source code
 COPY . .
 
-# Expose port
 EXPOSE 8000
 
-# Start command
 CMD ["uv", "run", "python", "main.py"]
