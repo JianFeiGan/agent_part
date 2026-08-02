@@ -135,6 +135,7 @@ const routes: RouteRecordRaw[] = [
           icon: 'ChatDotRound'
         }
       },
+
       // 模型厂商管理
       {
         path: 'providers',
