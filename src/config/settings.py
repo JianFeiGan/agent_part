@@ -177,11 +177,12 @@ class Settings(BaseSettings):
 
     # ==================== 占位资产降级配置 ====================
     allow_mock_assets: bool = Field(
-        default=True,
+        default=False,
         description=(
             "是否允许在无 API Key 或真实 Provider 失败时降级生成占位（mock）资产。"
-            "占位资产会被明确标记 is_mock=True 且仅供本地/CI 便利；"
-            "生产环境必须设为 False，否则会静默产出'已完成'的假图/假视频。"
+            "默认 False（fail-closed）：Provider 不可用时任务明确失败，不产出假资产。"
+            "本地/CI 无 API Key 开发时可在 .env 中设为 True，"
+            "占位资产会被明确标记 is_mock=True。"
         ),
     )
 

@@ -51,7 +51,7 @@ class TestAdapterConfigAPI:
         mock_session.refresh = AsyncMock()
         mock_session.add = MagicMock()
 
-        with patch("src.api.router.adapter_config.get_db") as mock_gdb:
+        with patch("src.api.router.adapter_config.get_db_session") as mock_gdb:
             cm = AsyncMock()
             cm.__aenter__ = AsyncMock(return_value=mock_session)
             cm.__aexit__ = AsyncMock(return_value=None)
@@ -95,7 +95,7 @@ class TestAdapterConfigAPI:
         exec_result.scalars.return_value = scalars_mock
         mock_session.execute.return_value = exec_result
 
-        with patch("src.api.router.adapter_config.get_db") as mock_gdb:
+        with patch("src.api.router.adapter_config.get_db_session") as mock_gdb:
             cm = AsyncMock()
             cm.__aenter__ = AsyncMock(return_value=mock_session)
             cm.__aexit__ = AsyncMock(return_value=None)
@@ -113,7 +113,7 @@ class TestAdapterConfigAPI:
         mock_session = AsyncMock()
         mock_session.get.return_value = mock_po
 
-        with patch("src.api.router.adapter_config.get_db") as mock_gdb:
+        with patch("src.api.router.adapter_config.get_db_session") as mock_gdb:
             cm = AsyncMock()
             cm.__aenter__ = AsyncMock(return_value=mock_session)
             cm.__aexit__ = AsyncMock(return_value=None)
@@ -129,7 +129,7 @@ class TestAdapterConfigAPI:
         mock_session = AsyncMock()
         mock_session.get.return_value = None
 
-        with patch("src.api.router.adapter_config.get_db") as mock_gdb:
+        with patch("src.api.router.adapter_config.get_db_session") as mock_gdb:
             cm = AsyncMock()
             cm.__aenter__ = AsyncMock(return_value=mock_session)
             cm.__aexit__ = AsyncMock(return_value=None)
@@ -146,7 +146,7 @@ class TestAdapterConfigAPI:
         mock_session = AsyncMock()
         mock_session.get.return_value = mock_po
 
-        with patch("src.api.router.adapter_config.get_db") as mock_gdb:
+        with patch("src.api.router.adapter_config.get_db_session") as mock_gdb:
             cm = AsyncMock()
             cm.__aenter__ = AsyncMock(return_value=mock_session)
             cm.__aexit__ = AsyncMock(return_value=None)
@@ -165,7 +165,7 @@ class TestAdapterConfigAPI:
         mock_session.delete = AsyncMock()
         mock_session.flush = AsyncMock()
 
-        with patch("src.api.router.adapter_config.get_db") as mock_gdb:
+        with patch("src.api.router.adapter_config.get_db_session") as mock_gdb:
             cm = AsyncMock()
             cm.__aenter__ = AsyncMock(return_value=mock_session)
             cm.__aexit__ = AsyncMock(return_value=None)
@@ -182,7 +182,7 @@ class TestAdapterConfigAPI:
         mock_session = AsyncMock()
         mock_session.get.return_value = mock_po
 
-        with patch("src.api.router.adapter_config.get_db") as mock_gdb:
+        with patch("src.api.router.adapter_config.get_db_session") as mock_gdb:
             cm = AsyncMock()
             cm.__aenter__ = AsyncMock(return_value=mock_session)
             cm.__aexit__ = AsyncMock(return_value=None)

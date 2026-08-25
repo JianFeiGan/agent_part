@@ -136,6 +136,7 @@ async def test_persist_images_not_called_on_error() -> None:
     mock_redis.update_task_progress = AsyncMock()
     mock_redis.save_task_state = AsyncMock()
     mock_redis.get_task_state = AsyncMock(return_value=None)
+    mock_redis.get_task_metadata = AsyncMock(return_value={"progress": 50.0})
 
     mock_app = MagicMock()
 
