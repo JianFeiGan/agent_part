@@ -131,6 +131,37 @@ class TaskManager:
 
         return task_id
 
+    async def _finalize_status(
+        self,
+        redis: RedisClient,
+        task_id: str,
+        status: TaskStatus,
+        current_step: str,
+        *,
+        tenant_id: str,
+    ) -> None:
+        """写入任务终态状态，保留当前进度值。
+
+        失败/取消不应把进度清零，否则前端进度条会从当前位置回跳到 0。
+
+        Args:
+            redis: Redis 客户端。
+            task_id: 任务 ID。
+            status: 终态状态（FAILED / CANCELLED）。
+            current_step: 终态步骤标识。
+            tenant_id: 租户 ID。
+        """
+        progress = 0.0
+        metadata = await redis.get_task_metadata(task_id, tenant_id=tenant_id)
+        if metadata:
+            try:
+                progress = float(metadata.get("progress") or 0.0)
+            except (TypeError, ValueError):
+                progress = 0.0
+        await redis.update_task_progress(
+            task_id, status.value, progress, current_step, tenant_id=tenant_id
+        )
+
     async def _execute_workflow(
         self,
         task_id: str,
@@ -214,8 +245,8 @@ class TaskManager:
             )
             config = {"configurable": {"thread_id": task_id}}
 
-            async for event in workflow.app.astream(initial_state, config=config):
-                # event 是每个节点的输出 dict，key 为节点名
+            async for _event in workflow.app.astream(initial_state, config=config):
+                # _event 是每个节点的输出 dict，key 为节点名
                 # 获取最新状态并触发回调
                 latest_state = await workflow.app.aget_state(config)
                 if latest_state and latest_state.values:
@@ -243,7 +274,7 @@ class TaskManager:
             # 将生成产物落库到 generated_assets，供刊登工作流复用
             if not result.has_error() and result.product_info:
                 product_id = result.product_info.product_id or ""
-                if product_id and result.generated_images:
+                if product_id and (result.generated_images or result.generated_video):
                     try:
                         async with get_db_session() as session:
                             persister = AssetPersister(session=session)
@@ -253,20 +284,23 @@ class TaskManager:
                                 task_id=task_id,
                                 images=result.generated_images,
                             )
+                            if result.generated_video:
+                                persisted += await persister.persist_videos(
+                                    tenant_id=tenant_id,
+                                    product_id=product_id,
+                                    task_id=task_id,
+                                    video=result.generated_video,
+                                )
                             logger.info(
-                                f"任务 {task_id} 产物落库: {persisted} 张图片"
+                                f"任务 {task_id} 产物落库: {persisted} 个资产"
                             )
                     except Exception as e:
                         logger.error(f"任务 {task_id} 产物落库失败: {e}")
 
             # 更新任务状态为完成
             if result.has_error():
-                await redis.update_task_progress(
-                    task_id,
-                    TaskStatus.FAILED.value,
-                    0,
-                    result.current_step,
-                    tenant_id=tenant_id,
+                await self._finalize_status(
+                    redis, task_id, TaskStatus.FAILED, result.current_step, tenant_id=tenant_id
                 )
             else:
                 await redis.update_task_progress(
@@ -279,23 +313,15 @@ class TaskManager:
 
         except asyncio.CancelledError:
             # 任务被取消
-            await redis.update_task_progress(
-                task_id,
-                TaskStatus.FAILED.value,
-                0,
-                "cancelled",
-                tenant_id=tenant_id,
+            await self._finalize_status(
+                redis, task_id, TaskStatus.CANCELLED, "cancelled", tenant_id=tenant_id
             )
             raise
 
         except Exception as e:
             # 更新任务状态为失败
-            await redis.update_task_progress(
-                task_id,
-                TaskStatus.FAILED.value,
-                0,
-                "error",
-                tenant_id=tenant_id,
+            await self._finalize_status(
+                redis, task_id, TaskStatus.FAILED, "error", tenant_id=tenant_id
             )
             # 记录错误
             state = await redis.get_task_state(task_id, tenant_id=tenant_id)
@@ -385,6 +411,18 @@ class TaskManager:
         if state and hasattr(state, "quality_reports") and state.quality_reports:
             quality_reports = [r.model_dump() for r in state.quality_reports]
 
+        # 降级标记：任一产物为 mock 占位
+        has_mock_assets = False
+        if state:
+            has_mock_assets = any(
+                bool(img.metadata and img.metadata.get("is_mock"))
+                for img in state.generated_images
+            ) or bool(
+                state.generated_video
+                and state.generated_video.metadata
+                and state.generated_video.metadata.get("is_mock")
+            )
+
         return {
             "task_id": task_id,
             "product_id": metadata.get("product_id"),
@@ -398,6 +436,7 @@ class TaskManager:
             "video": video,
             "quality_reports": quality_reports,
             "error_message": error_message,
+            "has_mock_assets": has_mock_assets,
             "created_at": metadata.get("created_at"),
             "updated_at": metadata.get("updated_at"),
             "state": state.model_dump() if state else None,
@@ -428,9 +467,9 @@ class TaskManager:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
 
-        # 更新状态为取消（使用 failed 状态）
-        await redis.update_task_progress(
-            task_id, TaskStatus.FAILED.value, 0, "cancelled", tenant_id=tenant_id
+        # 更新状态为取消
+        await self._finalize_status(
+            redis, task_id, TaskStatus.CANCELLED, "cancelled", tenant_id=tenant_id
         )
 
         return True

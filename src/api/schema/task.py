@@ -31,6 +31,7 @@ class TaskStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 class TaskCreateRequest(BaseModel):
@@ -178,6 +179,11 @@ class TaskDetailResponse(BaseModel):
 
     # 错误信息
     error_message: str | None = Field(default=None, description="错误信息")
+
+    # 降级标记：产物中包含 mock 占位资产
+    has_mock_assets: bool = Field(
+        default=False, description="产物中是否包含 mock 占位资产（降级产出）"
+    )
 
     # 时间戳
     created_at: datetime = Field(..., description="创建时间")

@@ -239,7 +239,7 @@ def _patches(repo: FakeAssetRepository, storage: FakeStorage | None = None):
         return fake_db
 
     patches.append(
-        mock.patch("src.api.router.assets.get_db", side_effect=_fake_get_db)
+        mock.patch("src.api.router.assets.get_db_session", side_effect=_fake_get_db)
     )
 
     # Mock storage backend if provided

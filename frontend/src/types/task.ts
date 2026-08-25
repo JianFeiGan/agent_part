@@ -81,7 +81,8 @@ export enum TaskStatus {
   PENDING = 'pending',
   RUNNING = 'running',
   COMPLETED = 'completed',
-  FAILED = 'failed'
+  FAILED = 'failed',
+  CANCELLED = 'cancelled'
 }
 
 /**
@@ -91,7 +92,8 @@ export const TaskStatusLabels: Record<TaskStatus, string> = {
   [TaskStatus.PENDING]: '待处理',
   [TaskStatus.RUNNING]: '运行中',
   [TaskStatus.COMPLETED]: '已完成',
-  [TaskStatus.FAILED]: '失败'
+  [TaskStatus.FAILED]: '失败',
+  [TaskStatus.CANCELLED]: '已取消'
 }
 
 /**
@@ -125,6 +127,7 @@ export interface TaskDetail {
   video: VideoResult | null
   quality_reports: QualityReport[]
   error_message: string | null
+  has_mock_assets?: boolean
   created_at: string
   updated_at: string
   state?: Record<string, unknown>

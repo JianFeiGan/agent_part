@@ -65,7 +65,7 @@
             <div class="progress-cell">
               <el-progress
                 :percentage="row.progress || 0"
-                :status="row.status === 'completed' ? 'success' : row.status === 'failed' ? 'exception' : undefined"
+                :status="row.status === 'completed' ? 'success' : (row.status === 'failed' || row.status === 'cancelled') ? 'exception' : undefined"
               />
             </div>
           </template>
@@ -103,7 +103,7 @@
               取消
             </el-button>
             <el-button
-              v-if="row.status === 'completed' || row.status === 'failed'"
+              v-if="row.status === 'completed' || row.status === 'failed' || row.status === 'cancelled'"
               type="danger"
               link
               @click="handleDelete(row)"
@@ -172,7 +172,8 @@ const statusLabels: Record<string, string> = {
   'pending': '待处理',
   'running': '运行中',
   'completed': '已完成',
-  'failed': '失败'
+  'failed': '失败',
+  'cancelled': '已取消'
 }
 
 // 步骤标签映射
@@ -206,7 +207,8 @@ const getStatusType = (status: string) => {
     'pending': 'info',
     'running': 'warning',
     'completed': 'success',
-    'failed': 'danger'
+    'failed': 'danger',
+    'cancelled': 'info'
   }
   return typeMap[status] || 'info'
 }

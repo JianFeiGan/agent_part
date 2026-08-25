@@ -47,6 +47,17 @@
               :text-inside="true"
             />
           </div>
+
+          <!-- 降级产出提示 -->
+          <el-alert
+            v-if="task.has_mock_assets"
+            class="mock-alert"
+            type="warning"
+            :closable="false"
+            show-icon
+            title="本任务包含 mock 占位资产"
+            description="部分产物为 Provider 不可用时的降级占位（假图/假视频），仅供联调使用，请检查模型厂商配置后重新生成。"
+          />
         </div>
 
         <!-- 已完成步骤 -->
@@ -242,7 +253,8 @@ const statusLabels: Record<string, string> = {
   'pending': '待处理',
   'running': '运行中',
   'completed': '已完成',
-  'failed': '失败'
+  'failed': '失败',
+  'cancelled': '已取消'
 }
 
 const getTaskTypeLabel = (type: string) => taskTypeLabels[type] || type
@@ -253,7 +265,8 @@ const getStatusType = (status: string) => {
     'pending': 'info',
     'running': 'warning',
     'completed': 'success',
-    'failed': 'danger'
+    'failed': 'danger',
+    'cancelled': 'info'
   }
   return typeMap[status] || 'info'
 }
@@ -373,6 +386,10 @@ onUnmounted(() => {
   font-size: 14px;
   color: #606266;
   margin-bottom: 10px;
+}
+
+.mock-alert {
+  margin-top: 16px;
 }
 
 .timeline-section,

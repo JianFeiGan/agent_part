@@ -111,7 +111,7 @@ class TestProductImportAPI:
         cm, _ = _mock_get_db()
 
         with (
-            patch("src.api.router.listing.get_db", return_value=cm),
+            patch("src.api.router.listing.get_db_session", return_value=cm),
             patch("src.api.router.listing.BaseRepository", return_value=mock_repo),
             patch("src.agents.listing_importer.ImportProductAgent") as MockAgent,
         ):
@@ -154,7 +154,7 @@ class TestProductImportAPI:
         cm, _ = _mock_get_db()
 
         with (
-            patch("src.api.router.listing.get_db", return_value=cm),
+            patch("src.api.router.listing.get_db_session", return_value=cm),
             patch("src.api.router.listing.BaseRepository", return_value=mock_repo),
         ):
             response = client.get("/api/v1/listing/products")
@@ -180,7 +180,7 @@ class TestListingTaskAPI:
             return AsyncMock()
 
         with (
-            patch("src.api.router.listing.get_db", return_value=cm),
+            patch("src.api.router.listing.get_db_session", return_value=cm),
             patch("src.api.router.listing.BaseRepository", side_effect=repo_factory),
         ):
             response = client.post(
@@ -202,7 +202,7 @@ class TestListingTaskAPI:
         cm, _ = _mock_get_db()
 
         with (
-            patch("src.api.router.listing.get_db", return_value=cm),
+            patch("src.api.router.listing.get_db_session", return_value=cm),
             patch("src.api.router.listing.BaseRepository", return_value=mock_repo),
         ):
             response = client.get("/api/v1/listing/tasks")
@@ -233,7 +233,7 @@ class TestListingTaskAPI:
             return AsyncMock()
 
         with (
-            patch("src.api.router.listing.get_db", return_value=cm),
+            patch("src.api.router.listing.get_db_session", return_value=cm),
             patch("src.api.router.listing.BaseRepository", side_effect=repo_factory),
         ):
             # 创建任务
@@ -287,7 +287,7 @@ class TestComplianceAPI:
         )
 
         with (
-            patch("src.api.router.listing.get_db", return_value=cm),
+            patch("src.api.router.listing.get_db_session", return_value=cm),
             patch("src.api.router.listing.BaseRepository", side_effect=repo_factory),
             patch("src.agents.listing_compliance_checker.ComplianceCheckerAgent") as MockAgent,
         ):
@@ -321,7 +321,7 @@ class TestComplianceAPI:
         cm, _ = _mock_get_db()
 
         with (
-            patch("src.api.router.listing.get_db", return_value=cm),
+            patch("src.api.router.listing.get_db_session", return_value=cm),
             patch("src.api.router.listing.BaseRepository", return_value=mock_repo),
         ):
             report_resp = client.get("/api/v1/listing/compliance/2")
@@ -338,7 +338,7 @@ class TestComplianceAPI:
         cm, _ = _mock_get_db()
 
         with (
-            patch("src.api.router.listing.get_db", return_value=cm),
+            patch("src.api.router.listing.get_db_session", return_value=cm),
             patch("src.api.router.listing.BaseRepository", return_value=mock_repo),
         ):
             response = client.get("/api/v1/listing/compliance/9999")
