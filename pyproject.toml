@@ -11,8 +11,11 @@ dependencies = [
     "langgraph>=0.2.0",
     "langchain-core>=0.3.0",
     "langchain-openai>=0.2.0",
+
     # JWT 鉴权（Kling AI HS256）
     "pyjwt>=2.8.0",
+    # 凭证加密（EncryptedJSONB）
+    "cryptography>=42.0.0",
     # 数据验证
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
@@ -27,6 +30,7 @@ dependencies = [
     "asyncio-throttle>=1.0.2",
     # 工具库
     "python-dotenv>=1.0.0",
+    "cryptography>=42.0.0",
     "tenacity>=8.2.0",
     "rich>=13.0.0",
     # Redis

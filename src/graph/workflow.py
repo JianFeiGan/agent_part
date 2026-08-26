@@ -337,7 +337,7 @@ class WorkflowBuilder:
             start_log.mark_completed("编排调度完成")
             return {
                 "current_step": "orchestration",
-                "completed_steps": state.completed_steps,
+                "completed_steps": [*state.completed_steps, "orchestration"],
                 "agent_logs": [start_log],
             }
 
@@ -368,7 +368,7 @@ class WorkflowBuilder:
                 "current_step": "requirement_analysis",
                 "requirement_report": result.data.get("requirement_report"),
                 "selling_points": result.data.get("selling_points", []),
-                "completed_steps": state.completed_steps,
+                "completed_steps": [*state.completed_steps, "requirement_analysis"],
                 "agent_logs": [start_log],
             }
 
@@ -392,7 +392,7 @@ class WorkflowBuilder:
                 "current_step": "creative_planning",
                 "creative_plan": result.data.get("creative_plan"),
                 "color_palette": result.data.get("color_palette"),
-                "completed_steps": state.completed_steps,
+                "completed_steps": [*state.completed_steps, "creative_planning"],
                 "agent_logs": [start_log],
             }
 
@@ -418,7 +418,7 @@ class WorkflowBuilder:
                 "current_step": "visual_design",
                 "generation_prompts": result.data.get("image_prompts", []),
                 "storyboard": result.data.get("storyboard"),
-                "completed_steps": state.completed_steps,
+                "completed_steps": [*state.completed_steps, "visual_design"],
                 "agent_logs": [start_log],
             }
 
@@ -442,7 +442,7 @@ class WorkflowBuilder:
             return {
                 "current_step": "image_generation",
                 "generated_images": result.data.get("generated_images", []),
-                "completed_steps": state.completed_steps,
+                "completed_steps": [*state.completed_steps, "image_generation"],
                 "agent_logs": [start_log],
             }
 
@@ -463,7 +463,7 @@ class WorkflowBuilder:
             return {
                 "current_step": "video_generation",
                 "generated_video": result.data.get("generated_video"),
-                "completed_steps": state.completed_steps,
+                "completed_steps": [*state.completed_steps, "video_generation"],
                 "agent_logs": [start_log],
             }
 
@@ -492,7 +492,7 @@ class WorkflowBuilder:
                 "issues": result.data.get("issues", []),
                 "asset_collection": result.data.get("asset_collection"),
                 "final_results": result.data.get("final_results"),
-                "completed_steps": state.completed_steps,
+                "completed_steps": [*state.completed_steps, "quality_review"],
                 "agent_logs": [start_log],
             }
 

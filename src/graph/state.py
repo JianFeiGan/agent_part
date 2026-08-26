@@ -261,6 +261,7 @@ class AgentState(BaseModel):
         default_factory=list, description="RAG 增强后的图片 Prompt 列表（累加）"
     )
 
+
     # ==================== 模型厂商指定 ====================
     llm_provider_id: int | None = Field(default=None, description="LLM 厂商 ID（空则用默认）")
     image_provider_id: int | None = Field(default=None, description="图片厂商 ID（空则用默认）")
