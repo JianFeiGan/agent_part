@@ -2,7 +2,7 @@
 知识库 API 测试。
 
 Description:
-    测试知识库管理相关 API 端点。
+    测试知识库管理相关 API 端点（mock 数据库层，不依赖真实 PG/Redis）。
 @author ganjianfei
 @version 1.0.0
 2026-04-05
@@ -14,7 +14,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
-from src.db.models import KnowledgeDoc
+from src.db import get_db
 
 
 @pytest.fixture
@@ -23,15 +23,42 @@ def client() -> TestClient:
     return TestClient(app)
 
 
-@pytest.fixture
-def mock_session() -> MagicMock:
-    """创建模拟数据库会话。"""
-    session = MagicMock()
-    session.execute = AsyncMock()
-    session.flush = AsyncMock()
-    session.commit = AsyncMock()
-    session.rollback = AsyncMock()
-    return session
+@pytest.fixture(autouse=True)
+def _inject_mock_db():
+    """注入 mock 数据库会话，避免测试发起真实 DB 连接。"""
+    mock_session = AsyncMock()
+
+    async def _execute(*_args, **_kwargs):
+        result = MagicMock()
+        result.scalar.return_value = 0
+        # scalars().all() 为同步调用（list_documents 内直接迭代）
+        result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+        result.all.return_value = []
+        return result
+
+    mock_session.execute = AsyncMock(side_effect=_execute)
+    mock_session.flush = AsyncMock()
+    mock_session.commit = AsyncMock()
+    mock_session.rollback = AsyncMock()
+
+    app.dependency_overrides[get_db] = lambda: mock_session
+    # 端点内部构造真实 KnowledgeRetriever / VectorStore，统一替换为 mock
+    mock_retriever = AsyncMock()
+    mock_retriever.retrieve.return_value = MagicMock(results=[], total=0)
+    with (
+        patch("src.rag.retriever.KnowledgeRetriever") as MockRetriever,
+        patch("src.db.vector_store.VectorStore") as MockVectorStore,
+    ):
+        MockRetriever.return_value = mock_retriever
+        MockVectorStore.return_value.get_stats = AsyncMock(
+            return_value={
+                "total_documents": 0,
+                "total_chunks": 0,
+                "documents_by_type": {},
+            }
+        )
+        yield mock_session
+    app.dependency_overrides.clear()
 
 
 class TestKnowledgeDocumentAPI:
