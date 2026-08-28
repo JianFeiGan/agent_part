@@ -423,7 +423,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
 import {
   getConversations,
   getConversationDetail,
@@ -569,9 +568,7 @@ function getBudgetColor(percent: number): string {
 async function loadOverview() {
   try {
     const { data } = await getUsageOverview()
-    if (data.code === 200 || data.code === 0) {
-      overview.value = data.data
-    }
+    overview.value = data.data
   } catch {
     // 保持默认值
   }
@@ -587,12 +584,10 @@ async function loadRecords() {
       page: currentPage.value,
       page_size: pageSize.value
     })
-    if (data.code === 200 || data.code === 0) {
-      records.value = data.data.items
-      recordsTotal.value = data.data.total
-    }
+    records.value = data.data.items
+    recordsTotal.value = data.data.total
   } catch {
-    ElMessage.error('加载会话记录失败')
+    console.error('加载会话记录失败')
   } finally {
     recordsLoading.value = false
   }
@@ -612,12 +607,10 @@ async function handleSearch() {
         page: currentPage.value,
         page_size: pageSize.value
       })
-      if (data.code === 200 || data.code === 0) {
-        records.value = data.data.items
-        recordsTotal.value = data.data.total
-      }
+      records.value = data.data.items
+      recordsTotal.value = data.data.total
     } catch {
-      ElMessage.error('搜索失败')
+      console.error('搜索失败')
     } finally {
       recordsLoading.value = false
     }
@@ -631,11 +624,9 @@ async function showDetail(row: ConversationLogItem) {
   detailData.value = null
   try {
     const { data } = await getConversationDetail(row.id)
-    if (data.code === 200 || data.code === 0) {
-      detailData.value = data.data
-    }
+    detailData.value = data.data
   } catch {
-    ElMessage.error('加载详情失败')
+    console.error('加载详情失败')
   }
 }
 
@@ -643,11 +634,9 @@ async function loadBudget() {
   budgetLoading.value = true
   try {
     const { data } = await getCostBudget(budgetForm.value)
-    if (data.code === 200 || data.code === 0) {
-      budget.value = data.data
-    }
+    budget.value = data.data
   } catch {
-    ElMessage.error('加载预算分析失败')
+    console.error('加载预算分析失败')
   } finally {
     budgetLoading.value = false
   }

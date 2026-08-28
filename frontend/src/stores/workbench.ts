@@ -82,25 +82,23 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     loading.value = true
     try {
       const response = await getTaskById(taskId)
-      if (response.data.code === 200) {
-        taskDetail.value = response.data.data
-        // 构建 agentLogMap
-        const map = new Map<string, AgentLog>()
-        if (taskDetail.value?.agent_logs) {
-          for (const log of taskDetail.value.agent_logs) {
-            map.set(log.step, log)
-          }
+      taskDetail.value = response.data.data
+      // 构建 agentLogMap
+      const map = new Map<string, AgentLog>()
+      if (taskDetail.value?.agent_logs) {
+        for (const log of taskDetail.value.agent_logs) {
+          map.set(log.step, log)
         }
-        agentLogMap.value = map
-        // 默认选中运行中或第一个节点
-        const runningLog = taskDetail.value.agent_logs?.find(l => l.status === 'running')
-        if (runningLog) {
-          selectedAgentId.value = runningLog.step
-        } else if (taskDetail.value.agent_logs?.length) {
-          selectedAgentId.value = taskDetail.value.agent_logs[0].step
-        } else {
-          selectedAgentId.value = 'orchestrator'
-        }
+      }
+      agentLogMap.value = map
+      // 默认选中运行中或第一个节点
+      const runningLog = taskDetail.value.agent_logs?.find(l => l.status === 'running')
+      if (runningLog) {
+        selectedAgentId.value = runningLog.step
+      } else if (taskDetail.value.agent_logs?.length) {
+        selectedAgentId.value = taskDetail.value.agent_logs[0].step
+      } else {
+        selectedAgentId.value = 'orchestrator'
       }
     } finally {
       loading.value = false

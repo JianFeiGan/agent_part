@@ -55,8 +55,8 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">
-              {{ getStatusLabel(row.status) }}
+            <el-tag :type="getTaskStatusTagType(row.status)">
+              {{ getTaskStatusLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -135,6 +135,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getTasks, cancelTask, deleteTask } from '@/api/tasks'
 import type { Task, TaskQueryParams } from '@/types/task'
+import { formatTime, getTaskStatusLabel, getTaskStatusTagType } from '@/utils/format'
 
 /**
  * 任务列表页面
@@ -167,15 +168,6 @@ const taskTypeLabels: Record<string, string> = {
   'image_and_video': '图片+视频'
 }
 
-// 任务状态标签映射
-const statusLabels: Record<string, string> = {
-  'pending': '待处理',
-  'running': '运行中',
-  'completed': '已完成',
-  'failed': '失败',
-  'cancelled': '已取消'
-}
-
 // 步骤标签映射
 const stepLabels: Record<string, string> = {
   'init': '初始化',
@@ -196,32 +188,9 @@ const getTaskTypeLabel = (type: string | undefined) => {
   return type ? (taskTypeLabels[type] || type) : '-'
 }
 
-// 获取状态标签
-const getStatusLabel = (status: string) => {
-  return statusLabels[status] || status
-}
-
-// 获取状态标签类型
-const getStatusType = (status: string) => {
-  const typeMap: Record<string, string> = {
-    'pending': 'info',
-    'running': 'warning',
-    'completed': 'success',
-    'failed': 'danger',
-    'cancelled': 'info'
-  }
-  return typeMap[status] || 'info'
-}
-
 // 获取步骤标签
 const getStepLabel = (step: string) => {
   return stepLabels[step] || step
-}
-
-// 格式化时间
-const formatTime = (time: string) => {
-  if (!time) return '-'
-  return time.replace('T', ' ').substring(0, 19)
 }
 
 // 加载任务列表
@@ -229,15 +198,11 @@ const loadTasks = async () => {
   loading.value = true
   try {
     const response = await getTasks(queryParams)
-    if (response.data.code === 200) {
-      taskList.value = response.data.data.items
-      total.value = response.data.data.total
-    } else {
-      ElMessage.error(response.data.message || '加载任务列表失败')
-    }
+    // 拦截器已统一处理错误提示并 reject，此处不再二次弹错
+    taskList.value = response.data.data.items
+    total.value = response.data.data.total
   } catch (error) {
     console.error('加载任务列表失败:', error)
-    ElMessage.error('加载任务列表失败')
   } finally {
     loading.value = false
   }
@@ -275,13 +240,9 @@ const handleCancel = async (row: Task) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    const response = await cancelTask(row.task_id)
-    if (response.data.code === 200) {
-      ElMessage.success('任务已取消')
-      loadTasks()
-    } else {
-      ElMessage.error(response.data.message || '取消失败')
-    }
+    await cancelTask(row.task_id)
+    ElMessage.success('任务已取消')
+    loadTasks()
   } catch {
     // 用户取消
   }
@@ -295,13 +256,9 @@ const handleDelete = async (row: Task) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    const response = await deleteTask(row.task_id)
-    if (response.data.code === 200) {
-      ElMessage.success('删除成功')
-      loadTasks()
-    } else {
-      ElMessage.error(response.data.message || '删除失败')
-    }
+    await deleteTask(row.task_id)
+    ElMessage.success('删除成功')
+    loadTasks()
   } catch {
     // 用户取消
   }

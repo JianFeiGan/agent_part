@@ -83,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   listAdapterConfigs,
@@ -124,9 +124,7 @@ const fetchConfigs = async () => {
   loading.value = true
   try {
     const res = await listAdapterConfigs()
-    if (res.data.code === 200) {
-      configs.value = res.data.data
-    }
+    configs.value = res.data.data
   } finally {
     loading.value = false
   }
@@ -157,27 +155,19 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     if (editingId.value) {
-      const res = await updateAdapterConfig(editingId.value, {
+      await updateAdapterConfig(editingId.value, {
         credentials: creds,
         is_active: form.is_active,
       })
-      if (res.data.code === 200) {
-        ElMessage.success('更新成功')
-      } else {
-        ElMessage.error(res.data.message || '更新失败')
-      }
+      ElMessage.success('更新成功')
     } else {
-      const res = await createAdapterConfig({
+      await createAdapterConfig({
         platform: form.platform as 'amazon' | 'ebay' | 'shopify',
         shop_id: form.shop_id,
         credentials: creds,
         is_active: form.is_active,
       })
-      if (res.data.code === 200) {
-        ElMessage.success('创建成功')
-      } else {
-        ElMessage.error(res.data.message || '创建失败')
-      }
+      ElMessage.success('创建成功')
     }
     dialogVisible.value = false
     await fetchConfigs()
@@ -189,13 +179,9 @@ const handleSubmit = async () => {
 const handleDelete = async (row: AdapterConfigResponse) => {
   try {
     await ElMessageBox.confirm(`确定删除 ${row.platform}/${row.shop_id} 的配置？`, '确认删除')
-    const res = await deleteAdapterConfig(row.id)
-    if (res.data.code === 200) {
-      ElMessage.success('删除成功')
-      await fetchConfigs()
-    } else {
-      ElMessage.error(res.data.message || '删除失败')
-    }
+    await deleteAdapterConfig(row.id)
+    ElMessage.success('删除成功')
+    await fetchConfigs()
   } catch {
     // User cancelled
   }

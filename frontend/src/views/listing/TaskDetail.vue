@@ -182,18 +182,17 @@ const statusType = (status: string): string => {
 
 onMounted(async () => {
   // 获取任务详情
-  const tasksRes = await listTasks()
-  if (tasksRes.data.code === 200) {
-    task.value =
-      tasksRes.data.data.find((t) => t.task_id === taskId) || null
+  try {
+    const tasksRes = await listTasks()
+    task.value = tasksRes.data.data.find((t) => t.task_id === taskId) || null
+  } catch {
+    console.error('加载刊登任务详情失败')
   }
 
   // 获取合规报告
   try {
     const compRes = await getComplianceReport(taskId)
-    if (compRes.data.code === 200) {
-      complianceReports.value = compRes.data.data
-    }
+    complianceReports.value = compRes.data.data
   } catch {
     // 无合规报告
   }
@@ -201,9 +200,7 @@ onMounted(async () => {
   // 获取推送结果
   try {
     const pushRes = await getPushResults(taskId)
-    if (pushRes.data.code === 200) {
-      pushResults.value = pushRes.data.data
-    }
+    pushResults.value = pushRes.data.data
   } catch {
     // 无推送结果
   }

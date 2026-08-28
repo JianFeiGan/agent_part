@@ -256,7 +256,7 @@ async function loadProviders() {
       providers.value = data.data.map(p => ({ ...p, _testing: false }))
     }
   } catch {
-    ElMessage.error('加载厂商列表失败')
+    console.error('加载厂商列表失败')
   } finally {
     loading.value = false
   }
@@ -330,7 +330,7 @@ async function handleSubmit() {
     dialogVisible.value = false
     await loadProviders()
   } catch {
-    ElMessage.error('操作失败')
+    console.error('提交厂商失败')
   } finally {
     submitting.value = false
   }
@@ -359,7 +359,7 @@ async function handleSetDefault(row: ProviderRow) {
     ElMessage.success('设置默认成功')
     await loadProviders()
   } catch {
-    ElMessage.error('设置默认失败')
+    console.error('设置默认失败')
   }
 }
 

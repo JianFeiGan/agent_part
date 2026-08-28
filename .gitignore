@@ -229,3 +229,7 @@ knowledge/
 output/
 frontend/package-lock.json
 .DS_Store
+
+# Redis dump（含真实数据，禁止入仓）
+frontend/dump.rdb
+*.rdb

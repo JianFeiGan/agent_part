@@ -204,6 +204,7 @@ import { useWorkbenchStore } from '@/stores/workbench'
 import { NODE_MAP } from '@/workflow/topology'
 import { AgentLogStatusLabels } from '@/types/task'
 import type { AgentLog, ChildCallRecord } from '@/types/task'
+import { formatTime } from '@/utils/format'
 
 /**
  * Agent 详情面板。
@@ -279,8 +280,7 @@ function formatVarValue(value: unknown): string {
 }
 
 function formatTimeRange(log: AgentLog): string {
-  const fmt = (t: string | null) => t ? t.replace('T', ' ').substring(0, 19) : '-'
-  return `${fmt(log.start_time)} → ${fmt(log.end_time)}`
+  return `${formatTime(log.start_time)} → ${formatTime(log.end_time)}`
 }
 
 function formatCallMeta(call: ChildCallRecord): string {

@@ -76,14 +76,10 @@ async function handleCancel() {
       cancelButtonText: '取消',
       type: 'warning',
     })
-    const response = await cancelTask(taskId)
-    if (response.data.code === 200) {
-      ElMessage.success('任务已取消')
-      disconnect()
-      await store.loadTask(taskId)
-    } else {
-      ElMessage.error(response.data.message || '取消失败')
-    }
+    await cancelTask(taskId)
+    ElMessage.success('任务已取消')
+    disconnect()
+    await store.loadTask(taskId)
   } catch {
     // 用户取消
   }

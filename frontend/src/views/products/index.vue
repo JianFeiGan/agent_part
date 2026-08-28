@@ -53,7 +53,7 @@
         <el-table-column prop="product_id" label="商品ID" width="180" />
         <el-table-column prop="name" label="商品名称" min-width="200" show-overflow-tooltip />
         <el-table-column prop="category" label="分类" width="120">
-          <template #default="{ row }">
+          <template #default="{ row }: { row: Product }">
             {{ ProductCategoryLabels[row.category] || row.category }}
           </template>
         </el-table-column>
@@ -143,15 +143,10 @@ const loadProducts = async () => {
   loading.value = true
   try {
     const response = await getProducts(queryParams)
-    if (response.data.code === 200) {
-      productList.value = response.data.data.items
-      total.value = response.data.data.total
-    } else {
-      ElMessage.error(response.data.message || '加载商品列表失败')
-    }
+    productList.value = response.data.data.items
+    total.value = response.data.data.total
   } catch (error) {
     console.error('加载商品列表失败:', error)
-    ElMessage.error('加载商品列表失败')
   } finally {
     loading.value = false
   }
@@ -197,13 +192,9 @@ const handleDelete = async (row: Product) => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    const response = await deleteProduct(row.product_id)
-    if (response.data.code === 200) {
-      ElMessage.success('删除成功')
-      loadProducts()
-    } else {
-      ElMessage.error(response.data.message || '删除失败')
-    }
+    await deleteProduct(row.product_id)
+    ElMessage.success('删除成功')
+    loadProducts()
   } catch {
     // 用户取消
   }
