@@ -29,7 +29,7 @@ from src.api.schema.listing import (
 from src.auth.api_key import require_auth
 from src.auth.context import AuthContext
 from src.db.listing_models import ListingProductPO, ListingTaskPO, TaskResultPO
-from src.db.postgres import get_db, get_db_session
+from src.db.postgres import get_db_session
 from src.db.repository import BaseRepository
 from src.models.listing import Platform
 
@@ -126,9 +126,9 @@ async def push_listing(
     async with get_db_session() as session:
         from src.db.asset_repository import AssetRepository
         from src.db.listing_models import CopywritingPackagePO
-        
+
         asset_repo = AssetRepository(session)
-        
+
         for platform in target_platforms:
             try:
                 # 从数据库加载适配器凭证（租户感知）
@@ -139,7 +139,7 @@ async def push_listing(
 
                 # 从数据库加载已生成的素材
                 db_assets = await asset_repo.list_by_task(auth.tenant_id, str(task_id))
-                
+
                 # 构建 AssetPackage
                 main_image = None
                 variant_images = []
@@ -152,7 +152,7 @@ async def push_listing(
                             variant_images.append(asset.url)
                     elif asset.asset_type == "video":
                         video_url = asset.url
-                
+
                 asset_package = AssetPackage(
                     listing_task_id=task_id,
                     platform=platform,
@@ -160,7 +160,7 @@ async def push_listing(
                     variant_images=variant_images,
                     video_url=video_url,
                 )
-                
+
                 # 尝试加载已生成的文案
                 copywriting_result = await session.execute(
                     select(CopywritingPackagePO).where(
@@ -169,7 +169,7 @@ async def push_listing(
                     )
                 )
                 copywriting_po = copywriting_result.scalar_one_or_none()
-                
+
                 if copywriting_po:
                     copywriting = CopywritingPackage(
                         listing_task_id=task_id,

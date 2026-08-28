@@ -10,8 +10,8 @@ Description:
 2026-03-25
 """
 
-from src.api.router import products, tasks, health
-from src.api.schema import common, product, task, asset
+from src.api.router import health, products, tasks
+from src.api.schema import asset, common, product, task
 
 __all__ = [
     "products",

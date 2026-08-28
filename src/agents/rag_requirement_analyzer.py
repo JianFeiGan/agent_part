@@ -13,17 +13,17 @@ Description:
 2026-04-05
 """
 
-import json
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.llm_json import extract_json
 from src.graph.state import RequirementReport
 
 
-class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentState]):
+class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
     """RAG增强的需求分析Agent。
 
     通过知识库检索增强商品分析能力：
@@ -119,7 +119,7 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentState]):
         )
         self.register_prompt("rag_selling_point", selling_point_prompt)
 
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行RAG增强的需求分析。
 
         Args:
@@ -155,7 +155,6 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentState]):
                     "selling_points": report.selling_points,
                     "rag_context_used": bool(knowledge_context),
                 },
-                next_agent=AgentRole.CREATIVE_PLANNER,
             )
 
         except Exception as e:
@@ -164,7 +163,7 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentState]):
                 error=f"需求分析失败: {e}",
             )
 
-    async def _retrieve_knowledge(self, state: AgentState) -> str:
+    async def _retrieve_knowledge(self, state: AgentRuntimeState) -> str:
         """检索相关知识。
 
         Args:
@@ -296,21 +295,16 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentState]):
         Returns:
             需求分析报告。
         """
-        try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start != -1 and end > start:
-                data = json.loads(response[start:end])
-                return RequirementReport(
-                    product_summary=data.get("product_summary", product.name),
-                    key_features=data.get("key_features", []),
-                    selling_points=data.get("selling_points", []),
-                    target_audience=data.get("target_audience", []),
-                    style_recommendations=data.get("style_recommendations", []),
-                    keywords=data.get("keywords", []),
-                )
-        except json.JSONDecodeError:
-            pass
+        data = extract_json(response)
+        if data is not None:
+            return RequirementReport(
+                product_summary=data.get("product_summary", product.name),
+                key_features=data.get("key_features", []),
+                selling_points=data.get("selling_points", []),
+                target_audience=data.get("target_audience", []),
+                style_recommendations=data.get("style_recommendations", []),
+                keywords=data.get("keywords", []),
+            )
 
         return self._create_default_report(product)
 

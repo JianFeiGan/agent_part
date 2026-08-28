@@ -15,6 +15,7 @@ from typing import Any
 from uuid import uuid4
 
 from src.api.schema.task import TaskStatus, TaskType
+from src.api.service import redis_client
 from src.api.service.asset_persister import AssetPersister
 from src.api.service.redis_client import RedisClient, get_redis
 from src.db.postgres import get_db_session
@@ -66,7 +67,6 @@ class TaskManager:
     def __init__(self) -> None:
         """初始化任务管理器。"""
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
-        self._ws_subscribers: dict[str, list[Any]] = {}
 
     async def create_task(
         self,
@@ -97,6 +97,7 @@ class TaskManager:
         generation_request = GenerationRequest(
             task_id=task_id,
             task_type=request_data.get("task_type", TaskType.IMAGE_AND_VIDEO.value),
+            tenant_id=tenant_id,
             image_types=request_data.get("image_types", ["main", "scene"]),
             image_count_per_type=request_data.get("image_count_per_type", 1),
             video_duration=request_data.get("video_duration", 30.0),
@@ -192,8 +193,8 @@ class TaskManager:
                 task_id, TaskStatus.RUNNING.value, 0, "init", tenant_id=tenant_id
             )
 
-            # 创建工作流并执行
-            workflow = ProductVisualWorkflow()
+            # 创建工作流并执行（注入租户/任务 ID 用于 Agent 会话记录隔离）
+            workflow = ProductVisualWorkflow(tenant_id=tenant_id, task_id=task_id)
 
             # 使用回调更新进度
             async def progress_callback(state: AgentState) -> None:
@@ -213,58 +214,68 @@ class TaskManager:
                 await redis.save_task_state(task_id, state, tenant_id=tenant_id)
 
                 # 推送进度更新事件
-                await self._broadcast_event(task_id, {
-                    "type": "progress_update",
-                    "progress": progress,
-                    "current_step": state.current_step,
-                })
+                await self._broadcast_event(
+                    task_id,
+                    {
+                        "type": "progress_update",
+                        "progress": progress,
+                        "current_step": state.current_step,
+                    },
+                    tenant_id=tenant_id,
+                )
 
                 # 推送 agent 状态变化和日志更新事件
                 if state.agent_logs:
                     for log in state.agent_logs:
-                        await self._broadcast_event(task_id, {
-                            "type": "agent_status_change",
-                            "agent_name": log.step,
-                            "status": log.status,
-                        })
+                        await self._broadcast_event(
+                            task_id,
+                            {
+                                "type": "agent_status_change",
+                                "agent_name": log.step,
+                                "status": log.status,
+                            },
+                            tenant_id=tenant_id,
+                        )
                     # 推送最新的完整日志
                     latest_log = state.agent_logs[-1]
                     if latest_log.status in ("completed", "failed"):
-                        await self._broadcast_event(task_id, {
-                            "type": "agent_log_update",
-                            "agent_log": latest_log.model_dump(),
-                        })
+                        await self._broadcast_event(
+                            task_id,
+                            {
+                                "type": "agent_log_update",
+                                "agent_log": latest_log.model_dump(),
+                            },
+                            tenant_id=tenant_id,
+                        )
 
-            # 执行工作流（使用 stream 模式，逐步获取节点输出）
+            # 执行工作流（values 流模式：每步直接产出完整状态，
+            # 免去每节点两次 aget_state checkpoint 往返）
             initial_state = create_initial_state(
                 product,
                 request,
+                tenant_id=tenant_id,
                 llm_provider_id=llm_provider_id,
                 image_provider_id=image_provider_id,
                 video_provider_id=video_provider_id,
             )
             config = {"configurable": {"thread_id": task_id}}
 
-            async for _event in workflow.app.astream(initial_state, config=config):
-                # _event 是每个节点的输出 dict，key 为节点名
-                # 获取最新状态并触发回调
-                latest_state = await workflow.app.aget_state(config)
-                if latest_state and latest_state.values:
-                    state_values = latest_state.values
-                    if isinstance(state_values, dict):
-                        state = AgentState(**state_values)
-                    else:
-                        state = state_values
-                    await progress_callback(state)
-
-            # 获取最终结果
-            final_state = await workflow.app.aget_state(config)
-            if final_state and final_state.values:
-                state_values = final_state.values
-                if isinstance(state_values, dict):
-                    result = AgentState(**state_values)
+            latest_values: Any = None
+            async for latest_values in workflow.app.astream(
+                initial_state, config=config, stream_mode="values"
+            ):
+                if isinstance(latest_values, dict):
+                    state = AgentState(**latest_values)
                 else:
-                    result = state_values
+                    state = latest_values
+                await progress_callback(state)
+
+            # 获取最终结果（values 模式最后一个事件即最终状态）
+            if latest_values is not None:
+                if isinstance(latest_values, dict):
+                    result = AgentState(**latest_values)
+                else:
+                    result = latest_values
             else:
                 result = AgentState(product_info=product, generation_request=request)
 
@@ -518,45 +529,71 @@ class TaskManager:
         """
         return task_id in self._running_tasks
 
-    def subscribe_ws(self, task_id: str, websocket: Any) -> None:
-        """订阅任务 WebSocket 事件。
+    async def _broadcast_event(
+        self, task_id: str, event: dict[str, Any], *, tenant_id: str
+    ) -> None:
+        """通过 Redis pub/sub 广播任务事件。
 
-        Args:
-            task_id: 任务 ID。
-            websocket: WebSocket 连接对象。
-        """
-        if task_id not in self._ws_subscribers:
-            self._ws_subscribers[task_id] = []
-        self._ws_subscribers[task_id].append(websocket)
-
-    def unsubscribe_ws(self, task_id: str, websocket: Any) -> None:
-        """取消订阅任务 WebSocket 事件。
-
-        Args:
-            task_id: 任务 ID。
-            websocket: WebSocket 连接对象。
-        """
-        if task_id in self._ws_subscribers:
-            self._ws_subscribers[task_id] = [
-                ws for ws in self._ws_subscribers[task_id] if ws is not websocket
-            ]
-            if not self._ws_subscribers[task_id]:
-                del self._ws_subscribers[task_id]
-
-    async def _broadcast_event(self, task_id: str, event: dict[str, Any]) -> None:
-        """广播 WebSocket 事件给所有订阅者。
+        事件写入 Redis 频道而非进程内队列，多 worker / 多实例部署下
+        WebSocket 端点所在进程也能收到事件。
 
         Args:
             task_id: 任务 ID。
             event: 事件数据。
+            tenant_id: 租户 ID。
         """
-        subscribers = self._ws_subscribers.get(task_id, [])
-        for ws in subscribers[:]:  # 复制列表避免迭代中修改
+        try:
+            await redis_client.publish_task_event(task_id, event, tenant_id=tenant_id)
+        except Exception as exc:
+            logger.warning("任务 %s 事件广播失败: %s", task_id, exc)
+
+    async def recover_stale_running_tasks(
+        self,
+        redis: RedisClient,
+        tenant_ids: list[str],
+        page_size: int = 100,
+    ) -> int:
+        """将重启后残留的 RUNNING 任务标记为 FAILED。
+
+        服务重启后进程内的 asyncio.Task 已消失，Redis 中状态仍是 RUNNING
+        的任务将永久卡死。启动时按租户扫描一次并置为终态。
+
+        Args:
+            redis: Redis 客户端。
+            tenant_ids: 需要扫描的租户 ID 列表（Redis 按租户 key 隔离）。
+            page_size: 每次拉取的 pageSize。
+
+        Returns:
+            被回收的任务数量。
+        """
+        recovered = 0
+        for tenant_id in tenant_ids:
             try:
-                await ws.send_json(event)
-            except Exception:
-                # 连接已断开，移除订阅
-                self.unsubscribe_ws(task_id, ws)
+                tasks, _total = await redis.list_tasks(
+                    tenant_id=tenant_id,
+                    page=1,
+                    page_size=page_size,
+                    status=TaskStatus.RUNNING.value,
+                )
+            except Exception as exc:
+                logger.warning("扫描租户 %s 的 RUNNING 任务失败: %s", tenant_id, exc)
+                continue
+
+            for item in tasks:
+                task_id = item.get("task_id")
+                if not task_id or self.is_task_running(task_id):
+                    continue
+                await redis.update_task_progress(
+                    task_id,
+                    TaskStatus.FAILED.value,
+                    float(item.get("progress") or 0.0),
+                    "interrupted",
+                    tenant_id=tenant_id,
+                )
+                recovered += 1
+                logger.info("回收中断任务 %s（服务重启导致）", task_id)
+
+        return recovered
 
 
 # 全局单例

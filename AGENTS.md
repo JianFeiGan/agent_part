@@ -468,8 +468,47 @@ POST /api/v1/tasks
 | `LLM_MODEL` | LLM 模型名称 | `qwen3.5-flash` |
 | `IMAGE_MODEL` | 图像生成模型 | `wanx-v1` |
 | `VIDEO_MODEL` | 视频生成模型 | `kling-v1` |
+| `ALLOW_MOCK_ASSETS` | 允许无 Provider 时降级生成占位（mock）资产 | `false`（fail-closed，本地可设 true） |
+| `DB_AUTO_CREATE` | 启动时自动 create_all 建表 | `true`（生产建议 false + Alembic） |
+| `EMBEDDING_DIMENSION` | Vector 列维度 | `1024` |
+| `LLM_RETRY_ATTEMPTS` | LLM 调用重试次数（不含首次） | `2` |
+| `LLM_RETRY_INITIAL_BACKOFF` | LLM 重试初始退避秒数 | `1.0` |
 
-### 6.2 配置类
+### 6.2 任务状态
+
+`TaskStatus`（`src/api/schema/task.py`）：
+
+| 状态 | 含义 |
+|------|------|
+| `pending` | 已创建，未开始 |
+| `running` | 执行中 |
+| `completed` | 成功完成 |
+| `failed` | 失败（进度值保留，不清零） |
+| `cancelled` | 被用户取消（进度值保留） |
+
+失败/取消不再把 progress 归零，避免前端进度条回跳；
+服务重启后残留的 `running` 任务会在启动时被回收为 `failed`（`interrupted`）。
+
+### 6.3 数据库迁移
+
+项目使用 Alembic 管理 schema（`alembic.ini` + `migrations/`）：
+
+```bash
+# 全新数据库：一次性建表（含 pgvector 扩展）
+uv run alembic upgrade head
+
+# 存量数据库（此前用 create_all 建过表）：补记基线版本后走增量迁移
+uv run alembic stamp head
+
+# 修改模型后生成迁移脚本
+uv run alembic revision -m "变更说明"
+```
+
+开发环境下 `DB_AUTO_CREATE=true`（默认）仍会在启动时 `create_all`；
+生产环境应设为 `false` 并统一使用迁移。
+更换 Embedding 模型需同时调整 `EMBEDDING_DIMENSION` 并生成列类型迁移。
+
+### 6.4 配置类
 
 ```python
 from src.config.settings import get_settings

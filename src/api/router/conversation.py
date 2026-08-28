@@ -5,15 +5,14 @@ AI 会话记录 API 路由。
 """
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 
-from src.api.deps import AuthDep
 from src.api.schema.common import ApiResponse
 from src.api.schema.conversation import (
+    AgentUsageBreakdown,
     ConversationContentQuery,
     ConversationDetailResponse,
     ConversationListResponse,
@@ -21,7 +20,6 @@ from src.api.schema.conversation import (
     ConversationQueryParams,
     CostBudgetRequest,
     CostBudgetResponse,
-    AgentUsageBreakdown,
     ModelUsageBreakdown,
     TokenUsageStats,
     UsageOverviewResponse,
@@ -29,7 +27,7 @@ from src.api.schema.conversation import (
 from src.auth.api_key import require_auth
 from src.auth.context import AuthContext
 from src.db.conversation_models import AIConversationLog
-from src.db.postgres import get_db, get_db_session
+from src.db.postgres import get_db_session
 from src.db.repository import BaseRepository
 
 logger = logging.getLogger(__name__)
@@ -299,7 +297,7 @@ async def get_cost_budget(
 
     计算今日和本月的费用使用量，与预算对比，并预估月费用。
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 

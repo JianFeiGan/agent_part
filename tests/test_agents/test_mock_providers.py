@@ -125,36 +125,40 @@ class TestMockImageProvider:
             assert exists, f"File should exist at key: {key}"
 
     @pytest.mark.asyncio
-    async def test_mock_image_provider_creates_asset_po(
-        self, storage_backend: LocalStorageBackend, mock_session: AsyncMock
+    async def test_mock_image_direct_call_markers(
+        self, storage_backend: LocalStorageBackend
     ) -> None:
-        """GeneratedAssetPO 行应存在，is_mock=True。"""
-        agent = ImageGeneratorAgent(storage_backend=storage_backend)
-        storyboard = _make_storyboard()
-        state = _make_state(storyboard)
+        """直接调用 _call_image_api 时走 mock 占位，metadata 标记齐全。"""
+        # 显式禁用 Provider，避免依赖本地 DB/环境变量中的真实厂商配置
+        with patch.object(
+            ProviderFactory,
+            "get_image_provider",
+            new=AsyncMock(return_value=None),
+        ):
+            agent = ImageGeneratorAgent(storage_backend=storage_backend)
+            storyboard = _make_storyboard()
+            state = _make_state(storyboard)
 
-        result = await agent.execute(state)
+            result = await agent.execute(state)
 
-        assert result.success is True
-        images = result.data["generated_images"]
-        assert len(images) > 0
-        for img_data in images:
-            # 直接调用 _call_image_api 时传入 session
-            img_list = await agent._call_image_api(
-                prompt=img_data.get("prompt", "test"),
-                negative_prompt=None,
-                width=img_data.get("width", 1024),
-                height=img_data.get("height", 1024),
-                image_type=img_data.get("image_type", "main"),
-                state=state,
-                session=mock_session,
-            )
-            assert len(img_list) == 1
-            generated = img_list[0]
-            assert generated.metadata.get("is_mock") is True
-            assert generated.metadata.get("provider") == "mock"
-            # 验证 URL 格式
-            assert generated.url.startswith("/static/")
+            assert result.success is True
+            images = result.data["generated_images"]
+            assert len(images) > 0
+            for img_data in images:
+                img_list = await agent._call_image_api(
+                    prompt=img_data.get("prompt", "test"),
+                    negative_prompt=None,
+                    width=img_data.get("width", 1024),
+                    height=img_data.get("height", 1024),
+                    image_type=img_data.get("image_type", "main"),
+                    state=state,
+                )
+                assert len(img_list) == 1
+                generated = img_list[0]
+                assert generated.metadata.get("is_mock") is True
+                assert generated.metadata.get("provider") == "mock"
+                # 验证 URL 格式
+                assert generated.url.startswith("/static/")
 
     @pytest.mark.asyncio
     async def test_image_metadata_has_mock_markers(self) -> None:
@@ -293,28 +297,32 @@ class TestMockVideoProvider:
         assert video_data["status"] == AssetStatus.COMPLETED.value
 
     @pytest.mark.asyncio
-    async def test_mock_video_creates_asset_po(
-        self, storage_backend: LocalStorageBackend, mock_session: AsyncMock
+    async def test_mock_video_direct_call_markers(
+        self, storage_backend: LocalStorageBackend
     ) -> None:
-        """视频 GeneratedAssetPO 行应存在，is_mock=True。"""
-        agent = VideoGeneratorAgent(storage_backend=storage_backend)
-        storyboard = _make_storyboard()
-        state = _make_state(storyboard)
+        """直接调用 _call_video_api 时走 mock 占位，metadata 标记齐全。"""
+        # 显式禁用 Provider，避免依赖本地 DB/环境变量中的真实厂商配置
+        with patch.object(
+            ProviderFactory,
+            "get_video_provider",
+            new=AsyncMock(return_value=None),
+        ):
+            agent = VideoGeneratorAgent(storage_backend=storage_backend)
+            storyboard = _make_storyboard()
+            state = _make_state(storyboard)
 
-        result = await agent.execute(state)
+            result = await agent.execute(state)
 
-        assert result.success is True
-        video_data = result.data["generated_video"]
-        # 直接调用 _call_video_api 传入 session
-        video = await agent._call_video_api(
-            video_id=video_data.get("video_id", "vid_test"),
-            storyboard=storyboard,
-            scene_prompts=[{"prompt": "test"}],
-            width=video_data.get("width", 1920),
-            height=video_data.get("height", 1080),
-            state=state,
-            session=mock_session,
-        )
+            assert result.success is True
+            video_data = result.data["generated_video"]
+            video = await agent._call_video_api(
+                video_id=video_data.get("video_id", "vid_test"),
+                storyboard=storyboard,
+                scene_prompts=[{"prompt": "test"}],
+                width=video_data.get("width", 1920),
+                height=video_data.get("height", 1080),
+                state=state,
+            )
         assert video.metadata.get("is_mock") is True
         assert video.metadata.get("provider") == "mock"
         assert video.url.startswith("/static/")

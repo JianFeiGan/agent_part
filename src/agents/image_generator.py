@@ -21,27 +21,15 @@ from typing import Any
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
 from src.clients.protocols import ImageProviderProtocol
 from src.clients.provider_result import ProviderUnavailableError
-from src.db.asset_repository import AssetRepository
 from src.models.assets import AssetStatus, GeneratedImage, ImageFormat
 from src.models.creative import ImageType
 from src.storage.base import StorageBackend
 from src.storage.factory import get_storage_backend
 
 logger = logging.getLogger(__name__)
-
-
-class ImageGenerationInput:
-    """图片生成输入参数。"""
-
-    prompt: str
-    negative_prompt: str | None
-    width: int
-    height: int
-    style: str
-    num_images: int
 
 
 # 1x1 透明 PNG 的 base64 编码（最小合法 PNG）
@@ -51,7 +39,7 @@ _EMPTY_PNG_BASE64 = (
 )
 
 
-class ImageGeneratorAgent(BaseAgent[AgentState]):
+class ImageGeneratorAgent(BaseAgent[AgentRuntimeState]):
     """图片生成Agent。
 
     通过 ProviderFactory 动态获取图片生成 Provider，
@@ -109,7 +97,7 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         )
         self.register_prompt("optimize", optimize_prompt)
 
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行图片生成。
 
         Args:
@@ -146,7 +134,6 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
                     "generated_images": [img.model_dump() for img in generated_images],
                     "total_count": len(generated_images),
                 },
-                next_agent=AgentRole.QUALITY_REVIEWER,
             )
 
         except Exception as e:
@@ -158,7 +145,7 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
     async def _generate_images(
         self,
         prompt_data: dict[str, Any],
-        _state: AgentState,
+        _state: AgentRuntimeState,
     ) -> list[GeneratedImage]:
         """生成图片。
 
@@ -281,32 +268,28 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
 
         return ", ".join(parts)
 
-    def _resolve_tenant_id(self, state: AgentState) -> str:
+    def _resolve_tenant_id(self, state: AgentRuntimeState) -> str:
         """从 state 中解析 tenant_id。
 
-        TODO: GenerationRequest 当前没有 tenant_id 字段。
-        后续需要添加 tenant_id 到 GenerationRequest 或 AgentState。
+        优先读 AgentRuntimeState.tenant_id（由 create_initial_state 显式注入），
+        兼容旧路径：generation_request / product_info 上的 tenant_id。
 
         Args:
-            state: 当前 AgentState。
+            state: 当前 AgentRuntimeState。
 
         Returns:
             tenant_id 字符串。
         """
-        # 尝试从 generation_request 获取（当前没有该字段）
-        if state.generation_request is not None:
-            req_tenant = getattr(state.generation_request, "tenant_id", None)
-            if req_tenant:
-                return req_tenant
+        if getattr(state, "tenant_id", None):
+            return state.tenant_id
+        # 尝试从 generation_request 获取（旧版本无该字段）
+        req_tenant = getattr(state.generation_request, "tenant_id", None)
+        if req_tenant:
+            return str(req_tenant)
         # 尝试从 product_info 获取
-        if state.product_info is not None:
-            prod_tenant = getattr(state.product_info, "tenant_id", None)
-            if prod_tenant:
-                return prod_tenant
-        # 尝试从 state 顶层获取
-        state_tenant = getattr(state, "tenant_id", None)
-        if state_tenant:
-            return state_tenant
+        prod_tenant = getattr(state.product_info, "tenant_id", None)
+        if prod_tenant:
+            return str(prod_tenant)
         logger.warning("No tenant_id found in state; falling back to 'system'.")
         return "system"
 
@@ -333,58 +316,6 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         url = await backend.save(data, key, content_type=mime_type)
         return url
 
-    async def _create_asset_po(
-        self,
-        session: AsyncSession,
-        tenant_id: str,
-        url: str,
-        storage_key: str,
-        data: bytes,
-        image_id: str,
-        prompt: str,
-        width: int,
-        height: int,
-        mime_type: str,
-        provider: str = "mock",
-        is_mock: bool = True,
-    ) -> None:
-        """在数据库中创建 GeneratedAssetPO 记录。
-
-        Args:
-            session: 异步数据库会话。
-            tenant_id: 租户 ID。
-            url: 可访问 URL。
-            storage_key: 存储键名。
-            data: 文件二进制数据。
-            image_id: 图片 ID。
-            prompt: 生成提示词。
-            width: 宽度。
-            height: 高度。
-            mime_type: MIME 类型。
-            provider: 生成提供方（真实为模型名，降级为 "mock"）。
-            is_mock: 是否为 Mock 占位（真实为 False）。
-        """
-        from src.storage.local import LocalStorageBackend
-
-        sha256 = LocalStorageBackend.compute_sha256(data)
-        repo = AssetRepository(session)
-        await repo.create_asset(
-            tenant_id=tenant_id,
-            asset_type="image",
-            provider=provider,
-            url=url,
-            storage_key=storage_key,
-            storage_backend="local",
-            mime_type=mime_type,
-            file_size=len(data),
-            width=width,
-            height=height,
-            sha256=sha256,
-            status="completed",
-            is_mock=is_mock,
-            extra_data={"prompt": prompt, "image_id": image_id},
-        )
-
     async def _call_image_api(
         self,
         prompt: str,
@@ -392,13 +323,14 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         width: int,
         height: int,
         image_type: str,
-        state: AgentState | None = None,
-        session: AsyncSession | None = None,
+        state: AgentRuntimeState | None = None,
     ) -> list[GeneratedImage]:
         """调用图片生成API。
 
         通过 ProviderFactory 动态获取图片 Provider，
         优先使用任务级指定的 image_provider_id，否则使用全局默认。
+        内部自建短会话读取 model_providers 表配置；
+        产物落库统一由任务完成后的 AssetPersister 负责。
 
         Args:
             prompt: 提示词。
@@ -406,8 +338,7 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
             width: 宽度。
             height: 高度。
             image_type: 图片类型。
-            state: 当前 AgentState（用于获取 tenant_id 和 provider_id）。
-            session: 可选的 AsyncSession（用于写 DB）。
+            state: 当前 AgentRuntimeState（用于获取 tenant_id 和 provider_id）。
 
         Returns:
             生成的图片列表。
@@ -426,12 +357,14 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
         image_provider: ImageProviderProtocol | None = None
         try:
             from src.clients.provider_factory import ProviderFactory
+            from src.db.postgres import get_db_session
 
-            image_provider = await ProviderFactory.get_image_provider(
-                session=session,
-                tenant_id=tenant_id,
-                provider_id=image_provider_id,
-            )
+            async with get_db_session() as db_session:
+                image_provider = await ProviderFactory.get_image_provider(
+                    session=db_session,
+                    tenant_id=tenant_id,
+                    provider_id=image_provider_id,
+                )
         except Exception as exc:
             logger.warning("ProviderFactory 获取图片 Provider 失败: %s", exc)
 
@@ -447,7 +380,6 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
                     seed=None,
                 )
                 image_bytes = result.images[0].data
-                storage_key = f"images/{tenant_id}/{image_id}.png"
                 url = await self._write_asset_to_storage(
                     image_bytes,
                     tenant_id,
@@ -456,21 +388,6 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
                 )
                 # 从 Provider 获取模型名
                 model_name = getattr(image_provider, "_model", "") or self.settings.image_model
-                if session is not None:
-                    await self._create_asset_po(
-                        session=session,
-                        tenant_id=tenant_id,
-                        url=url,
-                        storage_key=storage_key,
-                        data=image_bytes,
-                        image_id=image_id,
-                        prompt=prompt,
-                        width=width,
-                        height=height,
-                        mime_type="image/png",
-                        provider=model_name,
-                        is_mock=False,
-                    )
                 image = GeneratedImage(
                     image_id=image_id,
                     image_type=image_type,
@@ -512,30 +429,12 @@ class ImageGeneratorAgent(BaseAgent[AgentState]):
 
         # 降级 / Mock 占位路径（与无 key 的 CI / 本地行为逐字节一致）
         placeholder_bytes = base64.b64decode(_EMPTY_PNG_BASE64)
-        storage_key = f"images/{tenant_id}/{image_id}.png"
         url = await self._write_asset_to_storage(
             placeholder_bytes,
             tenant_id,
             image_id,
             "image/png",
         )
-
-        # 写入数据库（如果有 session）
-        if session is not None:
-            await self._create_asset_po(
-                session=session,
-                tenant_id=tenant_id,
-                url=url,
-                storage_key=storage_key,
-                data=placeholder_bytes,
-                image_id=image_id,
-                prompt=prompt,
-                width=width,
-                height=height,
-                mime_type="image/png",
-                provider="mock",
-                is_mock=True,
-            )
 
         image = GeneratedImage(
             image_id=image_id,

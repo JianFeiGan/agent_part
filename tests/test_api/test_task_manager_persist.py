@@ -68,15 +68,11 @@ async def test_persist_images_called_after_workflow_success() -> None:
 
     mock_app = MagicMock()
 
-    async def _empty_astream(*args, **kwargs):
-        """空异步生成器。"""
-        if False:
-            yield
+    async def _values_astream(*args, **kwargs):
+        """模拟 stream_mode="values"：产出最终完整状态。"""
+        yield final_state.model_dump()
 
-    mock_app.astream = MagicMock(side_effect=_empty_astream)
-    mock_app.aget_state = AsyncMock(
-        return_value=MagicMock(values=final_state.model_dump())
-    )
+    mock_app.astream = MagicMock(side_effect=_values_astream)
 
     mock_session = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)
@@ -140,14 +136,11 @@ async def test_persist_images_not_called_on_error() -> None:
 
     mock_app = MagicMock()
 
-    async def _empty_astream(*args, **kwargs):
-        if False:
-            yield
+    async def _values_astream_error(*args, **kwargs):
+        """模拟 stream_mode="values"：产出带错误的最终状态。"""
+        yield final_state.model_dump()
 
-    mock_app.astream = MagicMock(side_effect=_empty_astream)
-    mock_app.aget_state = AsyncMock(
-        return_value=MagicMock(values=final_state.model_dump())
-    )
+    mock_app.astream = MagicMock(side_effect=_values_astream_error)
 
     mock_session = AsyncMock()
     mock_session.__aenter__ = AsyncMock(return_value=mock_session)

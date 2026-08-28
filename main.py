@@ -18,6 +18,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.api.router import api_router
 from src.api.service.redis_client import close_redis, get_redis
+from src.api.service.task_manager import get_task_manager
 from src.config.settings import Settings, get_settings
 
 # 配置日志
@@ -28,11 +29,34 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _configured_tenant_ids() -> list[str]:
+    """从 API Token 注册表推导已配置租户 ID 列表。
+
+    Returns:
+        租户 ID 列表（去重）。
+    """
+    import json
+
+    try:
+        tokens = json.loads(get_settings().auth_api_tokens_json or "[]")
+    except json.JSONDecodeError:
+        logger.warning("AUTH_API_TOKENS_JSON 解析失败，跳过中断任务回收")
+        return []
+
+    tenant_ids = {
+        str(t.get("tenant_id"))
+        for t in tokens
+        if isinstance(t, dict) and t.get("tenant_id")
+    }
+    return sorted(tenant_ids)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理。
 
-启动时初始化 Redis 连接、数据库和 seed 模型厂商预置数据，关闭时清理资源。
+启动时初始化 Redis 连接、数据库和 seed 模型厂商预置数据，
+回收上次运行残留的中断任务，关闭时清理资源。
     """
     # 启动时
     logger.info("正在启动应用...")
@@ -41,6 +65,17 @@ async def lifespan(app: FastAPI):
         logger.info("Redis 连接成功")
     except Exception as e:
         logger.warning(f"Redis 连接失败: {e}，将使用内存存储")
+
+    # 回收上次运行残留的 RUNNING 任务（服务重启导致中断）
+    try:
+        tenant_ids = _configured_tenant_ids()
+        recovered = await get_task_manager().recover_stale_running_tasks(
+            await get_redis(), tenant_ids
+        )
+        if recovered:
+            logger.info(f"已回收 {recovered} 个中断任务")
+    except Exception as e:
+        logger.warning(f"中断任务回收失败: {e}")
 
     # 初始化数据库
     try:

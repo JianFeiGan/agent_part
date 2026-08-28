@@ -26,6 +26,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from src.config.settings import get_settings
 from src.db.encrypted_json import EncryptedJSONB
 from src.db.postgres import Base
 
@@ -105,7 +106,7 @@ class KnowledgeChunk(Base):
     doc_id: Mapped[int] = mapped_column(Integer, ForeignKey("knowledge_docs.id"), index=True)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), comment="BGE-large-zh 向量")
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(get_settings().embedding_dimension), comment="Embedding 向量")
     extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
 
@@ -277,7 +278,7 @@ class GraphRAGEntity(Base):
     description: Mapped[str | None] = mapped_column(Text, comment="实体描述")
     aliases: Mapped[list[str]] = mapped_column(JSONB, default=list)
     extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), comment="BGE-large-zh 向量")
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(get_settings().embedding_dimension), comment="Embedding 向量")
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -437,7 +438,7 @@ class AgentMemory(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False, comment="记忆内容")
     key_concepts: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="关键概念列表")
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), comment="BGE-large-zh 向量")
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(get_settings().embedding_dimension), comment="Embedding 向量")
     access_count: Mapped[int] = mapped_column(Integer, default=0, comment="访问计数")
     last_accessed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, comment="最后访问时间")
     importance: Mapped[float] = mapped_column(Float, default=0.5, comment="重要性评分")
@@ -586,7 +587,7 @@ class CategoryMemory(Base):
         JSONB, default=dict, comment="性能提示"
     )
     extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(1024), comment="BGE-large-zh 向量")
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(get_settings().embedding_dimension), comment="Embedding 向量")
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow

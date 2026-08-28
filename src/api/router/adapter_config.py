@@ -25,7 +25,7 @@ from src.api.schema.common import ApiResponse
 from src.auth.api_key import require_auth
 from src.auth.context import AuthContext
 from src.db.listing_models import AdapterConfigPO
-from src.db.postgres import get_db, get_db_session
+from src.db.postgres import get_db_session
 from src.models.listing import Platform
 
 logger = logging.getLogger(__name__)

@@ -13,12 +13,12 @@ Description:
 2026-03-23
 """
 
-import json
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.llm_json import extract_json
 from src.models.creative import (
     ColorInfo,
     ColorPalette,
@@ -69,7 +69,7 @@ PRESET_PALETTES: dict[str, dict[str, Any]] = {
 }
 
 
-class CreativePlannerAgent(BaseAgent[AgentState]):
+class CreativePlannerAgent(BaseAgent[AgentRuntimeState]):
     """创意策划Agent。
 
     根据需求分析结果，设计创意方案。
@@ -138,7 +138,7 @@ class CreativePlannerAgent(BaseAgent[AgentState]):
         )
         self.register_prompt("color", color_prompt)
 
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行创意策划。
 
         Args:
@@ -171,7 +171,6 @@ class CreativePlannerAgent(BaseAgent[AgentState]):
                     "creative_plan": creative_plan.model_dump(),
                     "color_palette": creative_plan.color_palette.model_dump(),
                 },
-                next_agent=AgentRole.VISUAL_DESIGNER,
             )
 
         except Exception as e:
@@ -184,7 +183,7 @@ class CreativePlannerAgent(BaseAgent[AgentState]):
         self,
         product: Any,
         report: Any,
-        state: AgentState,
+        state: AgentRuntimeState,
     ) -> CreativePlan:
         """生成创意方案。
 
@@ -229,34 +228,28 @@ class CreativePlannerAgent(BaseAgent[AgentState]):
         Returns:
             创意方案。
         """
-        try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start != -1 and end > start:
-                data = json.loads(response[start:end])
+        data = extract_json(response)
+        if data is not None:
+            # 确定视觉风格
+            style_str = data.get("visual_style", "modern").upper()
+            try:
+                visual_style = VisualStyle[style_str]
+            except KeyError:
+                visual_style = VisualStyle.MODERN
 
-                # 确定视觉风格
-                style_str = data.get("visual_style", "modern").upper()
-                try:
-                    visual_style = VisualStyle[style_str]
-                except KeyError:
-                    visual_style = VisualStyle.MODERN
+            # 获取配色方案
+            color_name = data.get("color_suggestion", "tech")
+            palette = self._get_palette(color_name)
 
-                # 获取配色方案
-                color_name = data.get("color_suggestion", "tech")
-                palette = self._get_palette(color_name)
-
-                return CreativePlan(
-                    name=data.get("theme_name", "默认创意主题"),
-                    description=data.get("theme_description", ""),
-                    visual_style=visual_style,
-                    style_keywords=data.get("style_keywords", []),
-                    color_palette=palette,
-                    key_elements=data.get("key_elements", []),
-                    target_emotion=data.get("target_emotion"),
-                )
-        except json.JSONDecodeError:
-            pass
+            return CreativePlan(
+                name=data.get("theme_name", "默认创意主题"),
+                description=data.get("theme_description", ""),
+                visual_style=visual_style,
+                style_keywords=data.get("style_keywords", []),
+                color_palette=palette,
+                key_elements=data.get("key_elements", []),
+                target_emotion=data.get("target_emotion"),
+            )
 
         return self._create_default_plan(product)
 

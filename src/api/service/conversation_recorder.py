@@ -6,12 +6,8 @@ AI 会话记录服务。
 
 import logging
 import time
-from datetime import datetime
 from typing import Any
 
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from src.config.settings import get_settings
 from src.db.conversation_models import AIConversationLog
 from src.db.postgres import get_db_session
 from src.db.repository import BaseRepository

@@ -96,7 +96,7 @@ class TestUploadImageSuccess:
             mock_get_backend.return_value = backend_mock
 
             # Mock DB session + AssetRepository
-            with patch("src.api.router.products.get_db") as mock_get_db:
+            with patch("src.api.router.products.get_db_session") as mock_get_db:
                 mock_session = MagicMock()
                 mock_session.__aenter__ = AsyncMock(return_value=mock_session)
                 mock_session.__aexit__ = AsyncMock(return_value=None)
@@ -234,7 +234,7 @@ class TestUploadDedupesBySha256:
 
         # 第一次上传：find_by_sha256 -> None，然后 create_asset
         # 第二次上传：find_by_sha256 -> 命中已有资产
-        with patch("src.api.router.products.get_db") as mock_get_db:
+        with patch("src.api.router.products.get_db_session") as mock_get_db:
             mock_session = MagicMock()
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=None)
@@ -331,7 +331,7 @@ class TestUploadStorageRollback:
         content = b"test-content-for-rollback"
         file = _make_upload_file(content=content, content_type="image/png")
 
-        with patch("src.api.router.products.get_db") as mock_get_db:
+        with patch("src.api.router.products.get_db_session") as mock_get_db:
             mock_session = MagicMock()
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=None)

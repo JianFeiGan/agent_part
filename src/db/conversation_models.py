@@ -11,7 +11,7 @@ AI 会话记录数据库模型。
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ARRAY, Float, Integer, String, Text, TIMESTAMP, func
+from sqlalchemy import TIMESTAMP, Float, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 

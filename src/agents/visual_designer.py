@@ -12,12 +12,12 @@ Description:
 2026-03-23
 """
 
-import json
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.llm_json import extract_json, extract_json_list
 from src.models.creative import ImagePrompt, ImageType
 from src.models.storyboard import (
     Scene,
@@ -28,7 +28,7 @@ from src.models.storyboard import (
 )
 
 
-class VisualDesignerAgent(BaseAgent[AgentState]):
+class VisualDesignerAgent(BaseAgent[AgentRuntimeState]):
     """视觉设计Agent。
 
     将创意方案转化为具体的视觉输出规格。
@@ -112,7 +112,7 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
         )
         self.register_prompt("storyboard", storyboard_prompt)
 
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行视觉设计。
 
         Args:
@@ -157,18 +157,9 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
 
             state.mark_step_completed("visual_design")
 
-            # 根据任务类型确定下一个Agent
-            if task_type == "image_only":
-                next_agent = AgentRole.IMAGE_GENERATOR
-            elif task_type == "video_only":
-                next_agent = AgentRole.VIDEO_GENERATOR
-            else:
-                next_agent = AgentRole.IMAGE_GENERATOR  # 先执行图片生成
-
             return AgentResult(
                 success=True,
                 data=result_data,
-                next_agent=next_agent,
             )
 
         except Exception as e:
@@ -181,7 +172,7 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
         self,
         product: Any,
         creative_plan: Any,
-        state: AgentState,
+        state: AgentRuntimeState,
     ) -> list[ImagePrompt]:
         """生成图片提示词。
 
@@ -231,42 +222,36 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
         Returns:
             图片提示词列表。
         """
-        try:
-            # 尝试解析JSON数组
-            start = response.find("[")
-            end = response.rfind("]") + 1
-            if start != -1 and end > start:
-                data_list = json.loads(response[start:end])
-                prompts = []
-                for data in data_list:
-                    # 防御性处理：确保 data 是字典
-                    if not isinstance(data, dict):
-                        continue
+        data_list = extract_json_list(response)
+        if data_list:
+            prompts = []
+            for data in data_list:
+                # 防御性处理：确保 data 是字典
+                if not isinstance(data, dict):
+                    continue
 
-                    type_str = data.get("image_type", "main")
-                    try:
-                        image_type = ImageType(type_str)
-                    except ValueError:
-                        image_type = ImageType.MAIN
+                type_str = data.get("image_type", "main")
+                try:
+                    image_type = ImageType(type_str)
+                except ValueError:
+                    image_type = ImageType.MAIN
 
-                    style_kw = data.get("style_keywords", [])
-                    # 确保 style_keywords 是列表
-                    if isinstance(style_kw, str):
-                        style_kw = [kw.strip() for kw in style_kw.split(",") if kw.strip()]
+                style_kw = data.get("style_keywords", [])
+                # 确保 style_keywords 是列表
+                if isinstance(style_kw, str):
+                    style_kw = [kw.strip() for kw in style_kw.split(",") if kw.strip()]
 
-                    prompts.append(
-                        ImagePrompt(
-                            image_type=image_type,
-                            prompt=data.get("prompt", ""),
-                            negative_prompt=data.get("negative_prompt"),
-                            style_keywords=style_kw,
-                            aspect_ratio=data.get("aspect_ratio", "1:1"),
-                        )
+                prompts.append(
+                    ImagePrompt(
+                        image_type=image_type,
+                        prompt=data.get("prompt", ""),
+                        negative_prompt=data.get("negative_prompt"),
+                        style_keywords=style_kw,
+                        aspect_ratio=data.get("aspect_ratio", "1:1"),
                     )
-                if prompts:
-                    return prompts
-        except (json.JSONDecodeError, TypeError):
-            pass
+                )
+            if prompts:
+                return prompts
 
         return self._create_default_prompts(None, image_types)
 
@@ -329,7 +314,7 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
         self,
         product: Any,
         creative_plan: Any,
-        state: AgentState,
+        state: AgentRuntimeState,
     ) -> Storyboard:
         """生成分镜脚本。
 
@@ -374,48 +359,42 @@ class VisualDesignerAgent(BaseAgent[AgentState]):
         Returns:
             分镜脚本。
         """
-        try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start != -1 and end > start:
-                data = json.loads(response[start:end])
+        data = extract_json(response)
+        if data is not None:
+            scenes = []
+            for i, scene_data in enumerate(data.get("scenes", [])):
+                scene_type_str = scene_data.get("scene_type", "product_intro")
+                try:
+                    scene_type = SceneType(scene_type_str)
+                except ValueError:
+                    scene_type = SceneType.PRODUCT_INTRO
 
-                scenes = []
-                for i, scene_data in enumerate(data.get("scenes", [])):
-                    scene_type_str = scene_data.get("scene_type", "product_intro")
-                    try:
-                        scene_type = SceneType(scene_type_str)
-                    except ValueError:
-                        scene_type = SceneType.PRODUCT_INTRO
+                shot_type_str = scene_data.get("shot_type", "medium")
+                try:
+                    shot_type = ShotType(shot_type_str)
+                except ValueError:
+                    shot_type = ShotType.MEDIUM
 
-                    shot_type_str = scene_data.get("shot_type", "medium")
-                    try:
-                        shot_type = ShotType(shot_type_str)
-                    except ValueError:
-                        shot_type = ShotType.MEDIUM
-
-                    scenes.append(
-                        Scene(
-                            scene_id=i + 1,
-                            scene_type=scene_type,
-                            duration=float(scene_data.get("duration", 3.0)),
-                            shot_type=shot_type,
-                            description=scene_data.get("description", ""),
-                            visual_prompt=scene_data.get("visual_prompt", ""),
-                            transition_in=TransitionType.CUT,
-                            transition_out=TransitionType.CUT,
-                        )
+                scenes.append(
+                    Scene(
+                        scene_id=i + 1,
+                        scene_type=scene_type,
+                        duration=float(scene_data.get("duration", 3.0)),
+                        shot_type=shot_type,
+                        description=scene_data.get("description", ""),
+                        visual_prompt=scene_data.get("visual_prompt", ""),
+                        transition_in=TransitionType.CUT,
+                        transition_out=TransitionType.CUT,
                     )
-
-                return Storyboard(
-                    title=data.get("title", f"{product.name}产品视频"),
-                    description=data.get("description", ""),
-                    total_duration=duration,
-                    scenes=scenes,
-                    visual_style="modern",
                 )
-        except json.JSONDecodeError:
-            pass
+
+            return Storyboard(
+                title=data.get("title", f"{product.name}产品视频"),
+                description=data.get("description", ""),
+                total_duration=duration,
+                scenes=scenes,
+                visual_style="modern",
+            )
 
         return self._create_default_storyboard(product, duration)
 

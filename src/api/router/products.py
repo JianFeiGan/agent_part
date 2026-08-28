@@ -22,7 +22,7 @@ from src.api.schema.product import (
 )
 from src.auth.context import AuthContext
 from src.db.asset_repository import AssetRepository
-from src.db.postgres import get_db, get_db_session
+from src.db.postgres import get_db_session
 from src.models.product import Product
 from src.storage.factory import get_storage_backend
 from src.storage.local import LocalStorageBackend

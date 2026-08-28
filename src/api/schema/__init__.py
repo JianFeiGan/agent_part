@@ -8,6 +8,11 @@ Description:
 2026-03-25
 """
 
+from src.api.schema.asset import (
+    ImageResponse,
+    QualityReportResponse,
+    VideoResponse,
+)
 from src.api.schema.common import (
     ApiResponse,
     ErrorResponse,
@@ -25,11 +30,6 @@ from src.api.schema.task import (
     TaskDetailResponse,
     TaskListQuery,
     TaskStatusResponse,
-)
-from src.api.schema.asset import (
-    ImageResponse,
-    QualityReportResponse,
-    VideoResponse,
 )
 
 __all__ = [

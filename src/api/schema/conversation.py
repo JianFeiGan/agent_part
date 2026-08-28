@@ -3,11 +3,9 @@ AI 会话记录 API Schema。
 """
 
 from datetime import datetime
-
 from typing import Literal
 
 from pydantic import BaseModel, Field
-
 
 # ==================== 查询参数 ====================
 

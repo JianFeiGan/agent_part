@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     )
     qwen_embedding_dimensions: int = Field(default=1024, description="千问 Embedding 向量维度")
 
+    # ==================== 向量维度配置 ====================
+    # 决定 knowledge_docs / knowledge_chunks / GraphRAG 等表的 Vector(N) 列宽。
+    # 更换 Embedding 模型后需同时调整本值，并通过 Alembic 迁移变更列类型。
+    embedding_dimension: int = Field(
+        default=1024,
+        description="向量列维度（BGE-large-zh=1024；qwen text-embedding-v3 支持 768/1024/1536）",
+    )
+
     @property
     def effective_dashscope_api_key(self) -> str:
         """获取有效的 DashScope API Key。
@@ -106,6 +114,14 @@ class Settings(BaseSettings):
     postgres_user: str = Field(default="postgres", description="PostgreSQL 用户名")
     postgres_password: str = Field(default="", description="PostgreSQL 密码")
     postgres_db: str = Field(default="pvg", description="PostgreSQL 数据库名")
+    db_auto_create: bool = Field(
+        default=True,
+        description=(
+            "启动时是否自动 create_all 建表（开发便利）。"
+            "生产环境建议设为 False，改用 Alembic 迁移管理 schema："
+            "全新库 `alembic upgrade head`，存量库 `alembic stamp head` 后增量迁移。"
+        ),
+    )
 
     # ==================== RAG 配置 ====================
     rag_enabled: bool = Field(default=True, description="启用 RAG 检索增强")
@@ -174,6 +190,18 @@ class Settings(BaseSettings):
     llm_model: str = Field(default="deepseek-v4-flash", description="LLM 模型名称")
     image_model: str = Field(default="sensenova-u1-fast", description="图像生成模型")
     video_model: str = Field(default="kling-v1", description="视频生成模型")
+
+    # ==================== LLM 调用重试配置 ====================
+    llm_retry_attempts: int = Field(
+        default=2,
+        ge=0,
+        description="LLM 调用失败后的重试次数（不含首次调用，0 表示不重试）",
+    )
+    llm_retry_initial_backoff: float = Field(
+        default=1.0,
+        gt=0,
+        description="LLM 重试的初始退避秒数（指数退避基数）",
+    )
 
     # ==================== 占位资产降级配置 ====================
     allow_mock_assets: bool = Field(

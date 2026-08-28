@@ -8,7 +8,9 @@ Description:
 2026-03-25
 """
 
+import asyncio
 import contextlib
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 
@@ -336,8 +338,8 @@ async def task_websocket(
     redis = await get_redis_client()
     task_manager = get_task_manager()
 
-    # 订阅事件
-    task_manager.subscribe_ws(task_id, websocket)
+    # 订阅 Redis 频道（跨进程广播，替代原先的进程内订阅队列）
+    pubsub = await redis.subscribe_task_events(task_id, tenant_id=auth.tenant_id)
 
     try:
         # 发送初始状态（兼容旧格式）
@@ -362,25 +364,41 @@ async def task_websocket(
                     })
 
             # 如果任务已完成或失败，关闭连接
-            if status_data.get("status") in ["completed", "failed"]:
+            if status_data.get("status") in [
+                "completed",
+                "failed",
+                "cancelled",
+            ]:
                 return
 
         except ValueError:
             await websocket.send_json({"error": "任务不存在"})
             return
 
-        # 保持连接，等待事件广播
+        # 保持连接，转发 Redis 频道事件
         while True:
+            message = await pubsub.get_message(
+                ignore_subscribe_messages=True, timeout=1.0
+            )
+            if message is not None and message.get("type") == "message":
+                try:
+                    await websocket.send_json(json.loads(message["data"]))
+                except Exception:
+                    break
+
+            # 客户端断开检测（心跳消息）
             try:
-                # 接收客户端消息（心跳等）
-                await websocket.receive_text()
+                await asyncio.wait_for(websocket.receive_text(), timeout=0.01)
+            except TimeoutError:
+                continue
             except WebSocketDisconnect:
                 break
 
     except Exception:
         pass
     finally:
-        task_manager.unsubscribe_ws(task_id, websocket)
+        with contextlib.suppress(Exception):
+            await pubsub.close()
         with contextlib.suppress(Exception):
             await websocket.close()
 

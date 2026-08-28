@@ -12,13 +12,13 @@ Description:
 2026-04-05
 """
 
-import json
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.llm_json import extract_json
 from src.models.creative import (
     ColorInfo,
     ColorPalette,
@@ -69,7 +69,7 @@ PRESET_PALETTES: dict[str, dict[str, Any]] = {
 }
 
 
-class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
+class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
     """RAG增强的创意策划Agent。
 
     通过知识库检索增强创意策划能力：
@@ -160,7 +160,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
         )
         self.register_prompt("rag_color", color_prompt)
 
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行RAG增强的创意策划。
 
         Args:
@@ -203,7 +203,6 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
                     "color_palette": creative_plan.color_palette.model_dump(),
                     "rag_enhanced": bool(brand_guidelines or category_styles or case_inspirations),
                 },
-                next_agent=AgentRole.VISUAL_DESIGNER,
             )
 
         except Exception as e:
@@ -212,7 +211,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
                 error=f"创意策划失败: {e}",
             )
 
-    async def _retrieve_creative_knowledge(self, state: "AgentState") -> tuple[str, str, str]:
+    async def _retrieve_creative_knowledge(self, state: "AgentRuntimeState") -> tuple[str, str, str]:
         """检索创意相关知识。
 
         Args:
@@ -277,7 +276,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
         self,
         product: Any,
         report: Any,
-        state: "AgentState",
+        state: "AgentRuntimeState",
         brand_guidelines: str,
         category_styles: str,
         case_inspirations: str,
@@ -331,32 +330,26 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
         Returns:
             创意方案。
         """
-        try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start != -1 and end > start:
-                data = json.loads(response[start:end])
+        data = extract_json(response)
+        if data is not None:
+            style_str = data.get("visual_style", "modern").upper()
+            try:
+                visual_style = VisualStyle[style_str]
+            except KeyError:
+                visual_style = VisualStyle.MODERN
 
-                style_str = data.get("visual_style", "modern").upper()
-                try:
-                    visual_style = VisualStyle[style_str]
-                except KeyError:
-                    visual_style = VisualStyle.MODERN
+            color_name = data.get("color_suggestion", "tech")
+            palette = self._get_palette(color_name, brand_guidelines)
 
-                color_name = data.get("color_suggestion", "tech")
-                palette = self._get_palette(color_name, brand_guidelines)
-
-                return CreativePlan(
-                    name=data.get("theme_name", "默认创意主题"),
-                    description=data.get("theme_description", ""),
-                    visual_style=visual_style,
-                    style_keywords=data.get("style_keywords", []),
-                    color_palette=palette,
-                    key_elements=data.get("key_elements", []),
-                    target_emotion=data.get("target_emotion"),
-                )
-        except json.JSONDecodeError:
-            pass
+            return CreativePlan(
+                name=data.get("theme_name", "默认创意主题"),
+                description=data.get("theme_description", ""),
+                visual_style=visual_style,
+                style_keywords=data.get("style_keywords", []),
+                color_palette=palette,
+                key_elements=data.get("key_elements", []),
+                target_emotion=data.get("target_emotion"),
+            )
 
         return self._create_default_plan(product)
 

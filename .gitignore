@@ -220,7 +220,6 @@ docs/*.mermaid
 knowledge/
 openspec/
 knowledge/
-migrations/
 .flow/
 .claude/
 .output/

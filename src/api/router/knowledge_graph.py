@@ -10,21 +10,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import AuthDep
 from src.api.schema.common import ApiResponse
 from src.api.schema.knowledge_graph import (
-    KnowledgeGraphCreate,
-    KnowledgeGraphResponse,
-    KnowledgeGraphListResponse,
     AddDocumentRequest,
-    HybridSearchRequest,
-    SearchResponse,
-    SearchResult,
     AgentQueryRequest,
     AgentQueryResponse,
+    HybridSearchRequest,
+    KnowledgeGraphCreate,
+    KnowledgeGraphListResponse,
+    KnowledgeGraphResponse,
+    SearchResponse,
+    SearchResult,
 )
 from src.db import get_db
 from src.knowledge import (
-    KnowledgeGraph,
     DocumentIngestionService,
     KnowledgeAgentWorkflow,
+    KnowledgeGraph,
 )
 
 router = APIRouter()

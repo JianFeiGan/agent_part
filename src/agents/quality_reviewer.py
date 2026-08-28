@@ -13,14 +13,14 @@ Description:
 2026-03-23
 """
 
-import json
 import logging
 from datetime import datetime
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.llm_json import extract_json
 from src.models.assets import (
     AssetCollection,
     AssetStatus,
@@ -34,7 +34,7 @@ from src.models.assets import (
 logger = logging.getLogger(__name__)
 
 
-class QualityReviewerAgent(BaseAgent[AgentState]):
+class QualityReviewerAgent(BaseAgent[AgentRuntimeState]):
     """质量审核Agent。
 
     对生成的内容进行全面质量检测。
@@ -106,7 +106,7 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
         )
         self.register_prompt("compliance", compliance_prompt)
 
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行质量审核。
 
         Args:
@@ -183,7 +183,6 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
                     "asset_collection": asset_collection.model_dump(),
                     "final_results": final_results,
                 },
-                next_agent=None,  # 流程结束
             )
 
         except Exception as e:
@@ -196,7 +195,7 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
         self,
         image: GeneratedImage,
         product: Any,
-        state: AgentState,
+        state: AgentRuntimeState,
     ) -> QualityReport:
         """审核图片。
 
@@ -272,7 +271,7 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
         self,
         video: GeneratedVideo,
         product: Any,
-        state: AgentState,
+        state: AgentRuntimeState,
     ) -> QualityReport:
         """审核视频。
 
@@ -361,23 +360,22 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
 
         Returns:
             质量评分对象。
-        """
-        try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start != -1 and end > start:
-                data = json.loads(response[start:end])
-                return QualityScore(
-                    overall_score=float(data.get("overall_score", 0.8)),
-                    clarity_score=float(data.get("clarity_score", 0.8)),
-                    composition_score=float(data.get("composition_score", 0.8)),
-                    color_score=float(data.get("color_score", 0.8)),
-                    relevance_score=float(data.get("relevance_score", 0.8)),
-                )
-        except (json.JSONDecodeError, ValueError):
-            pass
 
-        return QualityScore(overall_score=0.8)
+        Raises:
+            ValueError: 响应中无法提取有效 JSON 时抛出，
+                由调用方按 fail-closed 处理（0 分 + high 级 issue）。
+        """
+        data = extract_json(response)
+        if data is None:
+            raise ValueError("质量评分响应中未找到有效 JSON")
+
+        return QualityScore(
+            overall_score=float(data.get("overall_score", 0.8)),
+            clarity_score=float(data.get("clarity_score", 0.8)),
+            composition_score=float(data.get("composition_score", 0.8)),
+            color_score=float(data.get("color_score", 0.8)),
+            relevance_score=float(data.get("relevance_score", 0.8)),
+        )
 
     def _calculate_overall_score(self, reports: list[QualityReport]) -> float:
         """计算总体评分。
@@ -396,7 +394,7 @@ class QualityReviewerAgent(BaseAgent[AgentState]):
 
     def _create_final_results(
         self,
-        state: AgentState,
+        state: AgentRuntimeState,
         reports: list[QualityReport],
         overall_score: float,
     ) -> dict[str, Any]:

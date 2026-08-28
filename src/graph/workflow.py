@@ -9,6 +9,7 @@ Description:
 2026-03-23
 """
 
+from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -163,6 +164,71 @@ def _apply_trace_to_log(agent: Any, log: AgentLog) -> None:
     log.provider = trace.get("provider")
 
 
+
+def make_agent_node(
+    agent_key: str,
+    step_name: str,
+    agent: Any,
+    result_mapper: Callable[[Any], dict[str, Any]],
+    *,
+    apply_trace: bool = True,
+    summarize: str | Callable[[Any], str] = "",
+    input_snapshot: Callable[[AgentState], dict[str, Any] | None] | None = None,
+    output_snapshot: Callable[[Any], dict[str, Any] | None] | None = None,
+) -> Any:
+    """构建统一的 Agent 节点处理函数。
+
+    封装所有节点共有的样板逻辑：执行日志创建、Agent 执行、Trace 回写、
+    失败短路（写入 error）、成功时映射结果字段并累加 completed_steps。
+
+    Args:
+        agent_key: Agent 标识（用于日志）。
+        step_name: 工作流步骤名（写入 current_step / completed_steps）。
+        agent: Agent 实例。
+        result_mapper: 从 AgentResult.data 提取要合并进状态的字段。
+        apply_trace: 是否将 Agent 的 LLM Trace 回写到日志。
+        summarize: 成功摘要文案，或接收 AgentResult 返回文案的回调。
+        input_snapshot: 从当前状态生成输入快照（可选）。
+        output_snapshot: 从执行结果生成输出快照（可选）。
+
+    Returns:
+        LangGraph 节点异步函数。
+    """
+
+    async def _node(state: AgentState) -> dict:
+        """通用 Agent 节点。"""
+        start_log = create_agent_log(agent_key, "running")
+
+        result = await agent.execute(state)
+        if apply_trace:
+            _apply_trace_to_log(agent, start_log)
+
+        if not result.success:
+            start_log.mark_failed(result.error or "执行失败")
+            if input_snapshot is not None:
+                start_log.input_data = input_snapshot(state)
+            return {
+                "error": result.error,
+                "current_step": step_name,
+                "agent_logs": [start_log],
+            }
+
+        summary = summarize(result) if callable(summarize) else summarize
+        start_log.mark_completed(summary)
+        if input_snapshot is not None:
+            start_log.input_data = input_snapshot(state)
+        if output_snapshot is not None:
+            start_log.output_data = output_snapshot(result)
+        return {
+            "current_step": step_name,
+            **result_mapper(result),
+            "completed_steps": [*state.completed_steps, step_name],
+            "agent_logs": [start_log],
+        }
+
+    return _node
+
+
 class WorkflowBuilder:
     """工作流构建器。
 
@@ -186,6 +252,8 @@ class WorkflowBuilder:
         retriever: Any | None = None,
         session: "AsyncSession | None" = None,
         rag_enabled: bool = True,
+        tenant_id: str = "system",
+        task_id: str | None = None,
     ) -> None:
         """初始化工作流构建器。
 
@@ -193,6 +261,8 @@ class WorkflowBuilder:
             retriever: 知识检索器实例（可选）。
             session: 数据库会话，用于 RAG 检索（可选）。
             rag_enabled: 是否启用 RAG 增强，默认启用。
+            tenant_id: 租户 ID，注入各 Agent 用于隔离会话记录与资产归属。
+            task_id: 关联任务 ID，用于 Agent 会话记录关联。
         """
         self.graph = StateGraph(AgentState)
         self.checkpointer = MemorySaver()
@@ -201,6 +271,8 @@ class WorkflowBuilder:
         self._retriever = retriever
         self._session = session
         self._rag_enabled = rag_enabled
+        self._tenant_id = tenant_id
+        self._task_id = task_id
 
     def set_rag_dependencies(
         self,
@@ -236,10 +308,14 @@ class WorkflowBuilder:
             return RAGEnhancedRequirementAnalyzer(
                 retriever=self._retriever,
                 session=self._session,
+                tenant_id=self._tenant_id,
+                task_id=self._task_id,
             )
         from src.agents.requirement_analyzer import RequirementAnalyzerAgent
 
-        return RequirementAnalyzerAgent()
+        return RequirementAnalyzerAgent(
+            tenant_id=self._tenant_id, task_id=self._task_id
+        )
 
     def _create_creative_planner(self) -> Any:
         """创建创意策划 Agent。
@@ -255,10 +331,14 @@ class WorkflowBuilder:
             return RAGEnhancedCreativePlanner(
                 retriever=self._retriever,
                 session=self._session,
+                tenant_id=self._tenant_id,
+                task_id=self._task_id,
             )
         from src.agents.creative_planner import CreativePlannerAgent
 
-        return CreativePlannerAgent()
+        return CreativePlannerAgent(
+            tenant_id=self._tenant_id, task_id=self._task_id
+        )
 
     def _create_quality_reviewer(self) -> Any:
         """创建质量审核 Agent。
@@ -274,10 +354,14 @@ class WorkflowBuilder:
             return RAGEnhancedQualityReviewer(
                 retriever=self._retriever,
                 session=self._session,
+                tenant_id=self._tenant_id,
+                task_id=self._task_id,
             )
         from src.agents.quality_reviewer import QualityReviewerAgent
 
-        return QualityReviewerAgent()
+        return QualityReviewerAgent(
+            tenant_id=self._tenant_id, task_id=self._task_id
+        )
 
     def _create_image_generator(self) -> Any:
         """创建图片生成 Agent。
@@ -293,10 +377,14 @@ class WorkflowBuilder:
             return RAGEnhancedImageGenerator(
                 retriever=self._retriever,
                 session=self._session,
+                tenant_id=self._tenant_id,
+                task_id=self._task_id,
             )
         from src.agents.image_generator import ImageGeneratorAgent
 
-        return ImageGeneratorAgent()
+        return ImageGeneratorAgent(
+            tenant_id=self._tenant_id, task_id=self._task_id
+        )
 
     def add_agent_nodes(self) -> "WorkflowBuilder":
         """添加所有Agent节点。
@@ -310,200 +398,137 @@ class WorkflowBuilder:
         from src.agents.visual_designer import VisualDesignerAgent
 
         # 创建 Agent 实例（根据 RAG 配置选择版本）
-        orchestrator = OrchestratorAgent()
+        orchestrator = OrchestratorAgent(
+            tenant_id=self._tenant_id, task_id=self._task_id
+        )
         requirement_analyzer = self._create_requirement_analyzer()
         creative_planner = self._create_creative_planner()
-        visual_designer = VisualDesignerAgent()
+        visual_designer = VisualDesignerAgent(
+            tenant_id=self._tenant_id, task_id=self._task_id
+        )
         image_generator = self._create_image_generator()
-        video_generator = VideoGeneratorAgent()
+        video_generator = VideoGeneratorAgent(
+            tenant_id=self._tenant_id, task_id=self._task_id
+        )
         quality_reviewer = self._create_quality_reviewer()
 
-        # 定义节点处理函数
-        async def orchestrator_node(state: AgentState) -> dict:
-            """编排器节点。"""
-            # 记录开始日志
-            start_log = create_agent_log("orchestrator", "running")
+        # 使用统一工厂构建节点处理函数
+        def _trunc(value: Any, limit: int = 500) -> str | None:
+            return str(value)[:limit] if value else None
 
-            result = await orchestrator.execute(state)
-
-            # 记录结束日志
-            if not result.success:
-                start_log.mark_failed(result.error or "执行失败")
-                return {
-                    "error": result.error,
-                    "current_step": "orchestration",
-                    "agent_logs": [start_log],
-                }
-            start_log.mark_completed("编排调度完成")
-            return {
-                "current_step": "orchestration",
-                "completed_steps": [*state.completed_steps, "orchestration"],
-                "agent_logs": [start_log],
-            }
-
-        async def requirement_analyzer_node(state: AgentState) -> dict:
-            """需求分析节点。"""
-            start_log = create_agent_log("requirement_analyzer", "running")
-
-            result = await requirement_analyzer.execute(state)
-            _apply_trace_to_log(requirement_analyzer, start_log)
-
-            if not result.success:
-                start_log.mark_failed(result.error or "执行失败")
-                start_log.input_data = {"product_info": str(state.product_info)[:500]} if state.product_info else None
-                return {
-                    "error": result.error,
-                    "current_step": "requirement_analysis",
-                    "agent_logs": [start_log],
-                }
-            start_log.mark_completed(
-                f"分析完成，发现 {len(result.data.get('selling_points', []))} 个卖点"
-            )
-            start_log.input_data = {"product_info": str(state.product_info)[:500]} if state.product_info else None
-            start_log.output_data = {
-                "selling_points_count": len(result.data.get("selling_points", [])),
-                "key_features_count": len(result.data.get("requirement_report", {}).get("key_features", [])) if result.data.get("requirement_report") else 0,
-            }
-            return {
-                "current_step": "requirement_analysis",
-                "requirement_report": result.data.get("requirement_report"),
-                "selling_points": result.data.get("selling_points", []),
-                "completed_steps": [*state.completed_steps, "requirement_analysis"],
-                "agent_logs": [start_log],
-            }
-
-        async def creative_planner_node(state: AgentState) -> dict:
-            """创意策划节点。"""
-            start_log = create_agent_log("creative_planner", "running")
-
-            result = await creative_planner.execute(state)
-            _apply_trace_to_log(creative_planner, start_log)
-
-            if not result.success:
-                start_log.mark_failed(result.error or "执行失败")
-                return {
-                    "error": result.error,
-                    "current_step": "creative_planning",
-                    "agent_logs": [start_log],
-                }
-            start_log.mark_completed("创意方案生成完成")
-            start_log.input_data = {"selling_points_count": len(state.selling_points)} if state.selling_points else None
-            return {
-                "current_step": "creative_planning",
-                "creative_plan": result.data.get("creative_plan"),
-                "color_palette": result.data.get("color_palette"),
-                "completed_steps": [*state.completed_steps, "creative_planning"],
-                "agent_logs": [start_log],
-            }
-
-        async def visual_designer_node(state: AgentState) -> dict:
-            """视觉设计节点。"""
-            start_log = create_agent_log("visual_designer", "running")
-
-            result = await visual_designer.execute(state)
-            _apply_trace_to_log(visual_designer, start_log)
-
-            if not result.success:
-                start_log.mark_failed(result.error or "执行失败")
-                return {
-                    "error": result.error,
-                    "current_step": "visual_design",
-                    "agent_logs": [start_log],
-                }
-            prompts_count = len(result.data.get("image_prompts", []))
-            start_log.mark_completed(f"生成 {prompts_count} 个图片提示词")
-            start_log.input_data = {"creative_plan": str(state.creative_plan)[:500]} if state.creative_plan else None
-            start_log.output_data = {"prompts_count": prompts_count}
-            return {
-                "current_step": "visual_design",
-                "generation_prompts": result.data.get("image_prompts", []),
-                "storyboard": result.data.get("storyboard"),
-                "completed_steps": [*state.completed_steps, "visual_design"],
-                "agent_logs": [start_log],
-            }
-
-        async def image_generator_node(state: AgentState) -> dict:
-            """图片生成节点。"""
-            start_log = create_agent_log("image_generator", "running")
-
-            result = await image_generator.execute(state)
-
-            if not result.success:
-                start_log.mark_failed(result.error or "执行失败")
-                return {
-                    "error": result.error,
-                    "current_step": "image_generation",
-                    "agent_logs": [start_log],
-                }
-            images_count = len(result.data.get("generated_images", []))
-            start_log.mark_completed(f"成功生成 {images_count} 张图片")
-            start_log.input_data = {"prompts_count": len(state.generation_prompts)} if state.generation_prompts else None
-            start_log.output_data = {"images_count": images_count}
-            return {
-                "current_step": "image_generation",
-                "generated_images": result.data.get("generated_images", []),
-                "completed_steps": [*state.completed_steps, "image_generation"],
-                "agent_logs": [start_log],
-            }
-
-        async def video_generator_node(state: AgentState) -> dict:
-            """视频生成节点。"""
-            start_log = create_agent_log("video_generator", "running")
-
-            result = await video_generator.execute(state)
-
-            if not result.success:
-                start_log.mark_failed(result.error or "执行失败")
-                return {
-                    "error": result.error,
-                    "current_step": "video_generation",
-                    "agent_logs": [start_log],
-                }
-            start_log.mark_completed("视频生成完成")
-            return {
-                "current_step": "video_generation",
-                "generated_video": result.data.get("generated_video"),
-                "completed_steps": [*state.completed_steps, "video_generation"],
-                "agent_logs": [start_log],
-            }
-
-        async def quality_reviewer_node(state: AgentState) -> dict:
-            """质量审核节点。"""
-            start_log = create_agent_log("quality_reviewer", "running")
-
-            result = await quality_reviewer.execute(state)
-            _apply_trace_to_log(quality_reviewer, start_log)
-
-            if not result.success:
-                start_log.mark_failed(result.error or "执行失败")
-                return {
-                    "error": result.error,
-                    "current_step": "quality_review",
-                    "agent_logs": [start_log],
-                }
-            score = result.data.get("overall_score", 0)
-            start_log.mark_completed(f"质量评分: {score}")
-            start_log.input_data = {"images_count": len(state.generated_images), "has_video": state.generated_video is not None}
-            start_log.output_data = {"quality_score": score, "issues_count": len(result.data.get("issues", []))}
-            return {
-                "current_step": "quality_review",
-                "quality_reports": result.data.get("quality_reports", []),
-                "quality_score": result.data.get("overall_score"),
-                "issues": result.data.get("issues", []),
-                "asset_collection": result.data.get("asset_collection"),
-                "final_results": result.data.get("final_results"),
-                "completed_steps": [*state.completed_steps, "quality_review"],
-                "agent_logs": [start_log],
-            }
+        node_defs = {
+            "orchestrator": make_agent_node(
+                "orchestrator",
+                "orchestration",
+                orchestrator,
+                lambda _r: {},
+                apply_trace=False,
+                summarize="编排调度完成",
+            ),
+            "requirement_analyzer": make_agent_node(
+                "requirement_analyzer",
+                "requirement_analysis",
+                requirement_analyzer,
+                lambda r: {
+                    "requirement_report": r.data.get("requirement_report"),
+                    "selling_points": r.data.get("selling_points", []),
+                },
+                summarize=lambda r: (
+                    f"分析完成，发现 {len(r.data.get('selling_points', []))} 个卖点"
+                ),
+                input_snapshot=lambda s: {"product_info": _trunc(s.product_info)},
+                output_snapshot=lambda r: {
+                    "selling_points_count": len(r.data.get("selling_points", [])),
+                    "key_features_count": (
+                        len(r.data.get("requirement_report", {}).get("key_features", []))
+                        if r.data.get("requirement_report")
+                        else 0
+                    ),
+                },
+            ),
+            "creative_planner": make_agent_node(
+                "creative_planner",
+                "creative_planning",
+                creative_planner,
+                lambda r: {
+                    "creative_plan": r.data.get("creative_plan"),
+                    "color_palette": r.data.get("color_palette"),
+                },
+                summarize="创意方案生成完成",
+                input_snapshot=lambda s: (
+                    {"selling_points_count": len(s.selling_points)}
+                    if s.selling_points
+                    else None
+                ),
+            ),
+            "visual_designer": make_agent_node(
+                "visual_designer",
+                "visual_design",
+                visual_designer,
+                lambda r: {
+                    "generation_prompts": r.data.get("image_prompts", []),
+                    "storyboard": r.data.get("storyboard"),
+                },
+                summarize=lambda r: (
+                    f"生成 {len(r.data.get('image_prompts', []))} 个图片提示词"
+                ),
+                input_snapshot=lambda s: {"creative_plan": _trunc(s.creative_plan)},
+                output_snapshot=lambda r: {
+                    "prompts_count": len(r.data.get("image_prompts", []))
+                },
+            ),
+            "image_generator": make_agent_node(
+                "image_generator",
+                "image_generation",
+                image_generator,
+                lambda r: {"generated_images": r.data.get("generated_images", [])},
+                apply_trace=False,
+                summarize=lambda r: (
+                    f"成功生成 {len(r.data.get('generated_images', []))} 张图片"
+                ),
+                input_snapshot=lambda s: (
+                    {"prompts_count": len(s.generation_prompts)}
+                    if s.generation_prompts
+                    else None
+                ),
+                output_snapshot=lambda r: {
+                    "images_count": len(r.data.get("generated_images", []))
+                },
+            ),
+            "video_generator": make_agent_node(
+                "video_generator",
+                "video_generation",
+                video_generator,
+                lambda r: {"generated_video": r.data.get("generated_video")},
+                apply_trace=False,
+                summarize="视频生成完成",
+            ),
+            "quality_reviewer": make_agent_node(
+                "quality_reviewer",
+                "quality_review",
+                quality_reviewer,
+                lambda r: {
+                    "quality_reports": r.data.get("quality_reports", []),
+                    "quality_score": r.data.get("overall_score"),
+                    "issues": r.data.get("issues", []),
+                    "asset_collection": r.data.get("asset_collection"),
+                    "final_results": r.data.get("final_results"),
+                },
+                summarize=lambda r: f"质量评分: {r.data.get('overall_score', 0)}",
+                input_snapshot=lambda s: {
+                    "images_count": len(s.generated_images),
+                    "has_video": s.generated_video is not None,
+                },
+                output_snapshot=lambda r: {
+                    "quality_score": r.data.get("overall_score"),
+                    "issues_count": len(r.data.get("issues", [])),
+                },
+            ),
+        }
 
         # 添加节点
-        self.graph.add_node("orchestrator", orchestrator_node)
-        self.graph.add_node("requirement_analyzer", requirement_analyzer_node)
-        self.graph.add_node("creative_planner", creative_planner_node)
-        self.graph.add_node("visual_designer", visual_designer_node)
-        self.graph.add_node("image_generator", image_generator_node)
-        self.graph.add_node("video_generator", video_generator_node)
-        self.graph.add_node("quality_reviewer", quality_reviewer_node)
+        for node_name, node_fn in node_defs.items():
+            self.graph.add_node(node_name, node_fn)
 
         self._nodes_added = True
         return self
@@ -588,6 +613,8 @@ def create_workflow(
     retriever: Any | None = None,
     session: "AsyncSession | None" = None,
     rag_enabled: bool = True,
+    tenant_id: str = "system",
+    task_id: str | None = None,
 ) -> "CompiledGraph":
     """创建并编译完整的工作流。
 
@@ -595,6 +622,8 @@ def create_workflow(
         retriever: 知识检索器实例（可选）。
         session: 数据库会话（可选）。
         rag_enabled: 是否启用 RAG 增强。
+        tenant_id: 租户 ID，注入各 Agent。
+        task_id: 关联任务 ID，注入各 Agent。
 
     Returns:
         编译后的工作流实例。
@@ -603,6 +632,8 @@ def create_workflow(
         retriever=retriever,
         session=session,
         rag_enabled=rag_enabled,
+        tenant_id=tenant_id,
+        task_id=task_id,
     )
     return builder.add_agent_nodes().add_edges().compile()
 
@@ -635,6 +666,8 @@ class ProductVisualWorkflow:
         retriever: Any | None = None,
         session: "AsyncSession | None" = None,
         rag_enabled: bool = True,
+        tenant_id: str = "system",
+        task_id: str | None = None,
     ) -> None:
         """初始化工作流。
 
@@ -642,15 +675,21 @@ class ProductVisualWorkflow:
             retriever: 知识检索器实例（可选）。
             session: 数据库会话（可选）。
             rag_enabled: 是否启用 RAG 增强。
+            tenant_id: 租户 ID，注入各 Agent 用于隔离会话记录与资产归属。
+            task_id: 关联任务 ID，用于 Agent 会话记录关联。
         """
         self.app: CompiledGraph = create_workflow(
             retriever=retriever,
             session=session,
             rag_enabled=rag_enabled,
+            tenant_id=tenant_id,
+            task_id=task_id,
         )
         self._retriever = retriever
         self._session = session
         self._rag_enabled = rag_enabled
+        self._tenant_id = tenant_id
+        self._task_id = task_id
 
     async def run(
         self,
@@ -720,4 +759,6 @@ class ProductVisualWorkflow:
             retriever=self._retriever,
             session=self._session,
             rag_enabled=self._rag_enabled,
+            tenant_id=self._tenant_id,
+            task_id=self._task_id,
         )

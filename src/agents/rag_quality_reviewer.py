@@ -12,7 +12,6 @@ Description:
 2026-04-05
 """
 
-import json
 import logging
 from datetime import datetime
 from typing import Any
@@ -20,7 +19,8 @@ from typing import Any
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.llm_json import extract_json
 from src.models.assets import (
     AssetCollection,
     AssetStatus,
@@ -34,7 +34,7 @@ from src.models.assets import (
 logger = logging.getLogger(__name__)
 
 
-class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
+class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
     """RAG增强的质量审核Agent。
 
     通过知识库检索增强审核能力：
@@ -130,7 +130,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
         )
         self.register_prompt("rag_compliance", compliance_prompt)
 
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行RAG增强的质量审核。
 
         Args:
@@ -211,7 +211,6 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
                     "final_results": final_results,
                     "compliance_rules_applied": len(self._compliance_rules),
                 },
-                next_agent=None,
             )
 
         except Exception as e:
@@ -220,7 +219,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
                 error=f"质量审核失败: {e}",
             )
 
-    async def _load_compliance_rules(self, state: AgentState) -> None:
+    async def _load_compliance_rules(self, state: AgentRuntimeState) -> None:
         """从知识库加载合规规则。
 
         Args:
@@ -268,7 +267,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
         self,
         image: GeneratedImage,
         product: Any,
-        state: AgentState,
+        state: AgentRuntimeState,
     ) -> QualityReport:
         """使用RAG规则审核图片。
 
@@ -351,7 +350,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
         self,
         video: GeneratedVideo,
         product: Any,
-        state: AgentState,
+        state: AgentRuntimeState,
     ) -> QualityReport:
         """使用RAG规则审核视频。
 
@@ -509,23 +508,22 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
 
         Returns:
             质量评分对象。
-        """
-        try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start != -1 and end > start:
-                data = json.loads(response[start:end])
-                return QualityScore(
-                    overall_score=float(data.get("overall_score", 0.8)),
-                    clarity_score=float(data.get("clarity_score", 0.8)),
-                    composition_score=float(data.get("composition_score", 0.8)),
-                    color_score=float(data.get("color_score", 0.8)),
-                    relevance_score=float(data.get("relevance_score", 0.8)),
-                )
-        except (json.JSONDecodeError, ValueError):
-            pass
 
-        return QualityScore(overall_score=0.8)
+        Raises:
+            ValueError: 响应中无法提取有效 JSON 时抛出，
+                由调用方按 fail-closed 处理（0 分 + high 级 issue）。
+        """
+        data = extract_json(response)
+        if data is None:
+            raise ValueError("质量评分响应中未找到有效 JSON")
+
+        return QualityScore(
+            overall_score=float(data.get("overall_score", 0.8)),
+            clarity_score=float(data.get("clarity_score", 0.8)),
+            composition_score=float(data.get("composition_score", 0.8)),
+            color_score=float(data.get("color_score", 0.8)),
+            relevance_score=float(data.get("relevance_score", 0.8)),
+        )
 
     def _calculate_overall_score(self, reports: list[QualityReport]) -> float:
         """计算总体评分。
@@ -544,7 +542,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
 
     def _create_final_results(
         self,
-        state: AgentState,
+        state: AgentRuntimeState,
         reports: list[QualityReport],
         overall_score: float,
     ) -> dict[str, Any]:

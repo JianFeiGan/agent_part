@@ -122,6 +122,7 @@ class GenerationRequest(BaseModel):
 
     task_id: str = Field(default_factory=lambda: "task_default", description="任务ID")
     task_type: str = Field(default="image_and_video", description="任务类型")
+    tenant_id: str = Field(default="system", description="租户 ID")
 
     # 图片生成配置
     image_types: list[str] = Field(
@@ -267,6 +268,9 @@ class AgentState(BaseModel):
     image_provider_id: int | None = Field(default=None, description="图片厂商 ID（空则用默认）")
     video_provider_id: int | None = Field(default=None, description="视频厂商 ID（空则用默认）")
 
+    # ==================== 租户信息 ====================
+    tenant_id: str = Field(default="system", description="租户 ID")
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     def mark_step_completed(self, step: str) -> None:
@@ -317,6 +321,7 @@ def create_initial_state(
     product: Product,
     request: GenerationRequest | None = None,
     *,
+    tenant_id: str | None = None,
     llm_provider_id: int | None = None,
     image_provider_id: int | None = None,
     video_provider_id: int | None = None,
@@ -326,6 +331,7 @@ def create_initial_state(
     Args:
         product: 商品信息。
         request: 生成请求，可选。
+        tenant_id: 租户 ID（空则取请求中的 tenant_id，再兜底 "system"）。
         llm_provider_id: 任务级指定的 LLM 厂商 ID。
         image_provider_id: 任务级指定的图片厂商 ID。
         video_provider_id: 任务级指定的视频厂商 ID。
@@ -333,10 +339,15 @@ def create_initial_state(
     Returns:
         初始化的Agent状态。
     """
+    resolved_request = request or GenerationRequest()
+    if tenant_id:
+        resolved_request.tenant_id = tenant_id
+
     return AgentState(
         product_info=product,
-        generation_request=request or GenerationRequest(),
+        generation_request=resolved_request,
         current_step="init",
+        tenant_id=resolved_request.tenant_id,
         llm_provider_id=llm_provider_id,
         image_provider_id=image_provider_id,
         video_provider_id=video_provider_id,

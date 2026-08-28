@@ -17,6 +17,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
+from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential
 
 from src.config.settings import Settings, get_settings
 
@@ -26,7 +27,7 @@ if TYPE_CHECKING:
     pass
 
 # 状态类型变量
-StateT = TypeVar("StateT", bound="AgentState")
+StateT = TypeVar("StateT", bound="AgentRuntimeState")
 
 
 class AgentRole(str, Enum):
@@ -50,7 +51,7 @@ class AgentStatus(str, Enum):
     FAILED = "failed"
 
 
-class AgentState(BaseModel):
+class AgentRuntimeState(BaseModel):
     """Agent状态基类。"""
 
     agent_id: str = Field(..., description="Agent ID")
@@ -68,7 +69,6 @@ class AgentResult(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict, description="结果数据")
     messages: list[BaseMessage] = Field(default_factory=list, description="消息历史")
     error: str | None = Field(default=None, description="错误信息")
-    next_agent: AgentRole | None = Field(default=None, description="下一个要执行的Agent")
 
 
 class BaseAgent(ABC, Generic[StateT]):
@@ -77,7 +77,6 @@ class BaseAgent(ABC, Generic[StateT]):
     所有协作Agent的基类，提供：
     - LLM 调用封装
     - 提示模板管理
-    - 工具注册
     - 状态管理
     - RAG 知识检索（可选）
 
@@ -123,7 +122,6 @@ class BaseAgent(ABC, Generic[StateT]):
         self._tenant_id = tenant_id
         self._task_id = task_id
         self._session_id = session_id
-        self._tools: list[Any] = []
         self._prompts: dict[str, ChatPromptTemplate] = {}
         self._last_trace: dict[str, Any] | None = None
 
@@ -155,39 +153,6 @@ class BaseAgent(ABC, Generic[StateT]):
         """
         return self._retriever is not None and self.settings.rag_enabled
 
-    async def retrieve_knowledge(
-        self,
-        query: str,
-        doc_type: str | None = None,
-        category: str | None = None,
-        top_k: int = 5,
-    ) -> list[dict[str, Any]]:
-        """执行知识检索（RAG 增强）。
-
-        Args:
-            query: 检索查询。
-            doc_type: 文档类型过滤。
-            category: 类目过滤。
-            top_k: 返回结果数量。
-
-        Returns:
-            检索结果列表。
-
-        Raises:
-            RuntimeError: 未配置知识检索器时抛出。
-        """
-        if not self.has_rag():
-            return []
-
-        # 导入 KnowledgeRetriever（延迟导入避免循环依赖）
-        from src.rag.retriever import KnowledgeRetriever
-
-        if isinstance(self._retriever, KnowledgeRetriever):
-            # 需要从外部注入 session，这里返回空结果
-            # 实际检索在具体 Agent 执行时通过 session 完成
-            return []
-        return []
-
     def _create_llm(self) -> BaseChatModel:
         """创建LLM实例（配置驱动）。
 
@@ -210,14 +175,6 @@ class BaseAgent(ABC, Generic[StateT]):
             "未配置任何 LLM Provider。"
             "请在模型厂商管理页面配置，或设置 DASHSCOPE_API_KEY / SENSENOVA_API_KEY 环境变量。"
         )
-
-    def register_tool(self, tool: Any) -> None:
-        """注册工具。
-
-        Args:
-            tool: 工具实例。
-        """
-        self._tools.append(tool)
 
     def register_prompt(self, name: str, template: ChatPromptTemplate) -> None:
         """注册提示模板。
@@ -253,6 +210,51 @@ class BaseAgent(ABC, Generic[StateT]):
         """
         pass
 
+    async def _ainvoke_with_retry(
+        self,
+        chain: Any,
+        input_vars: dict[str, Any],
+        **kwargs: Any,
+    ) -> Any:
+        """调用 LLM 链，按配置进行指数退避重试。
+
+        仅捕获 Exception（网络抖动、限流等瞬态错误）；
+        asyncio.CancelledError 等取消信号不会被重试拦截。
+
+        Args:
+            chain: LangChain LCEL 链。
+            input_vars: 输入变量。
+            **kwargs: 透传给链的参数。
+
+        Returns:
+            模型响应。
+        """
+        attempts = max(1, self.settings.llm_retry_attempts + 1)
+
+        def _log_retry(retry_state: Any) -> None:
+            exc = (
+                retry_state.outcome.exception()
+                if retry_state.outcome and retry_state.outcome.failed
+                else "unknown"
+            )
+            logger.warning(
+                "LLM 调用失败，准备第 %s/%s 次尝试（退避 %.1fs）: %s",
+                retry_state.attempt_number,
+                attempts,
+                self.settings.llm_retry_initial_backoff * (2 ** (retry_state.attempt_number - 1)),
+                exc,
+            )
+
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(attempts),
+            wait=wait_exponential(multiplier=self.settings.llm_retry_initial_backoff),
+            before_sleep=_log_retry,
+            reraise=True,
+        ):
+            with attempt:
+                return await chain.ainvoke(input_vars, **kwargs)
+        raise RuntimeError("unreachable")  # AsyncRetrying 循环必然 return 或抛出
+
     async def invoke_llm(
         self,
         prompt: ChatPromptTemplate,
@@ -282,7 +284,7 @@ class BaseAgent(ABC, Generic[StateT]):
         # 提取提示词模板文本
         prompt_text = ""
         try:
-            prompt_text = prompt.format(**{k: f"{{{k}}}" for k in input_vars.keys()})
+            prompt_text = prompt.format(**{k: f"{{{k}}}" for k in input_vars})
         except Exception:
             prompt_text = str(prompt)
 
@@ -296,7 +298,7 @@ class BaseAgent(ABC, Generic[StateT]):
             input_content=input_summary,
         ) as recorder:
             chain = prompt | self.llm
-            response = await chain.ainvoke(input_vars, **kwargs)
+            response = await self._ainvoke_with_retry(chain, input_vars, **kwargs)
             recorder.set_response(response)
 
             # 保存 Trace 数据，供 Agent 节点回写到 AgentLog
@@ -327,29 +329,3 @@ class BaseAgent(ABC, Generic[StateT]):
             Agent描述字符串。
         """
         return f"{self.__class__.__name__}(role={self.role.value})"
-
-
-class RunnableAgent(BaseAgent[StateT]):
-    """可运行的Agent实现。
-
-    提供基本的运行能力，子类只需实现 execute 方法。
-    """
-
-    async def run(self, state: StateT) -> AgentResult:
-        """运行Agent。
-
-        Args:
-            state: 当前状态。
-
-        Returns:
-            执行结果。
-        """
-        try:
-            result = await self.execute(state)
-            return result
-        except Exception as e:
-            return AgentResult(
-                success=False,
-                error=str(e),
-                next_agent=None,
-            )

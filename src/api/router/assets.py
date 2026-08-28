@@ -17,7 +17,7 @@ from src.api.schema.common import ApiResponse
 from src.auth.context import AuthContext
 from src.db.asset_repository import AssetRepository
 from src.db.listing_models import GeneratedAssetPO
-from src.db.postgres import get_db, get_db_session
+from src.db.postgres import get_db_session
 from src.storage.factory import get_storage_backend
 
 router = APIRouter()

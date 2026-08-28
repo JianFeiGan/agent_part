@@ -14,7 +14,6 @@ from src.models.product import (
     ProductCategory,
     ProductSpec,
     SellingPoint,
-    SellingPointType,
 )
 
 
