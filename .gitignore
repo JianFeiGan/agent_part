@@ -217,9 +217,7 @@ documents/
 docs/superpowers/
 docs/system_design.md
 docs/*.mermaid
-knowledge/
 openspec/
-knowledge/
 .flow/
 .claude/
 .output/
