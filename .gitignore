@@ -220,6 +220,8 @@ docs/*.mermaid
 openspec/
 .flow/
 .claude/
+.codex/
+.zcode/
 .output/
 .github/
 .codex/
