@@ -2,7 +2,7 @@
 RAG 评估 API 测试。
 
 Description:
-    测试 RAG 效果评估相关 API 端点。
+    测试 RAG 效果评估相关 API 端点（mock 数据库层与 RAG 日志，不依赖真实 PG）。
 @author ganjianfei
 @version 1.0.0
 2026-04-05
@@ -14,12 +14,52 @@ import pytest
 from fastapi.testclient import TestClient
 
 from main import app
+from src.db import get_db
+
+# 统一的 RAG 日志统计 mock 数据
+_RAG_STATS = {
+    "total_retrievals": 10,
+    "total_queries": 10,
+    "avg_similarity": 0.6,
+    "avg_quality_score": 0.8,
+    "total_quality_scores": 10,
+}
+_CHUNK_STATS = {
+    "total_retrievals": 10,
+    "unique_chunks_hit": 5,
+    "unique_docs_hit": 2,
+    "top_chunks": [],
+}
 
 
 @pytest.fixture
 def client() -> TestClient:
     """创建测试客户端。"""
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def _inject_mock_db():
+    """注入 mock 数据库会话与 RAG 日志，避免测试发起真实 DB 连接。"""
+    mock_session = AsyncMock()
+
+    async def _execute(*_args, **_kwargs):
+        result = MagicMock()
+        result.scalar.return_value = 0
+        result.scalars.return_value = MagicMock(all=MagicMock(return_value=[]))
+        result.all.return_value = []
+        return result
+
+    mock_session.execute = AsyncMock(side_effect=_execute)
+
+    mock_logger = MagicMock()
+    mock_logger.get_usage_stats = AsyncMock(return_value=_RAG_STATS)
+    mock_logger.get_chunk_hit_rate = AsyncMock(return_value=_CHUNK_STATS)
+
+    app.dependency_overrides[get_db] = lambda: mock_session
+    with patch("src.rag.logger.get_rag_logger", return_value=mock_logger):
+        yield mock_session
+    app.dependency_overrides.clear()
 
 
 class TestHitRateAPI:

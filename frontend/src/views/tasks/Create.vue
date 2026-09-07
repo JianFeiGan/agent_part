@@ -159,6 +159,7 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import type { Product } from '@/types/product'
 import type { TaskCreateRequest } from '@/types/task'
+import { TaskType } from '@/types/task'
 import type { ModelProviderResponse } from '@/types/provider'
 import { getProducts } from '@/api/products'
 import { createTask } from '@/api/tasks'
@@ -188,7 +189,7 @@ const videoProviders = ref<ModelProviderResponse[]>([])
 // 表单数据
 const formData = reactive<TaskCreateRequest>({
   product_id: '',
-  task_type: 'image_and_video',
+  task_type: TaskType.IMAGE_AND_VIDEO,
   image_types: ['main', 'scene', 'selling_point'],
   image_count_per_type: 1,
   video_duration: 30.0,
@@ -215,20 +216,15 @@ const rules: FormRules = {
 const loadProducts = async () => {
   try {
     const response = await getProducts({ page: 1, page_size: 100 })
-    if (response.data.code === 200) {
-      productList.value = response.data.data.items
+    productList.value = response.data.data.items
 
-      // 如果有预设的商品 ID
-      const preselectedProductId = route.query.product_id
-      if (preselectedProductId) {
-        formData.product_id = preselectedProductId as string
-      }
-    } else {
-      ElMessage.error(response.data.message || '加载商品列表失败')
+    // 如果有预设的商品 ID
+    const preselectedProductId = route.query.product_id
+    if (preselectedProductId) {
+      formData.product_id = preselectedProductId as string
     }
   } catch (error) {
     console.error('加载商品列表失败:', error)
-    ElMessage.error('加载商品列表失败')
   }
 }
 
@@ -257,13 +253,9 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     submitting.value = true
 
-    const response = await createTask(formData)
-    if (response.data.code === 200 || response.data.code === 201) {
-      ElMessage.success('任务创建成功')
-      router.push('/tasks')
-    } else {
-      ElMessage.error(response.data.message || '创建任务失败')
-    }
+    await createTask(formData)
+    ElMessage.success('任务创建成功')
+    router.push('/tasks')
   } catch {
     // 验证失败
   } finally {

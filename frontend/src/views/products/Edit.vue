@@ -156,24 +156,19 @@ const loadProduct = async () => {
   loading.value = true
   try {
     const response = await getProductById(productId)
-    if (response.data.code === 200) {
-      const product = response.data.data
-      Object.assign(formData, {
-        name: product.name,
-        brand: product.brand,
-        category: product.category,
-        subcategory: product.subcategory,
-        description: product.description,
-        short_description: product.short_description,
-        target_audience: product.target_audience || [],
-        tags: product.tags || []
-      })
-    } else {
-      ElMessage.error(response.data.message || '加载商品详情失败')
-    }
+    const product = response.data.data
+    Object.assign(formData, {
+      name: product.name,
+      brand: product.brand,
+      category: product.category,
+      subcategory: product.subcategory,
+      description: product.description,
+      short_description: product.short_description,
+      target_audience: product.target_audience || [],
+      tags: product.tags || []
+    })
   } catch (error) {
     console.error('加载商品详情失败:', error)
-    ElMessage.error('加载商品详情失败')
   } finally {
     loading.value = false
   }
@@ -187,13 +182,9 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     submitting.value = true
 
-    const response = await updateProduct(productId, formData)
-    if (response.data.code === 200) {
-      ElMessage.success('商品更新成功')
-      router.push('/products')
-    } else {
-      ElMessage.error(response.data.message || '更新商品失败')
-    }
+    await updateProduct(productId, formData)
+    ElMessage.success('商品更新成功')
+    router.push('/products')
   } catch {
     // 验证失败
   } finally {

@@ -103,6 +103,40 @@ class RedisClient:
             raise RuntimeError("Redis 客户端未连接，请先调用 connect()")
         return self._client
 
+    # ==================== 任务事件发布/订阅 ====================
+
+    async def publish_task_event(
+        self, task_id: str, event: dict[str, Any], *, tenant_id: str
+    ) -> None:
+        """发布任务事件到 Redis 频道（跨进程广播）。
+
+        Args:
+            task_id: 任务 ID。
+            event: 事件数据（JSON 可序列化）。
+            tenant_id: 租户 ID。
+        """
+        client = await self._ensure_connected()
+        channel = self._tenant_key(tenant_id, "task_events", task_id)
+        await client.publish(channel, json.dumps(event, ensure_ascii=False))
+
+    async def subscribe_task_events(
+        self, task_id: str, *, tenant_id: str
+    ) -> Any:
+        """订阅任务事件频道。
+
+        Args:
+            task_id: 任务 ID。
+            tenant_id: 租户 ID。
+
+        Returns:
+            Redis PubSub 对象，调用方负责关闭。
+        """
+        client = await self._ensure_connected()
+        channel = self._tenant_key(tenant_id, "task_events", task_id)
+        pubsub = client.pubsub(ignore_subscribe_messages=True)
+        await pubsub.subscribe(channel)
+        return pubsub
+
     # ==================== 商品相关操作 ====================
 
     async def save_product(self, product: Product, *, tenant_id: str) -> str:

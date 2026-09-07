@@ -125,18 +125,20 @@ const fetchTasks = async () => {
   loading.value = true
   try {
     const res = await listTasks()
-    if (res.data.code === 200) {
-      tasks.value = res.data.data
-    }
+    tasks.value = res.data.data
+  } catch {
+    console.error('加载刊登任务列表失败')
   } finally {
     loading.value = false
   }
 }
 
 const fetchProducts = async () => {
-  const res = await listProducts()
-  if (res.data.code === 200) {
+  try {
+    const res = await listProducts()
     products.value = res.data.data
+  } catch {
+    console.error('加载商品列表失败')
   }
 }
 
@@ -147,14 +149,10 @@ const handleCreateTask = async () => {
   }
   creating.value = true
   try {
-    const res = await createTask(createForm)
-    if (res.data.code === 200) {
-      ElMessage.success('任务创建成功')
-      showCreateDialog.value = false
-      fetchTasks()
-    } else {
-      ElMessage.error(res.data.message || '创建失败')
-    }
+    await createTask(createForm)
+    ElMessage.success('任务创建成功')
+    showCreateDialog.value = false
+    fetchTasks()
   } finally {
     creating.value = false
   }
@@ -163,13 +161,9 @@ const handleCreateTask = async () => {
 const handleCompliance = async (taskId: number) => {
   try {
     await ElMessageBox.confirm('确定对该任务执行合规检查？', '提示')
-    const res = await runComplianceCheck(taskId)
-    if (res.data.code === 200) {
-      ElMessage.success('合规检查完成')
-      fetchTasks()
-    } else {
-      ElMessage.error(res.data.message || '合规检查失败')
-    }
+    await runComplianceCheck(taskId)
+    ElMessage.success('合规检查完成')
+    fetchTasks()
   } catch {
     // User cancelled
   }
@@ -178,13 +172,9 @@ const handleCompliance = async (taskId: number) => {
 const handlePush = async (taskId: number) => {
   try {
     await ElMessageBox.confirm('确定推送该任务的刊登？', '提示')
-    const res = await pushListing(taskId)
-    if (res.data.code === 200) {
-      ElMessage.success('推送完成')
-      fetchTasks()
-    } else {
-      ElMessage.error(res.data.message || '推送失败')
-    }
+    await pushListing(taskId)
+    ElMessage.success('推送完成')
+    fetchTasks()
   } catch {
     // User cancelled
   }

@@ -220,7 +220,7 @@ class DashScopeImageClient:
         # 检查是否直接返回了结果（同步模式）
         output = data.get("output", {})
         if output.get("results"):
-            return self._parse_results(client, output["results"])
+            return await self._parse_results(client, output["results"])
 
         # 异步模式：获取 task_id 并轮询
         task_id = output.get("task_id")

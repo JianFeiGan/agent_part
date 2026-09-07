@@ -217,10 +217,7 @@ documents/
 docs/superpowers/
 docs/system_design.md
 docs/*.mermaid
-knowledge/
 openspec/
-knowledge/
-migrations/
 .flow/
 .claude/
 .output/
@@ -230,3 +227,7 @@ migrations/
 output/
 frontend/package-lock.json
 .DS_Store
+
+# Redis dump（含真实数据，禁止入仓）
+frontend/dump.rdb
+*.rdb

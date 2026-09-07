@@ -158,13 +158,9 @@ const handleSubmit = async () => {
     await formRef.value.validate()
     submitting.value = true
 
-    const response = await createProduct(formData)
-    if (response.data.code === 200 || response.data.code === 201) {
-      ElMessage.success('商品创建成功')
-      router.push('/products')
-    } else {
-      ElMessage.error(response.data.message || '创建商品失败')
-    }
+    await createProduct(formData)
+    ElMessage.success('商品创建成功')
+    router.push('/products')
   } catch {
     // 验证失败
   } finally {

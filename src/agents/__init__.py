@@ -16,8 +16,7 @@ RAG 增强版 Agent：
 - RAGEnhancedQualityReviewer: 知识库增强的质量审核
 """
 
-from src.agents.base import AgentResult, AgentRole, AgentStatus, BaseAgent
-from src.agents.base import AgentState as BaseAgentState
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, AgentStatus, BaseAgent
 from src.agents.creative_planner import CreativePlannerAgent
 from src.agents.image_generator import ImageGeneratorAgent
 from src.agents.orchestrator import OrchestratorAgent
@@ -34,7 +33,7 @@ __all__ = [
     "BaseAgent",
     "AgentRole",
     "AgentStatus",
-    "BaseAgentState",
+    "AgentRuntimeState",
     "AgentResult",
     # 具体 Agent
     "OrchestratorAgent",

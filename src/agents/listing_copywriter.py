@@ -43,17 +43,15 @@ class AICopywritingAgent:
     LLM 降级策略: 通义千问 → Claude → 规则模式
     """
 
-    def __init__(self, settings: Any | None = None, session: Any = None) -> None:
+    def __init__(self, settings: Any | None = None) -> None:
         """初始化。
 
         Args:
             settings: 可选配置。
-            session: 可选数据库会话，用于 RAG 检索。
         """
         self._settings = settings or get_settings()
         self._llm: BaseChatModel | None = None
         self._current_provider: LLMProvider = LLMProvider.TONGYI
-        self._session = session
 
     def _create_llm(self, provider: LLMProvider | None = None) -> BaseChatModel:
         """创建指定 LLM 实例（配置驱动）。
@@ -137,73 +135,21 @@ class AICopywritingAgent:
 
         return {"copywriting_packages": copywriting_packages}
 
-    async def _retrieve_category_memory(self, state: ListingState) -> str:
-        """检索类目记忆上下文（仅在类目已知时调用）。
-
-        Args:
-            state: 刊登工作流状态。
-
-        Returns:
-            格式化后的类目记忆上下文字符串，无数据时返回空字符串。
-        """
-        product = state.product
-        if not product:
-            return ""
-
-        category = product.category
-        if not category:
-            return ""
-
-        # 仅在至少有一个目标平台已知时检索类目记忆
-        if not state.target_platforms:
-            return ""
-
-        if not self._session:
-            return ""
-
-        try:
-            from src.rag.retriever import KnowledgeRetriever
-
-            retriever = KnowledgeRetriever()
-            context = await retriever.retrieve_category_memory_context(
-                self._session,
-                category,
-                limit=20,
-            )
-            return self._truncate_context(context, max_chars=4000)
-        except Exception:
-            return ""
-
-    def _truncate_context(self, context: str, max_chars: int = 4000) -> str:
-        """截断上下文以控制 token budget。
-
-        Args:
-            context: 原始上下文字符串。
-            max_chars: 最大字符数。
-
-        Returns:
-            截断后的上下文。
-        """
-        if len(context) <= max_chars:
-            return context
-        return context[:max_chars] + "..."
-
     async def _enhance_package(
-        self, package: CopywritingPackage, product: ListingProduct,
-        category_memory_context: str = "",
+        self, package: CopywritingPackage, product: ListingProduct
     ) -> CopywritingPackage:
         """使用 LLM 增强文案包。"""
         # 增强标题
         package.title = await self._enhance_with_llm(
             package.title,
-            f"商品：{product.title}\n品牌：{product.brand or '无'}\n类目：{product.category or '无'}\n类目记忆：{category_memory_context or '（无相关类目记忆）'}",
+            f"商品：{product.title}\n品牌：{product.brand or '无'}\n类目：{product.category or '无'}",
         )
 
         # 增强描述
         if package.description:
             package.description = await self._enhance_with_llm(
                 package.description,
-                f"商品：{product.title}\n品牌：{product.brand or '无'}\n类目记忆：{category_memory_context or '（无相关类目记忆）'}",
+                f"商品：{product.title}\n品牌：{product.brand or '无'}",
             )
 
         # 增强五点描述
@@ -211,7 +157,7 @@ class AICopywritingAgent:
         for bullet in package.bullet_points:
             enhanced = await self._enhance_with_llm(
                 bullet,
-                f"商品：{product.title}\n品牌：{product.brand or '无'}\n类目记忆：{category_memory_context or '（无相关类目记忆）'}",
+                f"商品：{product.title}\n品牌：{product.brand or '无'}",
             )
             enhanced_bullets.append(enhanced)
         package.bullet_points = enhanced_bullets
@@ -221,7 +167,7 @@ class AICopywritingAgent:
     async def execute(self, state: ListingState) -> dict:
         """异步执行文案生成（工作流节点接口）。
 
-        流程: 规则生成草稿 → 检索类目记忆 → 尝试 LLM 润色 → LLM 失败则使用规则草稿
+        流程: 规则生成草稿 → 尝试 LLM 润色 → LLM 失败则使用规则草稿
         """
         product = state.product
         if not product:
@@ -234,16 +180,11 @@ class AICopywritingAgent:
         if not packages:
             return {"copywriting_packages": {}}
 
-        # 检索类目记忆（仅在 platform 已知时）
-        category_memory_context = await self._retrieve_category_memory(state)
-
         # 尝试 LLM 增强
         enhanced: dict[Platform, CopywritingPackage] = {}
         for platform, package in packages.items():
             try:
-                enhanced_package = await self._enhance_package(
-                    package, product, category_memory_context
-                )
+                enhanced_package = await self._enhance_package(package, product)
                 enhanced[platform] = enhanced_package
                 logger.info(f"LLM-enhanced copywriting for {platform.value}")
             except Exception:

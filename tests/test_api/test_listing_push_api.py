@@ -88,6 +88,14 @@ class TestListingPushAPI:
         mock_task_obj = ListingTask(id=1, product_id=1, target_platforms=[Platform.AMAZON])
 
         cm, mock_session = _mock_get_db()
+        # 配置 execute 链路：list_by_task 返回空资产、无已存文案
+        scalars_mock = MagicMock()
+        scalars_mock.all.return_value = []
+        exec_result = MagicMock()
+        exec_result.scalars.return_value = scalars_mock
+        exec_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = exec_result
+        mock_session.add = MagicMock()
 
         mock_adapter = MagicMock()
         mock_adapter.push_listing.return_value = PushResult(
@@ -98,7 +106,7 @@ class TestListingPushAPI:
             patch(
                 "src.api.router.listing_push._load_domain_objects", new_callable=AsyncMock
             ) as mock_load,
-            patch("src.api.router.listing_push.get_db", return_value=cm),
+            patch("src.api.router.listing_push.get_db_session", return_value=cm),
             patch("src.api.router.listing_push.registry") as mock_registry,
             patch("src.api.router.listing_push._config_manager") as mock_mgr,
         ):
@@ -134,7 +142,7 @@ class TestListingPushAPI:
         cm, _ = _mock_get_db()
 
         with (
-            patch("src.api.router.listing_push.get_db", return_value=cm),
+            patch("src.api.router.listing_push.get_db_session", return_value=cm),
             patch("src.api.router.listing_push.BaseRepository", return_value=mock_repo),
         ):
             result_resp = client.get("/api/v1/listing/tasks/1/push-results")
@@ -151,7 +159,7 @@ class TestListingPushAPI:
         cm, _ = _mock_get_db()
 
         with (
-            patch("src.api.router.listing_push.get_db", return_value=cm),
+            patch("src.api.router.listing_push.get_db_session", return_value=cm),
             patch("src.api.router.listing_push.BaseRepository", return_value=mock_repo),
         ):
             response = client.get("/api/v1/listing/tasks/9999/push-results")

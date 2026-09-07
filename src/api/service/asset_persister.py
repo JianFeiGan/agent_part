@@ -13,7 +13,7 @@ import logging
 from typing import Any
 
 from src.db.asset_repository import AssetRepository
-from src.models.assets import GeneratedImage
+from src.models.assets import GeneratedImage, GeneratedVideo
 
 logger = logging.getLogger(__name__)
 
@@ -96,3 +96,56 @@ class AssetPersister:
             logger.info(f"图片落库: image_id={img.image_id}, product_id={product_id}")
 
         return count
+
+    async def persist_videos(
+        self,
+        *,
+        tenant_id: str,
+        product_id: str,
+        task_id: str,
+        video: GeneratedVideo,
+    ) -> int:
+        """将生成的视频落库。
+
+        Args:
+            tenant_id: 租户 ID。
+            product_id: 关联商品 ID。
+            task_id: 生成任务 ID。
+            video: 生成的视频。
+
+        Returns:
+            成功落库的视频数量（0 或 1）。
+        """
+        if not video.is_ready():
+            logger.warning(f"跳过未就绪视频: {video.video_id}")
+            return 0
+
+        is_mock = video.model == "mock"
+        url = video.url or f"/output/{video.local_path}"
+        storage_key = video.local_path or video.url or video.video_id
+
+        await self._repo.create_asset(
+            tenant_id=tenant_id,
+            product_id=product_id,
+            task_id=task_id,
+            asset_type="video",
+            provider=video.model or "kling",
+            url=url,
+            storage_key=storage_key,
+            storage_backend="local",
+            mime_type=f"video/{video.format.value}",
+            width=video.width,
+            height=video.height,
+            file_size=video.file_size or 0,
+            duration=video.duration,
+            status="completed",
+            is_mock=is_mock,
+            extra_data={
+                "video_id": video.video_id,
+                "title": video.title,
+                "fps": video.fps,
+                "prompt": (video.visual_prompt or "")[:500],
+            },
+        )
+        logger.info(f"视频落库: video_id={video.video_id}, product_id={product_id}")
+        return 1

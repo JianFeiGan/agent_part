@@ -12,13 +12,13 @@ Description:
 2026-04-05
 """
 
-import json
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.llm_json import extract_json
 from src.models.creative import (
     ColorInfo,
     ColorPalette,
@@ -69,7 +69,7 @@ PRESET_PALETTES: dict[str, dict[str, Any]] = {
 }
 
 
-class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
+class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
     """RAG增强的创意策划Agent。
 
     通过知识库检索增强创意策划能力：
@@ -115,7 +115,6 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
                     "【品牌视觉规范】\n{brand_guidelines}\n\n"
                     "【类目风格参考】\n{category_styles}\n\n"
                     "【成功案例灵感】\n{case_inspirations}\n\n"
-                    "【类目记忆】\n{category_memory_context}\n\n"
                     "输出JSON格式，包含：\n"
                     "- theme_name: 创意主题名称\n"
                     "- theme_description: 主题描述\n"
@@ -161,7 +160,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
         )
         self.register_prompt("rag_color", color_prompt)
 
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行RAG增强的创意策划。
 
         Args:
@@ -187,14 +186,9 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
                 case_inspirations,
             ) = await self._retrieve_creative_knowledge(state)
 
-            # 检索类目记忆上下文
-            category_memory_context = await self._retrieve_category_memory(state)
-
             # 生成创意方案
             creative_plan = await self._generate_creative_plan_with_rag(
-                product, report, state,
-                brand_guidelines, category_styles, case_inspirations,
-                category_memory_context,
+                product, report, state, brand_guidelines, category_styles, case_inspirations
             )
 
             # 更新状态
@@ -208,9 +202,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
                     "creative_plan": creative_plan.model_dump(),
                     "color_palette": creative_plan.color_palette.model_dump(),
                     "rag_enhanced": bool(brand_guidelines or category_styles or case_inspirations),
-                    "rag_sources": self._build_rag_sources(state),
                 },
-                next_agent=AgentRole.VISUAL_DESIGNER,
             )
 
         except Exception as e:
@@ -219,7 +211,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
                 error=f"创意策划失败: {e}",
             )
 
-    async def _retrieve_creative_knowledge(self, state: "AgentState") -> tuple[str, str, str]:
+    async def _retrieve_creative_knowledge(self, state: "AgentRuntimeState") -> tuple[str, str, str]:
         """检索创意相关知识。
 
         Args:
@@ -280,124 +272,14 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
 
         return brand_guidelines, category_styles, case_inspirations
 
-    async def _retrieve_category_memory(self, state: "AgentState") -> str:
-        """检索类目记忆上下文。
-
-        从 Graph RAG 获取类目相关的实体、边和记忆信息。
-
-        Args:
-            state: 当前状态。
-
-        Returns:
-            格式化后的类目记忆上下文字符串，无数据时返回空字符串。
-        """
-        if not self.has_rag() or not self._session:
-            return ""
-
-        product = state.product_info
-        if not product:
-            return ""
-
-        category = self._extract_category(product)
-        if not category:
-            return ""
-
-        tenant_id = self._extract_tenant_id(state)
-
-        if not hasattr(self._retriever, "retrieve_category_memory_context"):
-            return ""
-
-        try:
-            context = await self._retriever.retrieve_category_memory_context(
-                self._session,
-                category,
-                limit=20,
-                tenant_id=tenant_id,
-            )
-            return self._truncate_context(context, max_chars=4000)
-        except Exception:
-            return ""
-
-    def _truncate_context(self, context: str, max_chars: int = 4000) -> str:
-        """截断上下文以控制 token budget。
-
-        Args:
-            context: 原始上下文字符串。
-            max_chars: 最大字符数。
-
-        Returns:
-            截断后的上下文。
-        """
-        if len(context) <= max_chars:
-            return context
-        return context[:max_chars] + "..."
-
-    @staticmethod
-    def _extract_category(product: Any) -> str:
-        """从商品信息提取类目字符串。
-
-        Args:
-            product: 商品信息。
-
-        Returns:
-            类目字符串。
-        """
-        if product.category is None:
-            return ""
-        if hasattr(product.category, "value"):
-            return str(product.category.value)
-        return str(product.category)
-
-    @staticmethod
-    def _extract_tenant_id(state: "AgentState") -> str:
-        """从状态中提取租户 ID。
-
-        Args:
-            state: 当前状态。
-
-        Returns:
-            租户 ID，fallback 为 "system"。
-        """
-        if state.generation_request and hasattr(state.generation_request, "tenant_id"):
-            tid = getattr(state.generation_request, "tenant_id", None)
-            if tid:
-                return str(tid)
-        return "system"
-
-    def _build_rag_sources(self, state: "AgentState") -> list[dict[str, Any]]:
-        """构建 RAG 来源列表，区分 source_type。
-
-        Args:
-            state: 当前状态。
-
-        Returns:
-            RAG 来源列表。
-        """
-        sources: list[dict[str, Any]] = []
-        for src in state.rag_sources:
-            src_copy = dict(src)
-            if "doc_type" in src_copy:
-                dt = src_copy["doc_type"]
-                if dt == "brand_guide":
-                    src_copy["source_type"] = "brand_guide"
-                elif dt == "category_knowledge":
-                    src_copy["source_type"] = "category_knowledge"
-                elif dt == "case_study":
-                    src_copy["source_type"] = "case_study"
-                else:
-                    src_copy["source_type"] = dt
-            sources.append(src_copy)
-        return sources
-
     async def _generate_creative_plan_with_rag(
         self,
         product: Any,
         report: Any,
-        state: "AgentState",
+        state: "AgentRuntimeState",
         brand_guidelines: str,
         category_styles: str,
         case_inspirations: str,
-        category_memory_context: str = "",
     ) -> CreativePlan:
         """使用RAG知识生成创意方案。
 
@@ -408,7 +290,6 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
             brand_guidelines: 品牌规范。
             category_styles: 类目风格。
             case_inspirations: 成功案例。
-            category_memory_context: 类目记忆上下文。
 
         Returns:
             创意方案。
@@ -427,7 +308,6 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
                     "brand_guidelines": brand_guidelines or "暂无品牌规范",
                     "category_styles": category_styles or "暂无类目风格参考",
                     "case_inspirations": case_inspirations or "暂无成功案例参考",
-                    "category_memory_context": category_memory_context or "（无相关类目记忆）",
                     "product_info": product_info,
                     "requirement_report": requirement_report,
                     "style_preference": style_preference,
@@ -450,32 +330,26 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
         Returns:
             创意方案。
         """
-        try:
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start != -1 and end > start:
-                data = json.loads(response[start:end])
+        data = extract_json(response)
+        if data is not None:
+            style_str = data.get("visual_style", "modern").upper()
+            try:
+                visual_style = VisualStyle[style_str]
+            except KeyError:
+                visual_style = VisualStyle.MODERN
 
-                style_str = data.get("visual_style", "modern").upper()
-                try:
-                    visual_style = VisualStyle[style_str]
-                except KeyError:
-                    visual_style = VisualStyle.MODERN
+            color_name = data.get("color_suggestion", "tech")
+            palette = self._get_palette(color_name, brand_guidelines)
 
-                color_name = data.get("color_suggestion", "tech")
-                palette = self._get_palette(color_name, brand_guidelines)
-
-                return CreativePlan(
-                    name=data.get("theme_name", "默认创意主题"),
-                    description=data.get("theme_description", ""),
-                    visual_style=visual_style,
-                    style_keywords=data.get("style_keywords", []),
-                    color_palette=palette,
-                    key_elements=data.get("key_elements", []),
-                    target_emotion=data.get("target_emotion"),
-                )
-        except json.JSONDecodeError:
-            pass
+            return CreativePlan(
+                name=data.get("theme_name", "默认创意主题"),
+                description=data.get("theme_description", ""),
+                visual_style=visual_style,
+                style_keywords=data.get("style_keywords", []),
+                color_palette=palette,
+                key_elements=data.get("key_elements", []),
+                target_emotion=data.get("target_emotion"),
+            )
 
         return self._create_default_plan(product)
 

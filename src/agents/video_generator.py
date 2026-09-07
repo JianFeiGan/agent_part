@@ -20,12 +20,10 @@ import uuid
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
 from src.clients.protocols import VideoProviderProtocol
 from src.clients.provider_result import ProviderUnavailableError
-from src.db.asset_repository import AssetRepository
 from src.models.assets import AssetStatus, GeneratedVideo, VideoFormat
 from src.models.storyboard import Scene
 from src.storage.base import StorageBackend
@@ -40,7 +38,7 @@ _EMPTY_MP4_BASE64 = (
 )
 
 
-class VideoGeneratorAgent(BaseAgent[AgentState]):
+class VideoGeneratorAgent(BaseAgent[AgentRuntimeState]):
     """视频生成Agent。
 
     通过 ProviderFactory 动态获取视频生成 Provider，
@@ -119,7 +117,7 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         )
         self.register_prompt("composition", composition_prompt)
 
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行视频生成。
 
         Args:
@@ -148,7 +146,6 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
                 data={
                     "generated_video": video.model_dump(),
                 },
-                next_agent=AgentRole.QUALITY_REVIEWER,
             )
 
         except Exception as e:
@@ -160,7 +157,7 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
     async def _generate_video(
         self,
         storyboard: Any,
-        state: AgentState,
+        state: AgentRuntimeState,
     ) -> GeneratedVideo:
         """生成视频。
 
@@ -276,29 +273,26 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         except Exception:
             return scene.visual_prompt
 
-    def _resolve_tenant_id(self, state: AgentState) -> str:
+    def _resolve_tenant_id(self, state: AgentRuntimeState) -> str:
         """从 state 中解析 tenant_id。
 
-        TODO: GenerationRequest 当前没有 tenant_id 字段。
-        后续需要添加 tenant_id 到 GenerationRequest 或 AgentState。
+        优先读 AgentRuntimeState.tenant_id（由 create_initial_state 显式注入），
+        兼容旧路径：generation_request / product_info 上的 tenant_id。
 
         Args:
-            state: 当前 AgentState。
+            state: 当前 AgentRuntimeState。
 
         Returns:
             tenant_id 字符串。
         """
-        if state.generation_request is not None:
-            req_tenant = getattr(state.generation_request, "tenant_id", None)
-            if req_tenant:
-                return req_tenant
-        if state.product_info is not None:
-            prod_tenant = getattr(state.product_info, "tenant_id", None)
-            if prod_tenant:
-                return prod_tenant
-        state_tenant = getattr(state, "tenant_id", None)
-        if state_tenant:
-            return state_tenant
+        if getattr(state, "tenant_id", None):
+            return state.tenant_id
+        req_tenant = getattr(state.generation_request, "tenant_id", None)
+        if req_tenant:
+            return str(req_tenant)
+        prod_tenant = getattr(state.product_info, "tenant_id", None)
+        if prod_tenant:
+            return str(prod_tenant)
         logger.warning("No tenant_id found in state; falling back to 'system'.")
         return "system"
 
@@ -325,61 +319,6 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         url = await backend.save(data, key, content_type=mime_type)
         return url, key
 
-    async def _create_asset_po(
-        self,
-        session: AsyncSession,
-        tenant_id: str,
-        url: str,
-        storage_key: str,
-        data: bytes,
-        video_id: str,
-        visual_prompt: str,
-        width: int,
-        height: int,
-        duration: float,
-        mime_type: str,
-        provider: str = "mock",
-        is_mock: bool = True,
-    ) -> None:
-        """在数据库中创建 GeneratedAssetPO 记录。
-
-        Args:
-            session: 异步数据库会话。
-            tenant_id: 租户 ID。
-            url: 可访问 URL。
-            storage_key: 存储键名。
-            data: 文件二进制数据。
-            video_id: 视频 ID。
-            visual_prompt: 视觉提示词。
-            width: 宽度。
-            height: 高度。
-            duration: 时长。
-            mime_type: MIME 类型。
-            provider: 生成提供方（真实为模型名，降级为 "mock"）。
-            is_mock: 是否为 Mock 占位（真实为 False）。
-        """
-        from src.storage.local import LocalStorageBackend
-
-        sha256 = LocalStorageBackend.compute_sha256(data)
-        repo = AssetRepository(session)
-        await repo.create_asset(
-            tenant_id=tenant_id,
-            asset_type="video",
-            provider=provider,
-            url=url,
-            storage_key=storage_key,
-            storage_backend="local",
-            mime_type=mime_type,
-            file_size=len(data),
-            width=width,
-            height=height,
-            duration=duration,
-            sha256=sha256,
-            status="completed",
-            is_mock=is_mock,
-            extra_data={"visual_prompt": visual_prompt, "video_id": video_id},
-        )
-
     async def _call_video_api(
         self,
         video_id: str,
@@ -387,13 +326,14 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         scene_prompts: list[dict[str, Any]],
         width: int,
         height: int,
-        state: AgentState | None = None,
-        session: AsyncSession | None = None,
+        state: AgentRuntimeState | None = None,
     ) -> GeneratedVideo:
         """调用视频生成API。
 
         通过 ProviderFactory 动态获取视频 Provider，
         优先使用任务级指定的 video_provider_id，否则使用全局默认。
+        内部自建短会话读取 model_providers 表配置；
+        产物落库统一由任务完成后的 AssetPersister 负责。
 
         Args:
             video_id: 视频ID。
@@ -401,8 +341,7 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
             scene_prompts: 场景提示词列表。
             width: 宽度。
             height: 高度。
-            state: 当前 AgentState（用于获取 tenant_id 和 provider_id）。
-            session: 可选的 AsyncSession（用于写 DB）。
+            state: 当前 AgentRuntimeState（用于获取 tenant_id 和 provider_id）。
 
         Returns:
             生成的视频。
@@ -418,12 +357,14 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
         video_provider: VideoProviderProtocol | None = None
         try:
             from src.clients.provider_factory import ProviderFactory
+            from src.db.postgres import get_db_session
 
-            video_provider = await ProviderFactory.get_video_provider(
-                session=session,
-                tenant_id=tenant_id,
-                provider_id=video_provider_id,
-            )
+            async with get_db_session() as db_session:
+                video_provider = await ProviderFactory.get_video_provider(
+                    session=db_session,
+                    tenant_id=tenant_id,
+                    provider_id=video_provider_id,
+                )
         except Exception as exc:
             logger.warning("ProviderFactory 获取视频 Provider 失败: %s", exc)
 
@@ -457,22 +398,6 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
                 )
                 # 从 Provider 获取模型名
                 model_name = getattr(video_provider, "_model", "") or self.settings.video_model
-                if session is not None:
-                    await self._create_asset_po(
-                        session=session,
-                        tenant_id=tenant_id,
-                        url=url,
-                        storage_key=storage_key,
-                        data=video_bytes,
-                        video_id=video_id,
-                        visual_prompt=visual_prompt,
-                        width=width,
-                        height=height,
-                        duration=duration,
-                        mime_type="video/mp4",
-                        provider=model_name,
-                        is_mock=False,
-                    )
                 video = GeneratedVideo(
                     video_id=video_id,
                     title=storyboard.title,
@@ -525,25 +450,7 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
             "video/mp4",
         )
 
-        # 写入数据库（如果有 session）
-        if session is not None:
-            await self._create_asset_po(
-                session=session,
-                tenant_id=tenant_id,
-                url=url,
-                storage_key=storage_key,
-                data=placeholder_bytes,
-                video_id=video_id,
-                visual_prompt=str(scene_prompts),
-                width=width,
-                height=height,
-                duration=storyboard.total_duration,
-                mime_type="video/mp4",
-                provider="mock",
-                is_mock=True,
-            )
-
-        # 创建视频对象
+        # 创建视频对象（时长与真实路径一致使用裁剪后的 duration）
         video = GeneratedVideo(
             video_id=video_id,
             title=storyboard.title,
@@ -554,7 +461,7 @@ class VideoGeneratorAgent(BaseAgent[AgentState]):
             format=VideoFormat.MP4,
             width=width,
             height=height,
-            duration=storyboard.total_duration,
+            duration=duration,
             fps=30,
             file_size=len(placeholder_bytes),
             status=AssetStatus.COMPLETED,

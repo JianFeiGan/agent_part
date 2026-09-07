@@ -13,16 +13,16 @@ Description:
 2026-03-23
 """
 
-import json
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.llm_json import extract_json
 from src.graph.state import RequirementReport
 
 
-class RequirementAnalyzerAgent(BaseAgent[AgentState]):
+class RequirementAnalyzerAgent(BaseAgent[AgentRuntimeState]):
     """需求分析Agent。
 
     深入分析商品信息，生成结构化的需求分析报告。
@@ -93,7 +93,7 @@ class RequirementAnalyzerAgent(BaseAgent[AgentState]):
         )
         self.register_prompt("selling_point", selling_point_prompt)
 
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行需求分析。
 
         Args:
@@ -124,7 +124,6 @@ class RequirementAnalyzerAgent(BaseAgent[AgentState]):
                     "requirement_report": report.model_dump(),
                     "selling_points": report.selling_points,
                 },
-                next_agent=AgentRole.CREATIVE_PLANNER,
             )
 
         except Exception as e:
@@ -178,22 +177,16 @@ class RequirementAnalyzerAgent(BaseAgent[AgentState]):
         Returns:
             需求分析报告。
         """
-        try:
-            # 提取JSON
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start != -1 and end > start:
-                data = json.loads(response[start:end])
-                return RequirementReport(
-                    product_summary=data.get("product_summary", product.name),
-                    key_features=data.get("key_features", []),
-                    selling_points=data.get("selling_points", []),
-                    target_audience=data.get("target_audience", []),
-                    style_recommendations=data.get("style_recommendations", []),
-                    keywords=data.get("keywords", []),
-                )
-        except json.JSONDecodeError:
-            pass
+        data = extract_json(response)
+        if data is not None:
+            return RequirementReport(
+                product_summary=data.get("product_summary", product.name),
+                key_features=data.get("key_features", []),
+                selling_points=data.get("selling_points", []),
+                target_audience=data.get("target_audience", []),
+                style_recommendations=data.get("style_recommendations", []),
+                keywords=data.get("keywords", []),
+            )
 
         return self._create_default_report(product)
 

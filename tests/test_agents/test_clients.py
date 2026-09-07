@@ -90,16 +90,6 @@ class FakeAsyncClient:
         pass
 
 
-def _fake_wanx_response(status_code: int = 200, results: list | None = None) -> SimpleNamespace:
-    """构造 dashscope.ImageSynthesis.call 的返回值替身。"""
-    return SimpleNamespace(
-        status_code=status_code,
-        code="",
-        message="",
-        output={"results": results or []},
-    )
-
-
 # --------------------------------------------------------------------------- #
 # DashScope 图片客户端
 # --------------------------------------------------------------------------- #
@@ -109,14 +99,20 @@ class TestDashScopeImageClient:
         assert DashScopeImageClient(settings=_img_settings("")).is_available() is False
 
     @pytest.mark.asyncio
-    async def test_generate_happy_path(self) -> None:
-        fake = FakeAsyncClient(gets=[_FakeResponse(content=b"IMAGEBYTES")])
+    async def test_generate_happy_path_sync(self) -> None:
+        """测试同步模式：DashScope 直接返回图片结果。"""
+        fake = FakeAsyncClient(
+            posts=[
+                _FakeResponse(json_data={
+                    "output": {
+                        "results": [{"url": "https://dash/x.png", "seed": 42}],
+                    },
+                }),
+            ],
+            gets=[_FakeResponse(content=b"IMAGEBYTES")],
+        )
         client = DashScopeImageClient(settings=_img_settings(), httpx_client=fake)
-        with patch(
-            "dashscope.ImageSynthesis.call",
-            return_value=_fake_wanx_response(results=[{"url": "https://dash/x.png", "seed": 42}]),
-        ):
-            result = await client.generate(prompt="a cat", width=1024, height=1024, n=1)
+        result = await client.generate(prompt="a cat", width=1024, height=1024, n=1)
 
         assert isinstance(result, ImageGenerationResult)
         assert len(result.images) == 1
@@ -125,34 +121,111 @@ class TestDashScopeImageClient:
         assert result.images[0].seed == 42
 
     @pytest.mark.asyncio
-    async def test_generate_download_failure_raises(self) -> None:
-        fake = FakeAsyncClient(gets=[httpx.ConnectError("boom")])
+    async def test_generate_happy_path_async_poll(self) -> None:
+        """测试异步轮询模式：提交任务后轮询获取结果。"""
+        fake = FakeAsyncClient(
+            posts=[
+                _FakeResponse(json_data={
+                    "output": {"task_id": "task-123"},
+                }),
+            ],
+            gets=[
+                _FakeResponse(json_data={"output": {"task_status": "PENDING"}}),
+                _FakeResponse(json_data={
+                    "output": {
+                        "task_status": "SUCCEEDED",
+                        "results": [{"url": "https://dash/y.png"}],
+                    },
+                }),
+                _FakeResponse(content=b"IMAGEBYTES2"),
+            ],
+        )
         client = DashScopeImageClient(settings=_img_settings(), httpx_client=fake)
-        with patch(
-            "dashscope.ImageSynthesis.call",
-            return_value=_fake_wanx_response(results=[{"url": "u"}]),
-        ), pytest.raises(ProviderUnavailableError):
+        # 使用极短的轮询间隔以加快测试
+        import src.clients.dashscope_image_client as _mod
+        old_timeout = _mod._POLL_TIMEOUT
+        old_max = _mod._MAX_POLL_INTERVAL
+        _mod._POLL_TIMEOUT = 30.0
+        _mod._MAX_POLL_INTERVAL = 0.01
+        try:
+            result = await client.generate(prompt="a cat")
+        finally:
+            _mod._POLL_TIMEOUT = old_timeout
+            _mod._MAX_POLL_INTERVAL = old_max
+
+        assert isinstance(result, ImageGenerationResult)
+        assert len(result.images) == 1
+        assert result.images[0].data == b"IMAGEBYTES2"
+
+    @pytest.mark.asyncio
+    async def test_generate_submit_failure_raises(self) -> None:
+        """测试提交任务失败时抛出 ProviderUnavailableError。"""
+        fake = FakeAsyncClient(
+            posts=[httpx.ConnectError("connection refused")],
+        )
+        client = DashScopeImageClient(settings=_img_settings(), httpx_client=fake)
+        with pytest.raises(ProviderUnavailableError):
+            await client.generate(prompt="x")
+
+    @pytest.mark.asyncio
+    async def test_generate_download_failure_raises(self) -> None:
+        """测试下载图片失败时抛出 ProviderUnavailableError。"""
+        fake = FakeAsyncClient(
+            posts=[
+                _FakeResponse(json_data={
+                    "output": {"results": [{"url": "https://dash/x.png"}]},
+                }),
+            ],
+            gets=[httpx.ConnectError("boom")],
+        )
+        client = DashScopeImageClient(settings=_img_settings(), httpx_client=fake)
+        with pytest.raises(ProviderUnavailableError):
             await client.generate(prompt="x")
 
     @pytest.mark.asyncio
     async def test_generate_empty_results_raises(self) -> None:
-        fake = FakeAsyncClient()
+        """测试返回空结果时抛出 ProviderUnavailableError。"""
+        fake = FakeAsyncClient(
+            posts=[
+                _FakeResponse(json_data={"output": {"results": []}}),
+            ],
+        )
         client = DashScopeImageClient(settings=_img_settings(), httpx_client=fake)
-        with patch(
-            "dashscope.ImageSynthesis.call",
-            return_value=_fake_wanx_response(results=[]),
-        ), pytest.raises(ProviderUnavailableError):
+        with pytest.raises(ProviderUnavailableError):
             await client.generate(prompt="x")
 
     @pytest.mark.asyncio
     async def test_generate_api_error_raises(self) -> None:
-        fake = FakeAsyncClient()
+        """测试 API 返回错误时抛出 ProviderUnavailableError。"""
+        fake = FakeAsyncClient(
+            posts=[_FakeResponse(status_code=400)],
+        )
         client = DashScopeImageClient(settings=_img_settings(), httpx_client=fake)
-        with patch(
-            "dashscope.ImageSynthesis.call",
-            return_value=_fake_wanx_response(status_code=400, results=[]),
-        ), pytest.raises(ProviderUnavailableError):
+        with pytest.raises(ProviderUnavailableError):
             await client.generate(prompt="x")
+
+    @pytest.mark.asyncio
+    async def test_generate_task_failed_raises(self) -> None:
+        """测试异步任务失败时抛出 ProviderUnavailableError。"""
+        fake = FakeAsyncClient(
+            posts=[
+                _FakeResponse(json_data={"output": {"task_id": "task-456"}}),
+            ],
+            gets=[
+                _FakeResponse(json_data={
+                    "output": {"task_status": "FAILED", "code": "ERR", "message": "bad"},
+                }),
+            ],
+        )
+        client = DashScopeImageClient(settings=_img_settings(), httpx_client=fake)
+        import src.clients.dashscope_image_client as _mod
+        old_max = _mod._MAX_POLL_INTERVAL
+        _mod._MAX_POLL_INTERVAL = 0.01
+        try:
+            with pytest.raises(ProviderUnavailableError):
+                await client.generate(prompt="x")
+        finally:
+            _mod._MAX_POLL_INTERVAL = old_max
 
 
 # --------------------------------------------------------------------------- #

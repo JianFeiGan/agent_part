@@ -28,6 +28,7 @@ from src.api.schema.listing import (
     ProductImportRequest,
     ProductResponse,
 )
+from src.api.service.redis_client import get_redis
 from src.auth.api_key import require_auth
 from src.auth.context import AuthContext
 from src.db.listing_models import (
@@ -35,11 +36,10 @@ from src.db.listing_models import (
     ListingProductPO,
     ListingTaskPO,
 )
-from src.db.postgres import get_db, get_db_session
+from src.db.postgres import get_db_session
 from src.db.repository import BaseRepository
 from src.models.listing import ComplianceReport, ComplianceStatus, ListingProduct, Platform
 from src.models.listing_converter import product_to_listing
-from src.api.service.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 

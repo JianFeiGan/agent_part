@@ -39,14 +39,9 @@ class TestAgentResult:
 
     def test_success_result(self) -> None:
         """测试成功结果。"""
-        result = AgentResult(
-            success=True,
-            data={"key": "value"},
-            next_agent=AgentRole.CREATIVE_PLANNER,
-        )
+        result = AgentResult(success=True, data={"key": "value"})
         assert result.success is True
         assert result.data["key"] == "value"
-        assert result.next_agent == AgentRole.CREATIVE_PLANNER
 
     def test_failure_result(self) -> None:
         """测试失败结果。"""

@@ -125,13 +125,20 @@ _db_manager: DatabaseManager | None = None
 async def init_db() -> None:
     """初始化数据库连接池。
 
-    创建表结构（如果不存在）。
+    是否自动建表由 settings.db_auto_create 控制（默认 True 便于开发）。
+    生产环境应设为 False，改用 Alembic 迁移管理 schema。
     """
     global _db_manager
 
     if _db_manager is None:
         _db_manager = DatabaseManager()
         await _db_manager.init()
+
+        if not get_settings().db_auto_create:
+            logger.info(
+                "db_auto_create 已关闭，跳过 create_all；schema 由 Alembic 迁移管理"
+            )
+            return
 
         # 导入所有模型以确保表定义被注册到 Base.metadata
         from src.db import conversation_models, listing_models, models  # noqa: F401

@@ -94,15 +94,10 @@ const handleSubmit = async () => {
   loading.value = true
   try {
     const res = await importProduct(form)
-    if (res.data.code === 200) {
-      importedProduct.value = res.data.data
-      ElMessage.success('商品导入成功')
-    } else {
-      ElMessage.error(res.data.message || '导入失败')
-    }
+    importedProduct.value = res.data.data
+    ElMessage.success('商品导入成功')
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '导入失败'
-    ElMessage.error(msg)
+    console.error('商品导入失败:', e)
   } finally {
     loading.value = false
   }

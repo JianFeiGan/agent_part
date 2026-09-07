@@ -15,6 +15,7 @@ from typing import Any
 from uuid import uuid4
 
 from src.api.schema.task import TaskStatus, TaskType
+from src.api.service import redis_client
 from src.api.service.asset_persister import AssetPersister
 from src.api.service.redis_client import RedisClient, get_redis
 from src.db.postgres import get_db_session
@@ -66,7 +67,6 @@ class TaskManager:
     def __init__(self) -> None:
         """初始化任务管理器。"""
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
-        self._ws_subscribers: dict[str, list[Any]] = {}
 
     async def create_task(
         self,
@@ -97,6 +97,7 @@ class TaskManager:
         generation_request = GenerationRequest(
             task_id=task_id,
             task_type=request_data.get("task_type", TaskType.IMAGE_AND_VIDEO.value),
+            tenant_id=tenant_id,
             image_types=request_data.get("image_types", ["main", "scene"]),
             image_count_per_type=request_data.get("image_count_per_type", 1),
             video_duration=request_data.get("video_duration", 30.0),
@@ -131,6 +132,37 @@ class TaskManager:
 
         return task_id
 
+    async def _finalize_status(
+        self,
+        redis: RedisClient,
+        task_id: str,
+        status: TaskStatus,
+        current_step: str,
+        *,
+        tenant_id: str,
+    ) -> None:
+        """写入任务终态状态，保留当前进度值。
+
+        失败/取消不应把进度清零，否则前端进度条会从当前位置回跳到 0。
+
+        Args:
+            redis: Redis 客户端。
+            task_id: 任务 ID。
+            status: 终态状态（FAILED / CANCELLED）。
+            current_step: 终态步骤标识。
+            tenant_id: 租户 ID。
+        """
+        progress = 0.0
+        metadata = await redis.get_task_metadata(task_id, tenant_id=tenant_id)
+        if metadata:
+            try:
+                progress = float(metadata.get("progress") or 0.0)
+            except (TypeError, ValueError):
+                progress = 0.0
+        await redis.update_task_progress(
+            task_id, status.value, progress, current_step, tenant_id=tenant_id
+        )
+
     async def _execute_workflow(
         self,
         task_id: str,
@@ -161,8 +193,8 @@ class TaskManager:
                 task_id, TaskStatus.RUNNING.value, 0, "init", tenant_id=tenant_id
             )
 
-            # 创建工作流并执行
-            workflow = ProductVisualWorkflow()
+            # 创建工作流并执行（注入租户/任务 ID 用于 Agent 会话记录隔离）
+            workflow = ProductVisualWorkflow(tenant_id=tenant_id, task_id=task_id)
 
             # 使用回调更新进度
             async def progress_callback(state: AgentState) -> None:
@@ -182,58 +214,68 @@ class TaskManager:
                 await redis.save_task_state(task_id, state, tenant_id=tenant_id)
 
                 # 推送进度更新事件
-                await self._broadcast_event(task_id, {
-                    "type": "progress_update",
-                    "progress": progress,
-                    "current_step": state.current_step,
-                })
+                await self._broadcast_event(
+                    task_id,
+                    {
+                        "type": "progress_update",
+                        "progress": progress,
+                        "current_step": state.current_step,
+                    },
+                    tenant_id=tenant_id,
+                )
 
                 # 推送 agent 状态变化和日志更新事件
                 if state.agent_logs:
                     for log in state.agent_logs:
-                        await self._broadcast_event(task_id, {
-                            "type": "agent_status_change",
-                            "agent_name": log.step,
-                            "status": log.status,
-                        })
+                        await self._broadcast_event(
+                            task_id,
+                            {
+                                "type": "agent_status_change",
+                                "agent_name": log.step,
+                                "status": log.status,
+                            },
+                            tenant_id=tenant_id,
+                        )
                     # 推送最新的完整日志
                     latest_log = state.agent_logs[-1]
                     if latest_log.status in ("completed", "failed"):
-                        await self._broadcast_event(task_id, {
-                            "type": "agent_log_update",
-                            "agent_log": latest_log.model_dump(),
-                        })
+                        await self._broadcast_event(
+                            task_id,
+                            {
+                                "type": "agent_log_update",
+                                "agent_log": latest_log.model_dump(),
+                            },
+                            tenant_id=tenant_id,
+                        )
 
-            # 执行工作流（使用 stream 模式，逐步获取节点输出）
+            # 执行工作流（values 流模式：每步直接产出完整状态，
+            # 免去每节点两次 aget_state checkpoint 往返）
             initial_state = create_initial_state(
                 product,
                 request,
+                tenant_id=tenant_id,
                 llm_provider_id=llm_provider_id,
                 image_provider_id=image_provider_id,
                 video_provider_id=video_provider_id,
             )
             config = {"configurable": {"thread_id": task_id}}
 
-            async for event in workflow.app.astream(initial_state, config=config):
-                # event 是每个节点的输出 dict，key 为节点名
-                # 获取最新状态并触发回调
-                latest_state = await workflow.app.aget_state(config)
-                if latest_state and latest_state.values:
-                    state_values = latest_state.values
-                    if isinstance(state_values, dict):
-                        state = AgentState(**state_values)
-                    else:
-                        state = state_values
-                    await progress_callback(state)
-
-            # 获取最终结果
-            final_state = await workflow.app.aget_state(config)
-            if final_state and final_state.values:
-                state_values = final_state.values
-                if isinstance(state_values, dict):
-                    result = AgentState(**state_values)
+            latest_values: Any = None
+            async for latest_values in workflow.app.astream(
+                initial_state, config=config, stream_mode="values"
+            ):
+                if isinstance(latest_values, dict):
+                    state = AgentState(**latest_values)
                 else:
-                    result = state_values
+                    state = latest_values
+                await progress_callback(state)
+
+            # 获取最终结果（values 模式最后一个事件即最终状态）
+            if latest_values is not None:
+                if isinstance(latest_values, dict):
+                    result = AgentState(**latest_values)
+                else:
+                    result = latest_values
             else:
                 result = AgentState(product_info=product, generation_request=request)
 
@@ -243,7 +285,7 @@ class TaskManager:
             # 将生成产物落库到 generated_assets，供刊登工作流复用
             if not result.has_error() and result.product_info:
                 product_id = result.product_info.product_id or ""
-                if product_id and result.generated_images:
+                if product_id and (result.generated_images or result.generated_video):
                     try:
                         async with get_db_session() as session:
                             persister = AssetPersister(session=session)
@@ -253,20 +295,23 @@ class TaskManager:
                                 task_id=task_id,
                                 images=result.generated_images,
                             )
+                            if result.generated_video:
+                                persisted += await persister.persist_videos(
+                                    tenant_id=tenant_id,
+                                    product_id=product_id,
+                                    task_id=task_id,
+                                    video=result.generated_video,
+                                )
                             logger.info(
-                                f"任务 {task_id} 产物落库: {persisted} 张图片"
+                                f"任务 {task_id} 产物落库: {persisted} 个资产"
                             )
                     except Exception as e:
                         logger.error(f"任务 {task_id} 产物落库失败: {e}")
 
             # 更新任务状态为完成
             if result.has_error():
-                await redis.update_task_progress(
-                    task_id,
-                    TaskStatus.FAILED.value,
-                    0,
-                    result.current_step,
-                    tenant_id=tenant_id,
+                await self._finalize_status(
+                    redis, task_id, TaskStatus.FAILED, result.current_step, tenant_id=tenant_id
                 )
             else:
                 await redis.update_task_progress(
@@ -279,23 +324,15 @@ class TaskManager:
 
         except asyncio.CancelledError:
             # 任务被取消
-            await redis.update_task_progress(
-                task_id,
-                TaskStatus.FAILED.value,
-                0,
-                "cancelled",
-                tenant_id=tenant_id,
+            await self._finalize_status(
+                redis, task_id, TaskStatus.CANCELLED, "cancelled", tenant_id=tenant_id
             )
             raise
 
         except Exception as e:
             # 更新任务状态为失败
-            await redis.update_task_progress(
-                task_id,
-                TaskStatus.FAILED.value,
-                0,
-                "error",
-                tenant_id=tenant_id,
+            await self._finalize_status(
+                redis, task_id, TaskStatus.FAILED, "error", tenant_id=tenant_id
             )
             # 记录错误
             state = await redis.get_task_state(task_id, tenant_id=tenant_id)
@@ -385,6 +422,18 @@ class TaskManager:
         if state and hasattr(state, "quality_reports") and state.quality_reports:
             quality_reports = [r.model_dump() for r in state.quality_reports]
 
+        # 降级标记：任一产物为 mock 占位
+        has_mock_assets = False
+        if state:
+            has_mock_assets = any(
+                bool(img.metadata and img.metadata.get("is_mock"))
+                for img in state.generated_images
+            ) or bool(
+                state.generated_video
+                and state.generated_video.metadata
+                and state.generated_video.metadata.get("is_mock")
+            )
+
         return {
             "task_id": task_id,
             "product_id": metadata.get("product_id"),
@@ -398,6 +447,7 @@ class TaskManager:
             "video": video,
             "quality_reports": quality_reports,
             "error_message": error_message,
+            "has_mock_assets": has_mock_assets,
             "created_at": metadata.get("created_at"),
             "updated_at": metadata.get("updated_at"),
             "state": state.model_dump() if state else None,
@@ -428,9 +478,9 @@ class TaskManager:
             with contextlib.suppress(asyncio.CancelledError):
                 await task
 
-        # 更新状态为取消（使用 failed 状态）
-        await redis.update_task_progress(
-            task_id, TaskStatus.FAILED.value, 0, "cancelled", tenant_id=tenant_id
+        # 更新状态为取消
+        await self._finalize_status(
+            redis, task_id, TaskStatus.CANCELLED, "cancelled", tenant_id=tenant_id
         )
 
         return True
@@ -479,45 +529,71 @@ class TaskManager:
         """
         return task_id in self._running_tasks
 
-    def subscribe_ws(self, task_id: str, websocket: Any) -> None:
-        """订阅任务 WebSocket 事件。
+    async def _broadcast_event(
+        self, task_id: str, event: dict[str, Any], *, tenant_id: str
+    ) -> None:
+        """通过 Redis pub/sub 广播任务事件。
 
-        Args:
-            task_id: 任务 ID。
-            websocket: WebSocket 连接对象。
-        """
-        if task_id not in self._ws_subscribers:
-            self._ws_subscribers[task_id] = []
-        self._ws_subscribers[task_id].append(websocket)
-
-    def unsubscribe_ws(self, task_id: str, websocket: Any) -> None:
-        """取消订阅任务 WebSocket 事件。
-
-        Args:
-            task_id: 任务 ID。
-            websocket: WebSocket 连接对象。
-        """
-        if task_id in self._ws_subscribers:
-            self._ws_subscribers[task_id] = [
-                ws for ws in self._ws_subscribers[task_id] if ws is not websocket
-            ]
-            if not self._ws_subscribers[task_id]:
-                del self._ws_subscribers[task_id]
-
-    async def _broadcast_event(self, task_id: str, event: dict[str, Any]) -> None:
-        """广播 WebSocket 事件给所有订阅者。
+        事件写入 Redis 频道而非进程内队列，多 worker / 多实例部署下
+        WebSocket 端点所在进程也能收到事件。
 
         Args:
             task_id: 任务 ID。
             event: 事件数据。
+            tenant_id: 租户 ID。
         """
-        subscribers = self._ws_subscribers.get(task_id, [])
-        for ws in subscribers[:]:  # 复制列表避免迭代中修改
+        try:
+            await redis_client.publish_task_event(task_id, event, tenant_id=tenant_id)
+        except Exception as exc:
+            logger.warning("任务 %s 事件广播失败: %s", task_id, exc)
+
+    async def recover_stale_running_tasks(
+        self,
+        redis: RedisClient,
+        tenant_ids: list[str],
+        page_size: int = 100,
+    ) -> int:
+        """将重启后残留的 RUNNING 任务标记为 FAILED。
+
+        服务重启后进程内的 asyncio.Task 已消失，Redis 中状态仍是 RUNNING
+        的任务将永久卡死。启动时按租户扫描一次并置为终态。
+
+        Args:
+            redis: Redis 客户端。
+            tenant_ids: 需要扫描的租户 ID 列表（Redis 按租户 key 隔离）。
+            page_size: 每次拉取的 pageSize。
+
+        Returns:
+            被回收的任务数量。
+        """
+        recovered = 0
+        for tenant_id in tenant_ids:
             try:
-                await ws.send_json(event)
-            except Exception:
-                # 连接已断开，移除订阅
-                self.unsubscribe_ws(task_id, ws)
+                tasks, _total = await redis.list_tasks(
+                    tenant_id=tenant_id,
+                    page=1,
+                    page_size=page_size,
+                    status=TaskStatus.RUNNING.value,
+                )
+            except Exception as exc:
+                logger.warning("扫描租户 %s 的 RUNNING 任务失败: %s", tenant_id, exc)
+                continue
+
+            for item in tasks:
+                task_id = item.get("task_id")
+                if not task_id or self.is_task_running(task_id):
+                    continue
+                await redis.update_task_progress(
+                    task_id,
+                    TaskStatus.FAILED.value,
+                    float(item.get("progress") or 0.0),
+                    "interrupted",
+                    tenant_id=tenant_id,
+                )
+                recovered += 1
+                logger.info("回收中断任务 %s（服务重启导致）", task_id)
+
+        return recovered
 
 
 # 全局单例

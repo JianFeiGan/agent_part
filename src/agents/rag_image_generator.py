@@ -15,14 +15,14 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
 from src.agents.image_generator import ImageGeneratorAgent
 from src.rag.retriever import KnowledgeRetriever, RetrievalResult
 
 logger = logging.getLogger(__name__)
 
 
-class RAGEnhancedImageGenerator(BaseAgent[AgentState]):
+class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
     """RAG 增强图片生成 Agent。
 
     在 ImageGeneratorAgent 基础上增加：
@@ -63,7 +63,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentState]):
         """
         self._session = session
 
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行 RAG 增强的图片生成。
 
         在调用基础图片生成前，先检索品牌视觉规范和风格模板，
@@ -124,7 +124,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentState]):
                 error=f"RAG 增强图片生成失败: {e}",
             )
 
-    async def _retrieve_image_knowledge(self, state: AgentState) -> RetrievalResult:
+    async def _retrieve_image_knowledge(self, state: AgentRuntimeState) -> RetrievalResult:
         """检索图片生成相关知识。
 
         Args:
@@ -195,7 +195,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentState]):
 
         return "\n".join(enhanced_parts)
 
-    def _get_category(self, state: AgentState) -> str:
+    def _get_category(self, state: AgentRuntimeState) -> str:
         """从状态中获取商品类目。
 
         Args:
@@ -209,7 +209,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentState]):
             return cat.value if hasattr(cat, "value") else str(cat)
         return "general"
 
-    def _get_brand(self, state: AgentState) -> str | None:
+    def _get_brand(self, state: AgentRuntimeState) -> str | None:
         """从状态中获取品牌名称。
 
         Args:
@@ -222,7 +222,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentState]):
             return state.product_info.brand
         return None
 
-    def _get_style_preference(self, state: AgentState) -> str | None:
+    def _get_style_preference(self, state: AgentRuntimeState) -> str | None:
         """从状态中获取风格偏好。
 
         Args:
@@ -235,7 +235,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentState]):
             return state.generation_request.style_preference
         return None
 
-    def _resolve_tenant_id(self, state: AgentState) -> str:
+    def _resolve_tenant_id(self, state: AgentRuntimeState) -> str:
         """从状态中解析 tenant_id。
 
         Args:

@@ -17,7 +17,6 @@ import time
 
 from fastapi import APIRouter, Depends, status
 
-from src.api.deps import AuthDep
 from src.api.schema.common import ApiResponse
 from src.api.schema.model_provider import (
     ModelProviderCreateRequest,

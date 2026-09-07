@@ -16,11 +16,12 @@ from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.agents.base import AgentResult, AgentRole, AgentState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.llm_json import extract_json
 from src.graph.state import GenerationRequest
 
 
-class OrchestratorAgent(BaseAgent[AgentState]):
+class OrchestratorAgent(BaseAgent[AgentRuntimeState]):
     """编排调度Agent。
 
     作为系统的"大脑"，负责整体流程的编排和协调。
@@ -63,27 +64,7 @@ class OrchestratorAgent(BaseAgent[AgentState]):
         )
         self.register_prompt("task_decomposition", task_decomposition_prompt)
 
-        # 结果汇总提示
-        result_summary_prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    "你是一个结果汇总专家。"
-                    "请根据各Agent的执行结果，生成最终的内容摘要报告。\n\n"
-                    "输出格式：\n"
-                    "- 生成内容概述\n"
-                    "- 质量评估摘要\n"
-                    "- 使用建议",
-                ),
-                (
-                    "human",
-                    "执行结果：{execution_results}\n\n请生成最终报告。",
-                ),
-            ]
-        )
-        self.register_prompt("result_summary", result_summary_prompt)
-
-    async def execute(self, state: AgentState) -> AgentResult:
+    async def execute(self, state: AgentRuntimeState) -> AgentResult:
         """执行编排任务。
 
         Args:
@@ -112,7 +93,6 @@ class OrchestratorAgent(BaseAgent[AgentState]):
                     "task_plan": task_plan,
                     "next_step": "requirement_analysis",
                 },
-                next_agent=AgentRole.REQUIREMENT_ANALYZER,
             )
 
         except Exception as e:
@@ -121,7 +101,7 @@ class OrchestratorAgent(BaseAgent[AgentState]):
                 error=f"编排执行失败: {e}",
             )
 
-    async def _analyze_task(self, state: AgentState) -> dict[str, Any]:
+    async def _analyze_task(self, state: AgentRuntimeState) -> dict[str, Any]:
         """分析任务需求。
 
         Args:
@@ -183,17 +163,9 @@ class OrchestratorAgent(BaseAgent[AgentState]):
         Returns:
             解析后的任务规划。
         """
-        # 简单解析，实际应使用JSON解析
-        import json
-
-        try:
-            # 尝试提取JSON部分
-            start = response.find("{")
-            end = response.rfind("}") + 1
-            if start != -1 and end > start:
-                return json.loads(response[start:end])
-        except json.JSONDecodeError:
-            pass
+        parsed = extract_json(response)
+        if parsed is not None:
+            return parsed
 
         # 返回默认规划
         return {
@@ -206,27 +178,3 @@ class OrchestratorAgent(BaseAgent[AgentState]):
                 "quality_review",
             ],
         }
-
-    async def summarize_results(self, state: AgentState) -> dict[str, Any]:
-        """汇总执行结果。
-
-        Args:
-            state: 最终状态。
-
-        Returns:
-            结果摘要。
-        """
-        results = {
-            "product": state.product_info.name if state.product_info else None,
-            "images_count": len(state.generated_images),
-            "has_video": state.generated_video is not None,
-            "quality_score": state.quality_score,
-            "issues_count": len(state.issues),
-        }
-
-        prompt = self.get_prompt("result_summary")
-        if prompt:
-            summary = await self.invoke_llm(prompt, {"execution_results": results})
-            results["summary"] = summary
-
-        return results
