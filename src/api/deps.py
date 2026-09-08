@@ -12,11 +12,13 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from fastapi import Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.service.redis_client import RedisClient, get_redis
 from src.auth.api_key import require_auth
 from src.auth.context import AuthContext
 from src.config.settings import Settings, get_settings
+from src.db.postgres import get_db
 
 
 async def get_settings_dep() -> AsyncGenerator[Settings, None]:
@@ -42,3 +44,4 @@ async def get_redis_dep() -> AsyncGenerator[RedisClient, None]:
 SettingsDep = Annotated[Settings, Depends(get_settings_dep)]
 RedisDep = Annotated[RedisClient, Depends(get_redis_dep)]
 AuthDep = Annotated[AuthContext, Depends(require_auth)]
+SessionDep = Annotated[AsyncSession, Depends(get_db)]

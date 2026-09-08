@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 
 from src.agents.adapter_config import AdapterConfigManager
+from src.api.crud import mask_values
 from src.api.schema.adapter_config import (
     AdapterConfigCreate,
     AdapterConfigResponse,
@@ -41,7 +42,7 @@ def _po_to_response(po: AdapterConfigPO) -> AdapterConfigResponse:
         id=po.id,
         platform=po.platform,
         shop_id=po.shop_id,
-        credentials_masked=dict.fromkeys(po.credentials, "***"),
+        credentials_masked=mask_values(po.credentials),
         is_active=po.is_active,
         created_at=po.created_at.isoformat() if po.created_at else None,
         updated_at=po.updated_at.isoformat() if po.updated_at else None,
@@ -107,9 +108,7 @@ async def list_adapter_configs(
         配置列表（脱敏）。
     """
     async with get_db_session() as session:
-        stmt = select(AdapterConfigPO).where(
-            AdapterConfigPO.tenant_id == auth.tenant_id
-        )
+        stmt = select(AdapterConfigPO).where(AdapterConfigPO.tenant_id == auth.tenant_id)
         if platform:
             stmt = stmt.where(AdapterConfigPO.platform == platform.value)
         stmt = stmt.order_by(AdapterConfigPO.created_at.desc())
@@ -183,9 +182,7 @@ async def update_adapter_config(
 
         await session.flush()
         await session.refresh(po)
-        await _config_manager.invalidate_cache(
-            Platform(po.platform), tenant_id=auth.tenant_id
-        )
+        await _config_manager.invalidate_cache(Platform(po.platform), tenant_id=auth.tenant_id)
         return ApiResponse(
             code=200,
             message="更新成功",

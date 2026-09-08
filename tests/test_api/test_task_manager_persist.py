@@ -79,7 +79,11 @@ async def test_persist_images_called_after_workflow_success() -> None:
     mock_session.__aexit__ = AsyncMock(return_value=None)
 
     with (
-        patch("src.api.service.task_manager.get_redis", new_callable=AsyncMock, return_value=mock_redis),
+        patch(
+            "src.api.service.task_manager.get_redis",
+            new_callable=AsyncMock,
+            return_value=mock_redis,
+        ),
         patch("src.api.service.task_manager.ProductVisualWorkflow") as mock_wf_cls,
         patch("src.api.service.task_manager.AssetPersister", return_value=mock_persister_instance),
         patch("src.api.service.task_manager.get_db_session", return_value=mock_session),
@@ -147,7 +151,11 @@ async def test_persist_images_not_called_on_error() -> None:
     mock_session.__aexit__ = AsyncMock(return_value=None)
 
     with (
-        patch("src.api.service.task_manager.get_redis", new_callable=AsyncMock, return_value=mock_redis),
+        patch(
+            "src.api.service.task_manager.get_redis",
+            new_callable=AsyncMock,
+            return_value=mock_redis,
+        ),
         patch("src.api.service.task_manager.ProductVisualWorkflow") as mock_wf_cls,
         patch("src.api.service.task_manager.AssetPersister", return_value=mock_persister_instance),
         patch("src.api.service.task_manager.get_db_session", return_value=mock_session),

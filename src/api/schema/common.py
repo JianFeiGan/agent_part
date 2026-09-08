@@ -85,6 +85,22 @@ class PageResponse(BaseModel, Generic[T]):
     page_size: int = Field(default=10, ge=1, le=100, description="每页大小")
     pages: int = Field(default=0, ge=0, description="总页数")
 
+    @classmethod
+    def build(cls, items: list[T], *, total: int, page: int, page_size: int) -> "PageResponse[T]":
+        """从分页值构建响应，pages 自动向上取整计算。
+
+        Args:
+            items: 当前页数据列表。
+            total: 总记录数。
+            page: 当前页码。
+            page_size: 每页大小。
+
+        Returns:
+            PageResponse 实例。
+        """
+        pages = -(-total // page_size) if page_size > 0 else 0
+        return cls(items=items, total=total, page=page, page_size=page_size, pages=pages)
+
     model_config = {
         "json_schema_extra": {
             "examples": [

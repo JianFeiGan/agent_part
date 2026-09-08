@@ -62,7 +62,10 @@ class FakeStorage:
         self.deleted_keys: list[str] = []
 
     async def save(
-        self, data: bytes, key: str, content_type: str = "application/octet-stream"  # noqa: ARG002
+        self,
+        data: bytes,
+        key: str,
+        content_type: str = "application/octet-stream",  # noqa: ARG002
     ) -> str:
         return f"/static/{key}"
 
@@ -106,20 +109,14 @@ class FakeAssetRepository:
             and a.id not in self._deleted_ids
         ][:limit]
 
-    async def list_by_task(
-        self, tenant_id: str, task_id: str
-    ) -> list[FakeAsset]:
+    async def list_by_task(self, tenant_id: str, task_id: str) -> list[FakeAsset]:
         return [
             a
             for a in self._assets.values()
-            if a.tenant_id == tenant_id
-            and a.task_id == task_id
-            and a.id not in self._deleted_ids
+            if a.tenant_id == tenant_id and a.task_id == task_id and a.id not in self._deleted_ids
         ]
 
-    async def list_for_tenant(
-        self, tenant_id: str, **filters: Any
-    ) -> list[FakeAsset]:
+    async def list_for_tenant(self, tenant_id: str, **filters: Any) -> list[FakeAsset]:
         result = [
             a
             for a in self._assets.values()
@@ -143,7 +140,9 @@ def tenant_a_assets() -> list[FakeAsset]:
     """租户 A 的资产列表。"""
     return [
         FakeAsset(id=1, tenant_id="tenant-a", product_id="prod_001", asset_type="image"),
-        FakeAsset(id=2, tenant_id="tenant-a", product_id="prod_001", asset_type="video", duration=30.0),
+        FakeAsset(
+            id=2, tenant_id="tenant-a", product_id="prod_001", asset_type="video", duration=30.0
+        ),
         FakeAsset(id=3, tenant_id="tenant-a", task_id="task_001", asset_type="image"),
     ]
 
@@ -157,7 +156,9 @@ def tenant_b_assets() -> list[FakeAsset]:
 
 
 @pytest.fixture
-def all_assets(tenant_a_assets: list[FakeAsset], tenant_b_assets: list[FakeAsset]) -> list[FakeAsset]:
+def all_assets(
+    tenant_a_assets: list[FakeAsset], tenant_b_assets: list[FakeAsset]
+) -> list[FakeAsset]:
     """所有租户的资产。"""
     return tenant_a_assets + tenant_b_assets
 
@@ -177,13 +178,17 @@ def storage() -> FakeStorage:
 @pytest.fixture
 def auth_a() -> AuthContext:
     """租户 A 的认证上下文，拥有 assets:* scope。"""
-    return AuthContext(tenant_id="tenant-a", user_id="user-a", scopes=["assets:read", "assets:write"])
+    return AuthContext(
+        tenant_id="tenant-a", user_id="user-a", scopes=["assets:read", "assets:write"]
+    )
 
 
 @pytest.fixture
 def auth_b() -> AuthContext:
     """租户 B 的认证上下文，拥有 assets:* scope。"""
-    return AuthContext(tenant_id="tenant-b", user_id="user-b", scopes=["assets:read", "assets:write"])
+    return AuthContext(
+        tenant_id="tenant-b", user_id="user-b", scopes=["assets:read", "assets:write"]
+    )
 
 
 @pytest.fixture
@@ -238,9 +243,7 @@ def _patches(repo: FakeAssetRepository, storage: FakeStorage | None = None):
     def _fake_get_db():
         return fake_db
 
-    patches.append(
-        mock.patch("src.api.router.assets.get_db_session", side_effect=_fake_get_db)
-    )
+    patches.append(mock.patch("src.api.router.assets.get_db_session", side_effect=_fake_get_db))
 
     # Mock storage backend if provided
     if storage is not None:
@@ -354,9 +357,7 @@ class TestListAssets:
 
         asyncio.run(_run())
 
-    def test_list_requires_assets_read_or_write_scope(
-        self, auth_no_scope: AuthContext
-    ) -> None:
+    def test_list_requires_assets_read_or_write_scope(self, auth_no_scope: AuthContext) -> None:
         """list_assets 应拒绝无 scope 的请求。"""
         from src.api.router.assets import list_assets
 
@@ -516,98 +517,32 @@ class TestDeleteAsset:
 
 
 class TestAssetScopeCalls:
-    """验证每个 asset endpoint 源码中包含正确的 _require_scope 调用。"""
+    """验证每个 asset endpoint 源码中包含正确的 require_scope 调用。"""
 
     def test_list_assets_calls_require_scope_read(self) -> None:
-        """list_assets 应调用 _require_scope(auth, 'assets:read', 'assets:write')。"""
+        """list_assets 应调用 require_scope(auth, 'assets:read', 'assets:write')。"""
         from src.api.router.assets import list_assets
 
         source = inspect.getsource(list_assets)
-        assert "assets:read" in source, (
-            f"list_assets 源码中未找到 assets:read\nsource:\n{source}"
-        )
-        assert "assets:write" in source, (
-            f"list_assets 源码中未找到 assets:write\nsource:\n{source}"
-        )
-        assert "_require_scope" in source, (
-            f"list_assets 未调用 _require_scope\nsource:\n{source}"
-        )
+        assert "assets:read" in source, f"list_assets 源码中未找到 assets:read\nsource:\n{source}"
+        assert "assets:write" in source, f"list_assets 源码中未找到 assets:write\nsource:\n{source}"
+        assert "require_scope" in source, f"list_assets 未调用 require_scope\nsource:\n{source}"
 
     def test_get_asset_calls_require_scope_read(self) -> None:
-        """get_asset 应调用 _require_scope(auth, 'assets:read', 'assets:write')。"""
+        """get_asset 应调用 require_scope(auth, 'assets:read', 'assets:write')。"""
         from src.api.router.assets import get_asset
 
         source = inspect.getsource(get_asset)
         assert "assets:read" in source
         assert "assets:write" in source
-        assert "_require_scope" in source
+        assert "require_scope" in source
 
     def test_delete_asset_calls_require_scope_write(self) -> None:
-        """delete_asset 应调用 _require_scope(auth, 'assets:write')。"""
+        """delete_asset 应调用 require_scope(auth, 'assets:write')。"""
         from src.api.router.assets import delete_asset
 
         source = inspect.getsource(delete_asset)
-        assert '_require_scope(auth, "assets:write")' in source or \
-            "_require_scope(auth, 'assets:write')" in source, (
-            f"delete_asset 未调用 _require_scope(auth, 'assets:write')\nsource:\n{source}"
-        )
-
-
-# ---------------------------------------------------------------------------
-# Tests: _require_scope helper (unit tests)
-# ---------------------------------------------------------------------------
-
-
-class TestRequireScopeHelper:
-    """测试 assets.py 中的 _require_scope 辅助函数。"""
-
-    @pytest.fixture
-    def read_only_auth(self) -> AuthContext:
-        return AuthContext(tenant_id="t", user_id="u", scopes=["assets:read"])
-
-    @pytest.fixture
-    def write_only_auth(self) -> AuthContext:
-        return AuthContext(tenant_id="t", user_id="u", scopes=["assets:write"])
-
-    @pytest.fixture
-    def wildcard_auth(self) -> AuthContext:
-        return AuthContext(tenant_id="t", user_id="u", scopes=["*"])
-
-    @pytest.fixture
-    def empty_auth(self) -> AuthContext:
-        return AuthContext(tenant_id="t", user_id="u", scopes=[])
-
-    def test_assets_write_allows_write_scope(self, write_only_auth: AuthContext) -> None:
-        from src.api.router.assets import _require_scope
-
-        _require_scope(write_only_auth, "assets:write")
-
-    def test_assets_write_rejects_read_only(self, read_only_auth: AuthContext) -> None:
-        from src.api.router.assets import _require_scope
-
-        with pytest.raises(HTTPException) as exc_info:
-            _require_scope(read_only_auth, "assets:write")
-        assert exc_info.value.status_code == 403
-
-    def test_assets_read_allows_read_scope(self, read_only_auth: AuthContext) -> None:
-        from src.api.router.assets import _require_scope
-
-        _require_scope(read_only_auth, "assets:read", "assets:write")
-
-    def test_assets_read_allows_write_scope(self, write_only_auth: AuthContext) -> None:
-        from src.api.router.assets import _require_scope
-
-        _require_scope(write_only_auth, "assets:read", "assets:write")
-
-    def test_wildcard_passes_all(self, wildcard_auth: AuthContext) -> None:
-        from src.api.router.assets import _require_scope
-
-        _require_scope(wildcard_auth, "assets:write")
-        _require_scope(wildcard_auth, "assets:read", "assets:write")
-
-    def test_empty_scopes_rejected(self, empty_auth: AuthContext) -> None:
-        from src.api.router.assets import _require_scope
-
-        with pytest.raises(HTTPException) as exc_info:
-            _require_scope(empty_auth, "assets:write")
-        assert exc_info.value.status_code == 403
+        assert (
+            'require_scope(auth, "assets:write")' in source
+            or "require_scope(auth, 'assets:write')" in source
+        ), f"delete_asset 未调用 require_scope(auth, 'assets:write')\nsource:\n{source}"

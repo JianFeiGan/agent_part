@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
+from src.api.crud import require_scope
 from src.api.deps import AuthDep, RedisDep, SettingsDep
 from src.api.schema.common import ApiResponse, PageResponse
 from src.api.schema.product import (
@@ -20,7 +21,6 @@ from src.api.schema.product import (
     ProductResponse,
     ProductUpdateRequest,
 )
-from src.auth.context import AuthContext
 from src.db.asset_repository import AssetRepository
 from src.db.postgres import get_db_session
 from src.models.product import Product
@@ -30,12 +30,14 @@ from src.storage.local import LocalStorageBackend
 router = APIRouter()
 
 # 允许的图片 MIME 类型
-_ALLOWED_IMAGE_MIME_TYPES: frozenset[str] = frozenset({
-    "image/png",
-    "image/jpeg",
-    "image/webp",
-    "image/gif",
-})
+_ALLOWED_IMAGE_MIME_TYPES: frozenset[str] = frozenset(
+    {
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "image/gif",
+    }
+)
 
 # MIME 类型到文件扩展名的映射
 _MIME_TO_EXTENSION: dict[str, str] = {
@@ -44,25 +46,6 @@ _MIME_TO_EXTENSION: dict[str, str] = {
     "image/webp": "webp",
     "image/gif": "gif",
 }
-
-
-def _require_scope(auth: AuthContext, *scopes: str) -> None:
-    """检查 auth 是否拥有指定 scope 之一，否则 raise 403。
-
-    遍历 scopes，只要任一 scope 满足 auth.has_scope(scope) 即通过。
-    若全部不满足，抛出 HTTPException(status_code=403, detail="Forbidden")。
-
-    Args:
-        auth: 认证上下文。
-        *scopes: 一个或多个 scope 名称。
-
-    Raises:
-        HTTPException: 403 当 scope 不足时。
-    """
-    for scope in scopes:
-        if auth.has_scope(scope):
-            return
-    raise HTTPException(status_code=403, detail="Forbidden")
 
 
 @router.post(
@@ -86,7 +69,7 @@ async def create_product(
     Returns:
         创建成功的商品信息。
     """
-    _require_scope(auth, "products:write")
+    require_scope(auth, "products:write")
 
     # 生成商品 ID
     product_id = f"prod_{uuid4().hex[:12]}"
@@ -125,7 +108,7 @@ async def list_products(
     Returns:
         商品分页列表。
     """
-    _require_scope(auth, "products:read", "products:write")
+    require_scope(auth, "products:read", "products:write")
 
     products, total = await redis.list_products(
         tenant_id=auth.tenant_id,
@@ -173,7 +156,7 @@ async def get_product(
     Raises:
         HTTPException: 商品不存在时抛出 404 错误。
     """
-    _require_scope(auth, "products:read", "products:write")
+    require_scope(auth, "products:read", "products:write")
 
     product = await redis.get_product(product_id, tenant_id=auth.tenant_id)
     if not product:
@@ -211,7 +194,7 @@ async def update_product(
     Raises:
         HTTPException: 商品不存在时抛出 404 错误。
     """
-    _require_scope(auth, "products:write")
+    require_scope(auth, "products:write")
 
     # 获取现有商品
     product = await redis.get_product(product_id, tenant_id=auth.tenant_id)
@@ -256,7 +239,7 @@ async def delete_product(
     Raises:
         HTTPException: 商品不存在时抛出 404 错误。
     """
-    _require_scope(auth, "products:write")
+    require_scope(auth, "products:write")
 
     success = await redis.delete_product(product_id, tenant_id=auth.tenant_id)
     if not success:
@@ -296,7 +279,7 @@ async def upload_product_image(
         HTTPException: 403 scope 不足、400 MIME 不支持、413 文件过大、
                        404 商品不存在。
     """
-    _require_scope(auth, "products:write")
+    require_scope(auth, "products:write")
 
     # 检查商品是否存在
     product = await redis.get_product(product_id, tenant_id=auth.tenant_id)

@@ -54,14 +54,10 @@ async def get_dashboard_stats(
         仪表盘统计数据。
     """
     # 商品总数
-    _, total_products = await redis.list_products(
-        tenant_id=auth.tenant_id, page=1, page_size=1
-    )
+    _, total_products = await redis.list_products(tenant_id=auth.tenant_id, page=1, page_size=1)
 
     # 任务总数
-    _, total_tasks = await redis.list_tasks(
-        tenant_id=auth.tenant_id, page=1, page_size=1
-    )
+    _, total_tasks = await redis.list_tasks(tenant_id=auth.tenant_id, page=1, page_size=1)
 
     # 运行中任务数（按状态聚合）
     _, running_tasks = await redis.list_tasks(
@@ -74,9 +70,7 @@ async def get_dashboard_stats(
     )
 
     # 最近任务（最新 5 条）
-    recent, _ = await redis.list_tasks(
-        tenant_id=auth.tenant_id, page=1, page_size=5
-    )
+    recent, _ = await redis.list_tasks(tenant_id=auth.tenant_id, page=1, page_size=5)
 
     recent_items = [
         RecentTaskItem(

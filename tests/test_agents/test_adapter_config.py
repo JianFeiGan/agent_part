@@ -41,7 +41,7 @@ class TestAdapterConfigManager:
         )
         mock_session.execute.return_value = mock_result
 
-        with patch("src.agents.adapter_config.get_db") as mock_get_db:
+        with patch("src.agents.adapter_config.get_db_session") as mock_get_db:
             mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
@@ -77,7 +77,7 @@ class TestAdapterConfigManager:
         )
         mock_session.execute.return_value = mock_result
 
-        with patch("src.agents.adapter_config.get_db") as mock_get_db:
+        with patch("src.agents.adapter_config.get_db_session") as mock_get_db:
             mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
@@ -92,7 +92,7 @@ class TestAdapterConfigManager:
         mock_result.scalar_one_or_none.return_value = None
         mock_session.execute.return_value = mock_result
 
-        with patch("src.agents.adapter_config.get_db") as mock_get_db:
+        with patch("src.agents.adapter_config.get_db_session") as mock_get_db:
             mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
@@ -102,7 +102,7 @@ class TestAdapterConfigManager:
     @pytest.mark.asyncio
     async def test_db_error_returns_none(self, manager: AdapterConfigManager) -> None:
         """测试数据库异常时返回 None。"""
-        with patch("src.agents.adapter_config.get_db") as mock_get_db:
+        with patch("src.agents.adapter_config.get_db_session") as mock_get_db:
             mock_get_db.return_value.__aenter__ = AsyncMock(side_effect=ConnectionError("DB down"))
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
@@ -174,7 +174,7 @@ class TestAdapterConfigManager:
             side_effect=[mock_result_a, mock_result_b]
         )
 
-        with patch("src.agents.adapter_config.get_db") as mock_get_db:
+        with patch("src.agents.adapter_config.get_db_session") as mock_get_db:
             mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=None)
 

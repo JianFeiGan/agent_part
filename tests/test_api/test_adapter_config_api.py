@@ -142,7 +142,9 @@ class TestAdapterConfigAPI:
 
     def test_get_adapter_config_wrong_tenant(self, client: TestClient) -> None:
         """测试获取其他租户的配置返回 404。"""
-        mock_po = _make_mock_po(id=1, platform="amazon", shop_id="default", tenant_id="other-tenant")
+        mock_po = _make_mock_po(
+            id=1, platform="amazon", shop_id="default", tenant_id="other-tenant"
+        )
         mock_session = AsyncMock()
         mock_session.get.return_value = mock_po
 
@@ -178,7 +180,9 @@ class TestAdapterConfigAPI:
 
     def test_delete_adapter_config_wrong_tenant(self, client: TestClient) -> None:
         """测试删除其他租户的配置返回 404。"""
-        mock_po = _make_mock_po(id=1, platform="amazon", shop_id="default", tenant_id="other-tenant")
+        mock_po = _make_mock_po(
+            id=1, platform="amazon", shop_id="default", tenant_id="other-tenant"
+        )
         mock_session = AsyncMock()
         mock_session.get.return_value = mock_po
 

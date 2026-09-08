@@ -38,9 +38,7 @@ class TestWebSocketAuthStructure:
         )
 
         # 确认 accept 被调用
-        assert "accept()" in source, (
-            "task_websocket 源码中未找到 accept() 调用"
-        )
+        assert "accept()" in source, "task_websocket 源码中未找到 accept() 调用"
 
         # 定位 authenticate_websocket 和 accept 的行位置
         lines = source.splitlines()
@@ -94,9 +92,7 @@ class TestWebSocketAuthStructure:
         )
 
         # 验证 close 调用包含 reason 参数
-        assert "reason=" in source, (
-            "websocket.close 调用中缺少 reason= 参数"
-        )
+        assert "reason=" in source, "websocket.close 调用中缺少 reason= 参数"
 
     def test_task_websocket_uses_auth_tenant_id(self) -> None:
         """测试 task_websocket 使用 auth.tenant_id 而非硬编码 dev。
@@ -154,9 +150,7 @@ class TestWebSocketAuthIntegration:
         """测试 authenticate_websocket 是可调用的。"""
         from src.auth import authenticate_websocket
 
-        assert callable(authenticate_websocket), (
-            "authenticate_websocket 不是可调用对象"
-        )
+        assert callable(authenticate_websocket), "authenticate_websocket 不是可调用对象"
 
     def test_ws_1008_import_available(self) -> None:
         """测试 status.WS_1008_POLICY_VIOLATION 可用。"""

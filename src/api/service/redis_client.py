@@ -119,9 +119,7 @@ class RedisClient:
         channel = self._tenant_key(tenant_id, "task_events", task_id)
         await client.publish(channel, json.dumps(event, ensure_ascii=False))
 
-    async def subscribe_task_events(
-        self, task_id: str, *, tenant_id: str
-    ) -> Any:
+    async def subscribe_task_events(self, task_id: str, *, tenant_id: str) -> Any:
         """订阅任务事件频道。
 
         Args:

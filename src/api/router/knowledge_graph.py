@@ -32,7 +32,11 @@ router = APIRouter()
 _graphs: dict[str, dict[str, Any]] = {}
 
 
-@router.post("/graphs", response_model=ApiResponse[KnowledgeGraphResponse], status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/graphs",
+    response_model=ApiResponse[KnowledgeGraphResponse],
+    status_code=status.HTTP_201_CREATED,
+)
 async def create_graph(
     request: KnowledgeGraphCreate,
     auth: AuthDep = None,
@@ -72,9 +76,7 @@ async def list_graphs(
     tenant_id = auth.tenant_id if auth else "dev"
 
     items = [
-        KnowledgeGraphResponse(**g)
-        for g in _graphs.values()
-        if g.get("tenant_id") == tenant_id
+        KnowledgeGraphResponse(**g) for g in _graphs.values() if g.get("tenant_id") == tenant_id
     ]
 
     return ApiResponse.success(
@@ -141,7 +143,7 @@ async def hybrid_search(
             score=r.get("score", 0),
             source=r.get("source"),
         )
-        for i, r in enumerate(state.fused_results[:request.top_k])
+        for i, r in enumerate(state.fused_results[: request.top_k])
     ]
 
     return ApiResponse.success(

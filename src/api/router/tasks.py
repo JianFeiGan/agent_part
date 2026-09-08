@@ -14,6 +14,7 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 
+from src.api.crud import require_scope
 from src.api.deps import AuthDep, RedisDep
 from src.api.schema.common import ApiResponse, PageResponse
 from src.api.schema.task import (
@@ -25,28 +26,8 @@ from src.api.schema.task import (
 from src.api.service.redis_client import RedisClient
 from src.api.service.task_manager import TaskManager, get_task_manager
 from src.auth import authenticate_websocket
-from src.auth.context import AuthContext
 
 router = APIRouter()
-
-
-def _require_scope(auth: AuthContext, *scopes: str) -> None:
-    """检查 auth 是否拥有指定 scope 之一，否则 raise 403。
-
-    遍历 scopes，只要任一 scope 满足 auth.has_scope(scope) 即通过。
-    若全部不满足，抛出 HTTPException(status_code=403, detail="Forbidden")。
-
-    Args:
-        auth: 认证上下文。
-        *scopes: 一个或多个 scope 名称。
-
-    Raises:
-        HTTPException: 403 当 scope 不足时。
-    """
-    for scope in scopes:
-        if auth.has_scope(scope):
-            return
-    raise HTTPException(status_code=403, detail="Forbidden")
 
 
 def get_task_manager_dep() -> TaskManager:
@@ -87,7 +68,7 @@ async def create_task(
     Raises:
         HTTPException: 商品不存在时抛出 404 错误。
     """
-    _require_scope(auth, "tasks:write")
+    require_scope(auth, "tasks:write")
 
     # 检查商品是否存在
     product = await redis.get_product(request.product_id, tenant_id=auth.tenant_id)
@@ -131,7 +112,7 @@ async def list_tasks(
     Returns:
         任务分页列表。
     """
-    _require_scope(auth, "tasks:read", "tasks:write")
+    require_scope(auth, "tasks:read", "tasks:write")
 
     tasks, total = await task_manager.list_tasks(
         redis=redis,
@@ -179,7 +160,7 @@ async def get_task_detail(
     Raises:
         HTTPException: 任务不存在时抛出 404 错误。
     """
-    _require_scope(auth, "tasks:read", "tasks:write")
+    require_scope(auth, "tasks:read", "tasks:write")
 
     try:
         detail = await task_manager.get_task_detail(task_id, redis, tenant_id=auth.tenant_id)
@@ -217,7 +198,7 @@ async def get_task_status(
     Raises:
         HTTPException: 任务不存在时抛出 404 错误。
     """
-    _require_scope(auth, "tasks:read", "tasks:write")
+    require_scope(auth, "tasks:read", "tasks:write")
 
     try:
         status_data = await task_manager.get_task_status(task_id, redis, tenant_id=auth.tenant_id)
@@ -255,7 +236,7 @@ async def cancel_task(
     Raises:
         HTTPException: 任务不存在时抛出 404 错误。
     """
-    _require_scope(auth, "tasks:write")
+    require_scope(auth, "tasks:write")
 
     success = await task_manager.cancel_task(task_id, redis, tenant_id=auth.tenant_id)
     if not success:
@@ -291,7 +272,7 @@ async def delete_task(
     Raises:
         HTTPException: 任务不存在时抛出 404 错误。
     """
-    _require_scope(auth, "tasks:write")
+    require_scope(auth, "tasks:write")
 
     success = await redis.delete_task(task_id, tenant_id=auth.tenant_id)
     if not success:
@@ -328,7 +309,7 @@ async def task_websocket(
 
     # Scope 检查 — 需要 tasks:read 或 tasks:write
     try:
-        _require_scope(auth, "tasks:read", "tasks:write")
+        require_scope(auth, "tasks:read", "tasks:write")
     except HTTPException:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Forbidden")
         return
@@ -352,16 +333,20 @@ async def task_websocket(
             # 发送当前所有 agent_logs 的状态（新格式）
             detail = await task_manager.get_task_detail(task_id, redis, tenant_id=auth.tenant_id)
             for log in detail.get("agent_logs", []):
-                await websocket.send_json({
-                    "type": "agent_status_change",
-                    "agent_name": log.get("step"),
-                    "status": log.get("status"),
-                })
+                await websocket.send_json(
+                    {
+                        "type": "agent_status_change",
+                        "agent_name": log.get("step"),
+                        "status": log.get("status"),
+                    }
+                )
                 if log.get("status") in ("completed", "failed"):
-                    await websocket.send_json({
-                        "type": "agent_log_update",
-                        "agent_log": log,
-                    })
+                    await websocket.send_json(
+                        {
+                            "type": "agent_log_update",
+                            "agent_log": log,
+                        }
+                    )
 
             # 如果任务已完成或失败，关闭连接
             if status_data.get("status") in [
@@ -377,9 +362,7 @@ async def task_websocket(
 
         # 保持连接，转发 Redis 频道事件
         while True:
-            message = await pubsub.get_message(
-                ignore_subscribe_messages=True, timeout=1.0
-            )
+            message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
             if message is not None and message.get("type") == "message":
                 try:
                     await websocket.send_json(json.loads(message["data"]))

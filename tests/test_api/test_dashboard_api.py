@@ -54,12 +54,22 @@ class FakeRedis:
         ]
 
     async def list_products(
-        self, *, tenant_id: str, page: int = 1, page_size: int = 1, category: str | None = None  # noqa: ARG002
+        self,
+        *,
+        tenant_id: str,
+        page: int = 1,
+        page_size: int = 1,
+        category: str | None = None,  # noqa: ARG002
     ) -> tuple[list, int]:
         return [], 3
 
     async def list_tasks(
-        self, *, tenant_id: str, page: int = 1, page_size: int = 10, status: str | None = None  # noqa: ARG002
+        self,
+        *,
+        tenant_id: str,
+        page: int = 1,
+        page_size: int = 10,
+        status: str | None = None,  # noqa: ARG002
     ) -> tuple[list[dict], int]:
         filtered = [t for t in self._tasks if status is None or t["status"] == status]
         start = (page - 1) * page_size
@@ -207,7 +217,9 @@ class TestDashboardAPI:
 
         # 正常情况
         assert _extract_task_type({"request": {"task_type": "image_only"}}) == "image_only"
-        assert _extract_task_type({"request": {"task_type": "image_and_video"}}) == "image_and_video"
+        assert (
+            _extract_task_type({"request": {"task_type": "image_and_video"}}) == "image_and_video"
+        )
         assert _extract_task_type({"request": {"task_type": "video_only"}}) == "video_only"
 
         # 缺失 request 字段

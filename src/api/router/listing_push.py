@@ -132,9 +132,7 @@ async def push_listing(
         for platform in target_platforms:
             try:
                 # 从数据库加载适配器凭证（租户感知）
-                config = await _config_manager.get_config(
-                    platform, tenant_id=auth.tenant_id
-                )
+                config = await _config_manager.get_config(platform, tenant_id=auth.tenant_id)
                 adapter = registry.get(platform, config=config)
 
                 # 从数据库加载已生成的素材

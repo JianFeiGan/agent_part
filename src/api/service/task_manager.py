@@ -302,9 +302,7 @@ class TaskManager:
                                     task_id=task_id,
                                     video=result.generated_video,
                                 )
-                            logger.info(
-                                f"任务 {task_id} 产物落库: {persisted} 个资产"
-                            )
+                            logger.info(f"任务 {task_id} 产物落库: {persisted} 个资产")
                     except Exception as e:
                         logger.error(f"任务 {task_id} 产物落库失败: {e}")
 
@@ -426,8 +424,7 @@ class TaskManager:
         has_mock_assets = False
         if state:
             has_mock_assets = any(
-                bool(img.metadata and img.metadata.get("is_mock"))
-                for img in state.generated_images
+                bool(img.metadata and img.metadata.get("is_mock")) for img in state.generated_images
             ) or bool(
                 state.generated_video
                 and state.generated_video.metadata
@@ -453,9 +450,7 @@ class TaskManager:
             "state": state.model_dump() if state else None,
         }
 
-    async def cancel_task(
-        self, task_id: str, redis: RedisClient, *, tenant_id: str
-    ) -> bool:
+    async def cancel_task(self, task_id: str, redis: RedisClient, *, tenant_id: str) -> bool:
         """取消任务。
 
         Args:

@@ -18,7 +18,7 @@ from typing import Any
 from sqlalchemy import select
 
 from src.db.listing_models import AdapterConfigPO
-from src.db.postgres import get_db
+from src.db.postgres import get_db_session
 from src.models.listing import Platform
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ class AdapterConfigManager:
 
         # 查询数据库
         try:
-            async with get_db() as session:
+            async with get_db_session() as session:
                 stmt = select(AdapterConfigPO).where(
                     AdapterConfigPO.tenant_id == tenant_id,
                     AdapterConfigPO.platform == platform.value,

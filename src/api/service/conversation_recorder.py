@@ -234,7 +234,9 @@ class ConversationRecorder:
             response_metadata = getattr(response, "response_metadata", {})
             if isinstance(response_metadata, dict):
                 # ChatOpenAI: token_usage; ChatTongyi: usage
-                token_usage = response_metadata.get("token_usage") or response_metadata.get("usage") or {}
+                token_usage = (
+                    response_metadata.get("token_usage") or response_metadata.get("usage") or {}
+                )
                 if token_usage:
                     self._input_tokens = token_usage.get("prompt_tokens", 0)
                     self._output_tokens = token_usage.get("completion_tokens", 0)

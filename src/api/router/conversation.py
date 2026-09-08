@@ -97,9 +97,7 @@ async def list_conversations(
     """
     async with get_db_session() as session:
         # 构建查询
-        stmt = select(AIConversationLog).where(
-            AIConversationLog.tenant_id == auth.tenant_id
-        )
+        stmt = select(AIConversationLog).where(AIConversationLog.tenant_id == auth.tenant_id)
         count_stmt = select(func.count(AIConversationLog.id)).where(
             AIConversationLog.tenant_id == auth.tenant_id
         )
@@ -310,17 +308,13 @@ async def get_cost_budget(
             func.coalesce(func.sum(AIConversationLog.cost_usd), 0.0),
             func.coalesce(func.sum(AIConversationLog.total_tokens), 0),
             func.count(AIConversationLog.id),
-        ).where(
-            tenant_filter & (AIConversationLog.created_at >= today_start)
-        )
+        ).where(tenant_filter & (AIConversationLog.created_at >= today_start))
         today_row = (await session.execute(today_stmt)).one()
 
         # 本月统计
         month_stmt = select(
             func.coalesce(func.sum(AIConversationLog.cost_cny), 0.0),
-        ).where(
-            tenant_filter & (AIConversationLog.created_at >= month_start)
-        )
+        ).where(tenant_filter & (AIConversationLog.created_at >= month_start))
         month_cost_cny = (await session.execute(month_stmt)).scalar() or 0.0
 
     today_cost_cny = float(today_row[0])
@@ -329,14 +323,26 @@ async def get_cost_budget(
     today_calls = int(today_row[3])
 
     daily_remaining = max(0.0, request.daily_budget_cny - today_cost_cny)
-    daily_pct = min(100.0, (today_cost_cny / request.daily_budget_cny * 100)) if request.daily_budget_cny > 0 else 0.0
+    daily_pct = (
+        min(100.0, (today_cost_cny / request.daily_budget_cny * 100))
+        if request.daily_budget_cny > 0
+        else 0.0
+    )
 
     monthly_remaining = max(0.0, request.monthly_budget_cny - float(month_cost_cny))
-    monthly_pct = min(100.0, (float(month_cost_cny) / request.monthly_budget_cny * 100)) if request.monthly_budget_cny > 0 else 0.0
+    monthly_pct = (
+        min(100.0, (float(month_cost_cny) / request.monthly_budget_cny * 100))
+        if request.monthly_budget_cny > 0
+        else 0.0
+    )
 
     # 预估月费用：基于今日日均 × 当月天数
     day_of_month = now.day
-    days_in_month = (now.replace(month=now.month % 12 + 1, day=1) - timedelta(days=1)).day if now.month < 12 else 31
+    days_in_month = (
+        (now.replace(month=now.month % 12 + 1, day=1) - timedelta(days=1)).day
+        if now.month < 12
+        else 31
+    )
     projected_month = today_cost_cny * days_in_month / max(day_of_month, 1)
 
     return ApiResponse(

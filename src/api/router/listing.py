@@ -265,9 +265,7 @@ async def create_task_from_visual(
     redis = await get_redis()
     product = await redis.get_product(request.product_id, tenant_id=auth.tenant_id)
     if not product:
-        return ApiResponse(
-            code=404, message=f"视觉商品 {request.product_id} 不存在", data=None
-        )
+        return ApiResponse(code=404, message=f"视觉商品 {request.product_id} 不存在", data=None)
 
     listing_product = product_to_listing(product)
 

@@ -42,7 +42,9 @@ def _make_upload_file(
     content_type: str = "image/png",
 ) -> UploadFile:
     """创建测试用 UploadFile。"""
-    return UploadFile(filename=filename, file=io.BytesIO(content), headers={"content-type": content_type})
+    return UploadFile(
+        filename=filename, file=io.BytesIO(content), headers={"content-type": content_type}
+    )
 
 
 def _make_asset_po(asset_id: int = 1, url: str = "/static/images/test.png") -> GeneratedAssetPO:
@@ -82,12 +84,12 @@ class TestUploadImageSuccess:
         content = b"fake-png-data-for-test"
         file = _make_upload_file(content=content, content_type="image/png")
 
-        asset_mock = _make_asset_po(asset_id=42, url="/static/products/tenant_test/prod_001/abcd.png")
+        asset_mock = _make_asset_po(
+            asset_id=42, url="/static/products/tenant_test/prod_001/abcd.png"
+        )
 
         # Mock 存储后端
-        with patch(
-            "src.api.router.products.get_storage_backend"
-        ) as mock_get_backend:
+        with patch("src.api.router.products.get_storage_backend") as mock_get_backend:
             backend_mock = MagicMock()
             backend_mock.save = AsyncMock(
                 return_value="/static/products/tenant_test/prod_001/abcd.png"
@@ -245,9 +247,7 @@ class TestUploadDedupesBySha256:
             mock_repo1.find_by_sha256 = AsyncMock(return_value=None)
             mock_repo1.create_asset = AsyncMock(return_value=existing_asset)
 
-            with patch(
-                "src.api.router.products.get_storage_backend"
-            ) as mock_get_backend:
+            with patch("src.api.router.products.get_storage_backend") as mock_get_backend:
                 backend_mock = MagicMock()
                 backend_mock.save = AsyncMock(return_value=existing_asset.url)
                 mock_get_backend.return_value = backend_mock
@@ -342,18 +342,14 @@ class TestUploadStorageRollback:
             mock_repo.create_asset = AsyncMock(side_effect=RuntimeError("DB write error"))
 
             with (
-                patch(
-                    "src.api.router.products.get_storage_backend"
-                ) as mock_get_backend,
+                patch("src.api.router.products.get_storage_backend") as mock_get_backend,
                 patch(
                     "src.api.router.products.AssetRepository",
                     return_value=mock_repo,
                 ),
             ):
                 backend_mock = MagicMock()
-                backend_mock.save = AsyncMock(
-                    return_value="/static/products/test/rollback.png"
-                )
+                backend_mock.save = AsyncMock(return_value="/static/products/test/rollback.png")
                 backend_mock.delete = AsyncMock(return_value=True)
                 mock_get_backend.return_value = backend_mock
 

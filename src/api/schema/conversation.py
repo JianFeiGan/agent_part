@@ -126,12 +126,8 @@ class UsageOverviewResponse(BaseModel):
 class CostBudgetRequest(BaseModel):
     """费用预算请求。"""
 
-    daily_budget_cny: float = Field(
-        default=100.0, gt=0, description="每日预算（人民币）"
-    )
-    monthly_budget_cny: float = Field(
-        default=3000.0, gt=0, description="每月预算（人民币）"
-    )
+    daily_budget_cny: float = Field(default=100.0, gt=0, description="每日预算（人民币）")
+    monthly_budget_cny: float = Field(default=3000.0, gt=0, description="每月预算（人民币）")
 
 
 class CostBudgetResponse(BaseModel):

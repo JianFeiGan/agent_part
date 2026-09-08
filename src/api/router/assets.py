@@ -11,35 +11,16 @@ Description:
 
 from fastapi import APIRouter, HTTPException, Query, status
 
+from src.api.crud import require_scope
 from src.api.deps import AuthDep
 from src.api.schema.assets import AssetResponse
 from src.api.schema.common import ApiResponse
-from src.auth.context import AuthContext
 from src.db.asset_repository import AssetRepository
 from src.db.listing_models import GeneratedAssetPO
 from src.db.postgres import get_db_session
 from src.storage.factory import get_storage_backend
 
 router = APIRouter()
-
-
-def _require_scope(auth: AuthContext, *scopes: str) -> None:
-    """检查 auth 是否拥有指定 scope 之一，否则 raise 403。
-
-    遍历 scopes，只要任一 scope 满足 auth.has_scope(scope) 即通过。
-    若全部不满足，抛出 HTTPException(status_code=403, detail="Forbidden")。
-
-    Args:
-        auth: 认证上下文。
-        *scopes: 一个或多个 scope 名称。
-
-    Raises:
-        HTTPException: 403 当 scope 不足时。
-    """
-    for scope in scopes:
-        if auth.has_scope(scope):
-            return
-    raise HTTPException(status_code=403, detail="Forbidden")
 
 
 def _asset_to_response(asset: GeneratedAssetPO) -> AssetResponse:
@@ -96,7 +77,7 @@ async def list_assets(
     Returns:
         资产列表。
     """
-    _require_scope(auth, "assets:read", "assets:write")
+    require_scope(auth, "assets:read", "assets:write")
 
     async with get_db_session() as session:
         repo = AssetRepository(session)
@@ -106,9 +87,7 @@ async def list_assets(
         elif task_id is not None:
             results = await repo.list_by_task(auth.tenant_id, task_id)
         elif asset_type is not None:
-            results = await repo.list_for_tenant(
-                auth.tenant_id, asset_type=asset_type
-            )
+            results = await repo.list_for_tenant(auth.tenant_id, asset_type=asset_type)
         else:
             results = await repo.list_for_tenant(auth.tenant_id)
 
@@ -148,7 +127,7 @@ async def get_asset(
     Raises:
         HTTPException: 404 当资产不存在或不属于当前租户。
     """
-    _require_scope(auth, "assets:read", "assets:write")
+    require_scope(auth, "assets:read", "assets:write")
 
     async with get_db_session() as session:
         repo = AssetRepository(session)
@@ -188,7 +167,7 @@ async def delete_asset(
     Raises:
         HTTPException: 404 当资产不存在或不属于当前租户。
     """
-    _require_scope(auth, "assets:write")
+    require_scope(auth, "assets:write")
 
     async with get_db_session() as session:
         repo = AssetRepository(session)

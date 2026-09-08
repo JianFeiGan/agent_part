@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.crud import resolve_tenant
 from src.api.deps import AuthDep
 from src.api.schema.common import Result
 from src.db import get_db
@@ -123,7 +124,7 @@ async def create_document(
     Returns:
         创建的文档信息。
     """
-    tenant_id = auth.tenant_id if auth else "default"
+    tenant_id = resolve_tenant(auth)
 
     # 创建文档记录
     doc = KnowledgeDoc(
@@ -163,7 +164,9 @@ async def create_document(
     await session.commit()
     await session.refresh(doc)
 
-    logger.info(f"Created knowledge document: id={doc.id}, title='{doc.title}', tenant_id={tenant_id}")
+    logger.info(
+        f"Created knowledge document: id={doc.id}, title='{doc.title}', tenant_id={tenant_id}"
+    )
 
     return Result.success(
         KnowledgeDocumentResponse(
@@ -201,7 +204,7 @@ async def upload_document(
     Returns:
         创建的文档信息。
     """
-    tenant_id = auth.tenant_id if auth else "default"
+    tenant_id = resolve_tenant(auth)
 
     # 检查文件格式
     allowed_extensions = {".md", ".txt", ".json", ".pdf", ".docx"}
@@ -302,7 +305,7 @@ async def list_documents(
     """
     from sqlalchemy import func, select
 
-    tenant_id = auth.tenant_id if auth else "default"
+    tenant_id = resolve_tenant(auth)
 
     # 构建查询
     query = select(KnowledgeDoc).where(KnowledgeDoc.tenant_id == tenant_id)
@@ -364,7 +367,7 @@ async def delete_document(
     """
     from sqlalchemy import select
 
-    tenant_id = auth.tenant_id if auth else "default"
+    tenant_id = resolve_tenant(auth)
 
     result = await session.execute(
         select(KnowledgeDoc).where(
@@ -406,7 +409,7 @@ async def search_knowledge(
     """
     from src.rag.retriever import KnowledgeRetriever
 
-    tenant_id = auth.tenant_id if auth else "default"
+    tenant_id = resolve_tenant(auth)
 
     retriever = KnowledgeRetriever()
     result = await retriever.retrieve(
@@ -451,7 +454,7 @@ async def get_knowledge_stats(
     Returns:
         统计信息（仅当前租户）。
     """
-    tenant_id = auth.tenant_id if auth else "default"
+    tenant_id = resolve_tenant(auth)
 
     vector_store = VectorStore()
     stats = await vector_store.get_stats(session, tenant_id=tenant_id)
