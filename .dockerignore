@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+
+# Node.js
+node_modules/
+npm-debug.log*
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Docs
+docs-site/
+documents/
+
+# Output (挂载卷)
+output/
+
+# Tests (生产镜像不需要)
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Cache
+.ruff_cache/
+.mypy_cache/
+
+# Misc
+.DS_Store
+CHANGELOG.md
+SECURITY.md
+CONTRIBUTING.md
+README.md.bak
+# 注意：README.md 不能排除，因为 pyproject.toml 的 readme 字段依赖它
