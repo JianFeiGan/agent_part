@@ -1,6 +1,6 @@
 [project]
 name = "product-visual-generator"
-version = "0.2.0"
+version = "0.3.0"
 description = "多Agent协作商品图片/视频自动生成系统"
 readme = "README.md"
 requires-python = ">=3.11"
