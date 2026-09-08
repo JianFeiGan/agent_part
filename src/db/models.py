@@ -595,3 +595,70 @@ class CategoryMemory(Base):
 
     def __repr__(self) -> str:
         return f"<CategoryMemory(id={self.id}, category='{self.category}')>"
+
+
+class CategoryMemoryProposalPO(Base):
+    """类目记忆提案模型。
+
+    存储记忆提炼候选，经人工审核后写入正式 CategoryMemory。
+
+    Attributes:
+        id: 主键。
+        tenant_id: 租户 ID。
+        category: 商品类目。
+        summary: 类目摘要概述。
+        best_practices: 最佳实践列表 (JSONB)。
+        negative_patterns: 避坑/负面模式列表 (JSONB)。
+        style_guidelines: 风格指南字典 (JSONB)。
+        performance_hints: 性能/效果提示字典 (JSONB)。
+        source_type: 来源类型 (task_completion/compliance_failure/platform_push/manual)。
+        source_ref: 来源引用。
+        status: 审核状态 (pending/approved/rejected/applied)。
+        confidence: 置信度 (0.0-1.0)。
+        reviewed_by: 审核人。
+        review_reason: 审核理由。
+        created_at: 创建时间。
+        updated_at: 更新时间。
+        reviewed_at: 审核时间。
+    """
+
+    __tablename__ = "category_memory_proposals"
+
+    __table_args__ = (
+        Index("idx_proposals_tenant_status", "tenant_id", "status"),
+        Index("idx_proposals_tenant_category_status", "tenant_id", "category", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="租户 ID"
+    )
+    category: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True, comment="商品类目"
+    )
+    summary: Mapped[str | None] = mapped_column(Text, comment="类目摘要")
+    best_practices: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="最佳实践")
+    negative_patterns: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="避坑/负面模式")
+    style_guidelines: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, comment="风格指南")
+    performance_hints: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, comment="性能提示")
+    source_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, comment="来源类型"
+    )
+    source_ref: Mapped[str | None] = mapped_column(String(200), comment="来源引用")
+    status: Mapped[str] = mapped_column(
+        String(20), default="pending", index=True, comment="审核状态"
+    )
+    confidence: Mapped[float] = mapped_column(Float, default=0.5, comment="置信度")
+    reviewed_by: Mapped[str | None] = mapped_column(String(100), comment="审核人")
+    review_reason: Mapped[str | None] = mapped_column(Text, comment="审核理由")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, comment="审核时间")
+
+    def __repr__(self) -> str:
+        return (
+            f"<CategoryMemoryProposalPO(id={self.id}, category='{self.category}', "
+            f"status='{self.status}')>"
+        )
