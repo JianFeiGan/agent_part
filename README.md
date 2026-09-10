@@ -187,6 +187,8 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
 
 > 📊 更详细的类图与时序图见 [`docs/class-diagram.mermaid`](docs/class-diagram.mermaid) 与 [`docs/sequence-diagram.mermaid`](docs/sequence-diagram.mermaid)。
 
+> 🗺️ **交互式项目地图**：浏览器直接打开 [`docs/architecture-map.html`](docs/architecture-map.html)——12 个核心组件、3 条引导视图（视觉生成主路径 / 鉴权与租户 / RAG 与记忆），每个节点可点击跳转到对应源码（revision 锁定 `69cf4d8`）。规格源文件在 [`docs/architecture-map.json`](docs/architecture-map.json)。
+
 ---
 
 ## ⚡ 快速开始

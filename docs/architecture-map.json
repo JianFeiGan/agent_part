@@ -1,0 +1,473 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Agent Part · 项目地图",
+    "output": "architecture-map.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "repository": {
+      "url": "https://github.com/JianFeiGan/agent_part",
+      "provider": "github",
+      "revision": "69cf4d86139b3506bec87ba3bf2a14804ded61fb"
+    },
+    "views": [
+      {
+        "id": "generate-path",
+        "label": "视觉生成主路径",
+        "focus": [
+          "frontend",
+          "api",
+          "service",
+          "workflows",
+          "agents",
+          "providers",
+          "vendors"
+        ],
+        "note": "一次生成任务从工作台提交到厂商调用的完整链路"
+      },
+      {
+        "id": "auth-tenancy",
+        "label": "鉴权与租户",
+        "focus": [
+          "auth",
+          "api",
+          "db"
+        ],
+        "note": "Token 校验、scope 与 tenant_id 过滤都在 API 边界完成"
+      },
+      {
+        "id": "rag-memory",
+        "label": "RAG 与记忆",
+        "focus": [
+          "rag",
+          "agents",
+          "db"
+        ],
+        "note": "RAG 增强变体与 human-in-the-loop 记忆审核管道"
+      }
+    ],
+    "viewBox": [
+      1283,
+      630
+    ]
+  },
+  "components": [
+    {
+      "id": "frontend",
+      "type": "frontend",
+      "label": "DevTools 工作台",
+      "sublabel": "Vue 3 · :5173",
+      "tag": "DAG 可视化",
+      "sources": [
+        {
+          "path": "frontend/src/main.ts",
+          "label": "工作台入口"
+        }
+      ],
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        116,
+        58
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "API 层",
+      "sublabel": "FastAPI /api/v1",
+      "tag": "40+ 端点",
+      "sources": [
+        {
+          "path": "src/api/router/__init__.py",
+          "label": "路由注册"
+        },
+        {
+          "path": "main.py",
+          "label": "应用入口"
+        }
+      ],
+      "pos": [
+        215,
+        300
+      ],
+      "size": [
+        116,
+        58
+      ]
+    },
+    {
+      "id": "auth",
+      "type": "security",
+      "label": "鉴权与租户",
+      "sublabel": "sha256 Token",
+      "tag": "scope 校验",
+      "sources": [
+        {
+          "path": "src/auth/api_key.py",
+          "label": "Token 注册表"
+        }
+      ],
+      "pos": [
+        215,
+        110
+      ],
+      "size": [
+        116,
+        58
+      ]
+    },
+    {
+      "id": "service",
+      "type": "backend",
+      "label": "任务服务层",
+      "sublabel": "task_manager",
+      "sources": [
+        {
+          "path": "src/api/service/task_manager.py",
+          "label": "异步任务"
+        }
+      ],
+      "pos": [
+        404,
+        300
+      ],
+      "size": [
+        116,
+        58
+      ],
+      "tag": "asset_persister"
+    },
+    {
+      "id": "workflows",
+      "type": "backend",
+      "label": "LangGraph 工作流",
+      "sublabel": "视觉·刊登·问答",
+      "tag": "3 条 DAG",
+      "sources": [
+        {
+          "path": "src/graph/workflow.py",
+          "label": "视觉生成"
+        },
+        {
+          "path": "src/graph/listing_workflow.py",
+          "label": "刊登"
+        },
+        {
+          "path": "src/knowledge/agent_workflow.py",
+          "label": "知识问答"
+        }
+      ],
+      "pos": [
+        593,
+        300
+      ],
+      "size": [
+        116,
+        58
+      ]
+    },
+    {
+      "id": "agents",
+      "type": "backend",
+      "label": "Agent 层",
+      "sublabel": "BaseAgent + RAG",
+      "sources": [
+        {
+          "path": "src/agents/base.py",
+          "label": "BaseAgent"
+        }
+      ],
+      "pos": [
+        782,
+        300
+      ],
+      "size": [
+        116,
+        58
+      ],
+      "tag": "角色化"
+    },
+    {
+      "id": "rag",
+      "type": "backend",
+      "label": "RAG 与记忆",
+      "sublabel": "GraphRAG 管道",
+      "tag": "human-in-the-loop",
+      "sources": [
+        {
+          "path": "src/rag/memory_distiller.py",
+          "label": "记忆提炼"
+        }
+      ],
+      "pos": [
+        782,
+        490
+      ],
+      "size": [
+        116,
+        58
+      ]
+    },
+    {
+      "id": "providers",
+      "type": "backend",
+      "label": "Provider 工厂",
+      "sublabel": "ProviderFactory",
+      "sources": [
+        {
+          "path": "src/clients/provider_factory.py",
+          "label": "工厂实现"
+        }
+      ],
+      "pos": [
+        971,
+        300
+      ],
+      "size": [
+        116,
+        58
+      ],
+      "tag": "按租户选型"
+    },
+    {
+      "id": "vendors",
+      "type": "external",
+      "label": "模型厂商",
+      "sublabel": "千问·万象·可灵",
+      "tag": "OpenAI 兼容",
+      "pos": [
+        1127,
+        300
+      ],
+      "size": [
+        116,
+        58
+      ]
+    },
+    {
+      "id": "redis",
+      "type": "database",
+      "label": "Redis",
+      "sublabel": "任务状态 :6379",
+      "pos": [
+        215,
+        490
+      ],
+      "size": [
+        116,
+        58
+      ]
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "pgvector·15+表",
+      "tag": "多租户",
+      "sources": [
+        {
+          "path": "src/db/models.py",
+          "label": "核心模型"
+        }
+      ],
+      "pos": [
+        593,
+        490
+      ],
+      "size": [
+        116,
+        58
+      ]
+    },
+    {
+      "id": "storage",
+      "type": "cloud",
+      "label": "资产存储",
+      "sublabel": "本地 / OSS",
+      "sources": [
+        {
+          "path": "src/storage/factory.py",
+          "label": "存储工厂"
+        }
+      ],
+      "pos": [
+        404,
+        490
+      ],
+      "size": [
+        116,
+        58
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "后端服务 · FastAPI :8000",
+      "wraps": [
+        "api",
+        "auth",
+        "service",
+        "workflows",
+        "agents",
+        "providers"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "数据与基础设施 · docker compose",
+      "wraps": [
+        "redis",
+        "storage",
+        "db"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "frontend-to-api",
+      "from": "frontend",
+      "to": "api",
+      "label": "REST/WS",
+      "variant": "emphasis"
+    },
+    {
+      "id": "auth-to-api",
+      "from": "auth",
+      "to": "api",
+      "label": "Token 校验",
+      "variant": "security",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        273,
+        234
+      ]
+    },
+    {
+      "id": "api-to-service",
+      "from": "api",
+      "to": "service",
+      "label": "提交/查询"
+    },
+    {
+      "id": "service-to-workflows",
+      "from": "service",
+      "to": "workflows"
+    },
+    {
+      "id": "workflows-to-agents",
+      "from": "workflows",
+      "to": "agents",
+      "label": "执行"
+    },
+    {
+      "id": "agents-to-providers",
+      "from": "agents",
+      "to": "providers"
+    },
+    {
+      "id": "providers-to-vendors",
+      "from": "providers",
+      "to": "vendors"
+    },
+    {
+      "id": "api-to-redis",
+      "from": "api",
+      "to": "redis",
+      "label": "任务状态",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        273,
+        424
+      ]
+    },
+    {
+      "id": "agents-to-rag",
+      "from": "agents",
+      "to": "rag",
+      "label": "RAG 注入",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        840,
+        424
+      ]
+    },
+    {
+      "id": "rag-to-db",
+      "from": "rag",
+      "to": "db",
+      "fromSide": "left",
+      "toSide": "right"
+    },
+    {
+      "id": "providers-to-db",
+      "from": "providers",
+      "to": "db",
+      "label": "读配置",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          1029,
+          590
+        ],
+        [
+          651,
+          590
+        ]
+      ]
+    },
+    {
+      "id": "service-to-storage",
+      "from": "service",
+      "to": "storage",
+      "label": "资产持久化",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        462,
+        424
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "入口与鉴权",
+      "items": [
+        "FastAPI 40+ 端点统一挂载 /api/v1，TenantCRUD 门面收口数据访问",
+        "Token 注册表存 sha256 哈希，恒定时间比较",
+        "跨租户访问一律 404，防枚举"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "多 Agent 核心",
+      "items": [
+        "三条独立 LangGraph 工作流，state 互不混用",
+        "BaseAgent 按角色派生，RAG_ENABLED 注入增强变体",
+        "厂商调用走 SDK/HTTP：OpenAI 兼容端点 + 万象/可灵"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "数据与降级",
+      "items": [
+        "Provider 配置存 model_providers 表，按租户隔离",
+        "记忆写入必须经 staging 表人工审核",
+        "ALLOW_MOCK_ASSETS 默认 false（fail-closed）"
+      ]
+    }
+  ]
+}
