@@ -91,7 +91,7 @@ Docker：`docker compose up -d`（app :8000 / frontend :3000 / postgres pgvector
 - **两个同名 `TaskStatus`**：生成任务（`frontend/src/types/task.ts:80`，枚举 5 态）与刊登任务（`frontend/src/types/listing.ts:12`，联合类型 8 态，独有 `generating`/`reviewing`/`pushing`/`published`/`partial`，partial=部分平台成功）共享 `pending`/`completed`/`failed` 名字但语义不同、互不可换，误用会静默显示错状态；改状态代码前先确认是哪一套（详见 `CONTEXT.md` 与 `docs/adr/0002-two-taskstatus-types.md`）。
 - **测试环境被 conftest 强制隔离**：`tests/conftest.py` 有两个 autouse fixture，会把 `ALLOW_MOCK_ASSETS=true`、`RAG_ENABLED=true`、`AUTH_ENABLED=false`，并 monkeypatch 掉 `ProviderFactory.get_image_provider/get_video_provider`（返回 None）与 `BaseAgent._create_llm`（抛 ImportError）。目的是**杜绝测试发起真实外部调用**。所以：新增的 API 测试默认免鉴权；要验证真实路径需在用例内自行 patch 覆盖。
 - **`get_settings()` 是 `lru_cache` 单例**：改环境变量后必须 `get_settings.cache_clear()`，否则读不到新值。
-- **Postgres 连接串由 `POSTGRES_*` 分项拼出**（`settings.postgres_url` property），**没有** `DATABASE_URL` 字段。但 `docker-compose.yml` 里给 app 传了 `DATABASE_URL` 环境变量——它对应用代码无效，实际靠 compose 网络 + 分项默认值的组合生效（compose 未覆盖 POSTGRES_HOST，仍是 localhost，容器内连不上 DB）。Alembic 的 `env.py` 里"支持 DATABASE_URL 覆盖"的注释同样是过期信息，真实来源就是 `settings.postgres_url`。
+- **Postgres 连接串由 `POSTGRES_*` 分项拼出**（`settings.postgres_url` property），**没有** `DATABASE_URL` 字段。`docker-compose.yml` 已改为注入 `POSTGRES_HOST=postgres` 等分项；勿再传无效的 `DATABASE_URL`。Alembic 的 `env.py` 里"支持 DATABASE_URL 覆盖"的注释同样是过期信息，真实来源就是 `settings.postgres_url`。
 - **`src/knowledge/graph.py` 是占位实现**（docstring 明说），真实图谱在 `src/rag/graph_builder.py` / `graph_search.py` / `graph_memory.py`。
 - **前端知识库管理必须用 `/api/v1/knowledge` documents，不要调 `/api/v1/knowledge/graphs`**——后者已标 `deprecated=True`，是进程内内存占位。
 - 仓库根目录有 `README.md.bak`、`frontend/dump.rdb` 等遗留文件，不是活跃资产。
