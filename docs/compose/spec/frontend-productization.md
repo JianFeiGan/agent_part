@@ -103,11 +103,11 @@ commits: 694f325..694f325 # filled at delivery
 ## Tasks
 
 - [x] T1: 修复前端质量门槛（install 说明、AgentLog 类型、typecheck/test/build 全绿、主链路 API 解包与状态映射测试）— acceptance: `npm run typecheck && npm test && npm run build` 通过；`--legacy-peer-deps` 有文档；状态映射与空 AgentLog 有测试 (covers: S2 Phase1)
-- [ ] T2: 商品→任务创建入口与提交体验 — acceptance: 从商品列表进入创建页并预选；可搜索商品；空态引导；提交中禁用；失败保留输入；关键行为有测试 (covers: S2 Phase2; depends: T1; refs: #12)
-- [ ] T3: 任务实时状态协调器 — acceptance: WS 优先；running 且断线时 5s 轮询轻量状态；终态停轮询并补拉详情；页面可感知连接状态；协调逻辑有测试 (covers: S2 Phase2; depends: T1; refs: #13)
-- [ ] T4: 主链路三态与空态组件 — acceptance: 商品/任务列表与工作台共用 PageState；空态有下一步；error 有重试且不重复弹错；有测试 (covers: S2 Phase2; depends: T3; refs: #14)
-- [ ] T5: 工作台概览优先信息架构 — acceptance: 默认见概览（状态/进度/阶段/错误/结果）；Agent 明细默认折叠可展开；1280px+ 布局清晰；有测试 (covers: S2 Phase2; depends: T4; refs: #15)
-- [ ] T6: 工作台资产展示与下载 — acceptance: 图片预览、视频播放、每资产可下载、空态/坏 URL 兜底；不新增独立资产页；有测试 (covers: S2 Phase2; depends: T5; refs: #16)
+- [x] T2: 商品→任务创建入口与提交体验 — acceptance: 从商品列表进入创建页并预选；可搜索商品；空态引导；提交中禁用；失败保留输入；关键行为有测试 (covers: S2 Phase2; depends: T1; refs: #12)
+- [x] T3: 任务实时状态协调器 — acceptance: WS 优先；running 且断线时 5s 轮询轻量状态；终态停轮询并补拉详情；页面可感知连接状态；协调逻辑有测试 (covers: S2 Phase2; depends: T1; refs: #13)
+- [x] T4: 主链路三态与空态组件 — acceptance: 商品/任务列表与工作台共用 PageState；空态有下一步；error 有重试且不重复弹错；有测试 (covers: S2 Phase2; depends: T3; refs: #14)
+- [x] T5: 工作台概览优先信息架构 — acceptance: 默认见概览（状态/进度/阶段/错误/结果）；Agent 明细默认折叠可展开；1280px+ 布局清晰；有测试 (covers: S2 Phase2; depends: T4; refs: #15)
+- [x] T6: 工作台资产展示与下载 — acceptance: 图片预览、视频播放、每资产可下载、空态/坏 URL 兜底；不新增独立资产页；有测试 (covers: S2 Phase2; depends: T5; refs: #16)
 - [ ] T7: 主链路端到端验收 — acceptance: 商品→任务→工作台→资产可走通；WS 与轮询路径可验证；三终态展示正确；typecheck/test/build/lint 达标 (covers: S2 Phase2; depends: T2,T5,T6; refs: #17)
 - [ ] T8: 知识库管理页闭环 — acceptance: 列表/上传/删除/统计可用；走真实 `/knowledge` API；占位知识图谱路由不再作为前端数据源；三态达标；有关键路径测试 (covers: S2 Phase3; depends: T4)
 - [ ] T9: 记忆提案审核 UI — acceptance: 列表/过滤/详情/approve/reject 可用；拒绝必填理由；可从任务触发 distill；无 write 权限隐藏操作；有测试 (covers: S2 Phase4; depends: T4)

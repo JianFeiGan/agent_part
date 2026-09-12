@@ -16,6 +16,7 @@
           <el-select
             v-model="formData.product_id"
             filterable
+            :loading="productsLoading"
             placeholder="请选择关联商品"
             style="width: 100%;"
           >
@@ -26,6 +27,12 @@
               :value="product.product_id"
             />
           </el-select>
+          <div v-if="!productsLoading && !productList.length" class="product-empty-hint">
+            暂无商品，请先
+            <el-button type="primary" link @click="router.push('/products/create')">
+              创建商品
+            </el-button>
+          </div>
         </el-form-item>
 
         <el-form-item label="任务类型" prop="task_type">
@@ -180,6 +187,7 @@ const submitting = ref(false)
 
 // 商品列表
 const productList = ref<Product[]>([])
+const productsLoading = ref(false)
 
 // 厂商列表
 const llmProviders = ref<ModelProviderResponse[]>([])
@@ -214,6 +222,7 @@ const rules: FormRules = {
 
 // 加载商品列表
 const loadProducts = async () => {
+  productsLoading.value = true
   try {
     const page = await getProducts({ page: 1, page_size: 100 })
     productList.value = page.items
@@ -225,6 +234,8 @@ const loadProducts = async () => {
     }
   } catch (error) {
     console.error('加载商品列表失败:', error)
+  } finally {
+    productsLoading.value = false
   }
 }
 
@@ -277,5 +288,10 @@ onMounted(() => {
 <style scoped>
 .task-create {
   padding: 0;
+}
+.product-empty-hint {
+  margin-top: 4px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 </style>

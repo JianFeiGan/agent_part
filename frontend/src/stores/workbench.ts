@@ -3,8 +3,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { getTaskById } from '@/api/tasks'
+import { createEmptyAgentLog } from '@/types/task'
 import type {
   TaskDetail,
+  TaskStatusResponse,
   AgentLog,
   TaskWsEvent,
   AgentStatusChangeEvent,
@@ -120,27 +122,12 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         } else {
           // 新节点开始运行，创建基础日志
           const nodeDef = NODE_MAP.get(e.agent_name)
-          agentLogMap.value.set(e.agent_name, {
+          agentLogMap.value.set(e.agent_name, createEmptyAgentLog({
             agent_name: nodeDef?.label ?? e.agent_name,
             step: e.agent_name,
             start_time: e.status === 'running' ? new Date().toISOString() : null,
-            end_time: null,
             status: e.status,
-            message: null,
-            output_summary: null,
-            input_data: null,
-            output_data: null,
-            prompt_template: null,
-            prompt_variables: null,
-            input_tokens: 0,
-            output_tokens: 0,
-            total_tokens: 0,
-            cost_cny: 0,
-            latency_ms: null,
-            model_name: null,
-            provider: null,
-            child_calls: [],
-          })
+          }))
         }
         // 自动选中运行中的节点
         if (e.status === 'running') {
@@ -163,6 +150,33 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     }
   }
 
+  /** 应用轻量状态快照（轮询路径） */
+  function applyStatusSnapshot(snapshot: TaskStatusResponse) {
+    if (!taskDetail.value) {
+      taskDetail.value = {
+        task_id: snapshot.task_id,
+        product_id: '',
+        task_type: 'image_and_video' as TaskDetail['task_type'],
+        status: snapshot.status,
+        progress: snapshot.progress,
+        current_step: snapshot.current_step,
+        completed_steps: [],
+        agent_logs: [],
+        images: [],
+        video: null,
+        quality_reports: [],
+        error_message: null,
+        created_at: snapshot.created_at,
+        updated_at: snapshot.updated_at
+      }
+      return
+    }
+    taskDetail.value.status = snapshot.status
+    taskDetail.value.progress = snapshot.progress
+    taskDetail.value.current_step = snapshot.current_step
+    taskDetail.value.updated_at = snapshot.updated_at
+  }
+
   /** 设置 WebSocket 连接状态 */
   function setWsConnected(connected: boolean) {
     wsConnected.value = connected
@@ -183,6 +197,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     loadTask,
     selectAgent,
     handleWsEvent,
+    applyStatusSnapshot,
     setWsConnected,
   }
 })

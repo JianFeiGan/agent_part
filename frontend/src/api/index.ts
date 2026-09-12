@@ -60,9 +60,9 @@ instance.interceptors.response.use(
           break
         case 401:
           message = '未授权，请重新登录'
-          // 可以在这里处理登录过期逻辑
           localStorage.removeItem('token')
-          window.location.href = '/login'
+          // 无独立登录页：回首页并提示，避免落到不存在的 /login
+          window.location.href = '/'
           break
         case 403:
           message = '拒绝访问'
