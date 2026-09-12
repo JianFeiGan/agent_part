@@ -66,6 +66,10 @@
           <el-icon><Search /></el-icon>
           <template #title>检索测试</template>
         </el-menu-item>
+        <el-menu-item index="/memory-proposals">
+          <el-icon><Memo /></el-icon>
+          <template #title>记忆审核</template>
+        </el-menu-item>
       </el-sub-menu>
 
       <el-sub-menu index="listing">

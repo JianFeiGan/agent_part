@@ -109,6 +109,6 @@ commits: 694f325..694f325 # filled at delivery
 - [x] T5: 工作台概览优先信息架构 — acceptance: 默认见概览（状态/进度/阶段/错误/结果）；Agent 明细默认折叠可展开；1280px+ 布局清晰；有测试 (covers: S2 Phase2; depends: T4; refs: #15)
 - [x] T6: 工作台资产展示与下载 — acceptance: 图片预览、视频播放、每资产可下载、空态/坏 URL 兜底；不新增独立资产页；有测试 (covers: S2 Phase2; depends: T5; refs: #16)
 - [ ] T7: 主链路端到端验收 — acceptance: 商品→任务→工作台→资产可走通；WS 与轮询路径可验证；三终态展示正确；typecheck/test/build/lint 达标 (covers: S2 Phase2; depends: T2,T5,T6; refs: #17)
-- [ ] T8: 知识库管理页闭环 — acceptance: 列表/上传/删除/统计可用；走真实 `/knowledge` API；占位知识图谱路由不再作为前端数据源；三态达标；有关键路径测试 (covers: S2 Phase3; depends: T4)
-- [ ] T9: 记忆提案审核 UI — acceptance: 列表/过滤/详情/approve/reject 可用；拒绝必填理由；可从任务触发 distill；无 write 权限隐藏操作；有测试 (covers: S2 Phase4; depends: T4)
+- [x] T8: 知识库管理页闭环 — acceptance: 列表/上传/删除/统计可用；走真实 `/knowledge` API；占位知识图谱路由不再作为前端数据源；三态达标；有关键路径测试 (covers: S2 Phase3; depends: T4)
+- [x] T9: 记忆提案审核 UI — acceptance: 列表/过滤/详情/approve/reject 可用；拒绝必填理由；可从任务触发 distill；无 write 权限隐藏操作；有测试 (covers: S2 Phase4; depends: T4)
 - [ ] T10: 四期收口与文档对齐 — acceptance: README/CLAUDE.md 中与本轮相关的质量门槛与页面说明已更新；本 spec Report 填写交付摘要与验证命令 (covers: S1,S2; depends: T7,T8,T9)

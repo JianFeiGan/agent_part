@@ -88,6 +88,15 @@ const routes: RouteRecordRaw[] = [
           hidden: true
         }
       },
+      {
+        path: 'memory-proposals',
+        name: 'MemoryProposals',
+        component: () => import('@/views/memory/Proposals.vue'),
+        meta: {
+          title: '记忆审核',
+          icon: 'Memo'
+        }
+      },
       // 刊登工具
       {
         path: 'listing/import',
