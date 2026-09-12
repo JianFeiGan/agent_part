@@ -144,6 +144,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
         if (taskDetail.value) {
           taskDetail.value.progress = event.progress
           taskDetail.value.current_step = event.current_step
+          if (event.status) {
+            taskDetail.value.status = event.status as TaskDetail['status']
+          }
         }
         break
       }
@@ -152,25 +155,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
 
   /** 应用轻量状态快照（轮询路径） */
   function applyStatusSnapshot(snapshot: TaskStatusResponse) {
-    if (!taskDetail.value) {
-      taskDetail.value = {
-        task_id: snapshot.task_id,
-        product_id: '',
-        task_type: 'image_and_video' as TaskDetail['task_type'],
-        status: snapshot.status,
-        progress: snapshot.progress,
-        current_step: snapshot.current_step,
-        completed_steps: [],
-        agent_logs: [],
-        images: [],
-        video: null,
-        quality_reports: [],
-        error_message: null,
-        created_at: snapshot.created_at,
-        updated_at: snapshot.updated_at
-      }
-      return
-    }
+    if (!taskDetail.value) return
     taskDetail.value.status = snapshot.status
     taskDetail.value.progress = snapshot.progress
     taskDetail.value.current_step = snapshot.current_step

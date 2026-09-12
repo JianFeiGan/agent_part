@@ -1,4 +1,12 @@
-"""知识库管理 API 路由。"""
+"""知识图谱 API 路由（已废弃的内存占位实现）。
+
+Description:
+    本模块的 graphs / search / agent 端点均为进程内内存占位，
+    重启即丢，不落库。真实知识库管理请使用 /api/v1/knowledge
+    下的 documents 端点（src/api/router/knowledge.py）及
+    src/rag/* 持久化实现。保留本路由仅为兼容既有客户端，
+    所有端点已在 OpenAPI 中标记 deprecated。
+"""
 
 import uuid
 from datetime import datetime
@@ -36,13 +44,18 @@ _graphs: dict[str, dict[str, Any]] = {}
     "/graphs",
     response_model=ApiResponse[KnowledgeGraphResponse],
     status_code=status.HTTP_201_CREATED,
+    deprecated=True,
 )
 async def create_graph(
     request: KnowledgeGraphCreate,
     auth: AuthDep = None,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[KnowledgeGraphResponse]:
-    """创建知识图谱。"""
+    """创建知识图谱。
+
+    Deprecated: 进程内内存占位，不落库。真实知识库管理请使用
+    /api/v1/knowledge documents（src/api/router/knowledge.py）。
+    """
     graph_id = f"kg_{uuid.uuid4().hex[:8]}"
     tenant_id = auth.tenant_id if auth else "dev"
 
@@ -65,14 +78,22 @@ async def create_graph(
     )
 
 
-@router.get("/graphs", response_model=ApiResponse[KnowledgeGraphListResponse])
+@router.get(
+    "/graphs",
+    response_model=ApiResponse[KnowledgeGraphListResponse],
+    deprecated=True,
+)
 async def list_graphs(
     page: int = 1,
     page_size: int = 20,
     auth: AuthDep = None,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[KnowledgeGraphListResponse]:
-    """获取知识图谱列表。"""
+    """获取知识图谱列表。
+
+    Deprecated: 进程内内存占位，不落库。真实知识库管理请使用
+    /api/v1/knowledge documents（src/api/router/knowledge.py）。
+    """
     tenant_id = auth.tenant_id if auth else "dev"
 
     items = [
@@ -89,14 +110,22 @@ async def list_graphs(
     )
 
 
-@router.post("/graphs/{graph_id}/documents", response_model=ApiResponse[dict[str, Any]])
+@router.post(
+    "/graphs/{graph_id}/documents",
+    response_model=ApiResponse[dict[str, Any]],
+    deprecated=True,
+)
 async def add_document(
     graph_id: str,
     request: AddDocumentRequest,
     auth: AuthDep = None,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[dict[str, Any]]:
-    """添加文档到图谱。"""
+    """添加文档到图谱。
+
+    Deprecated: 依赖内存占位图谱。真实知识库管理请使用
+    /api/v1/knowledge documents（src/api/router/knowledge.py）。
+    """
     if graph_id not in _graphs:
         raise HTTPException(status_code=404, detail="知识图谱不存在")
 
@@ -126,13 +155,16 @@ async def add_document(
     return ApiResponse.success(result, message="文档添加成功")
 
 
-@router.post("/search/hybrid", response_model=ApiResponse[SearchResponse])
+@router.post("/search/hybrid", response_model=ApiResponse[SearchResponse], deprecated=True)
 async def hybrid_search(
     request: HybridSearchRequest,
     auth: AuthDep = None,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[SearchResponse]:
-    """混合检索。"""
+    """混合检索。
+
+    Deprecated: 兼容保留。检索请走 /api/v1/knowledge/search 或 src/rag/*。
+    """
     workflow = KnowledgeAgentWorkflow()
     state = await workflow.run(request.query)
 
@@ -156,13 +188,16 @@ async def hybrid_search(
     )
 
 
-@router.post("/agent/query", response_model=ApiResponse[AgentQueryResponse])
+@router.post("/agent/query", response_model=ApiResponse[AgentQueryResponse], deprecated=True)
 async def agent_query(
     request: AgentQueryRequest,
     auth: AuthDep = None,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[AgentQueryResponse]:
-    """Agent 查询入口。"""
+    """Agent 查询入口。
+
+    Deprecated: 兼容保留。真实检索/问答请走 /api/v1/knowledge 与 src/rag/*。
+    """
     session_id = request.session_id or f"session_{uuid.uuid4().hex[:8]}"
 
     workflow = KnowledgeAgentWorkflow()

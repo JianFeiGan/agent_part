@@ -153,6 +153,7 @@ import { useWorkbenchStore } from '@/stores/workbench'
 import { useTaskStatusCoordinator } from '@/composables/useTaskStatusCoordinator'
 import { downloadFile } from '@/utils/download'
 import { getTaskStatusLabel, getTaskStatusTagType } from '@/utils/format'
+import { TaskStatus, isTerminalTaskStatus } from '@/types/task'
 import PageState from '@/components/PageState.vue'
 import WorkbenchHeader from '@/components/workbench/WorkbenchHeader.vue'
 import AgentDAG from '@/components/workbench/AgentDAG.vue'
@@ -169,12 +170,13 @@ const taskId = route.params.id as string
 const showDiagnostics = ref(false)
 const loadError = ref(false)
 
-const { connectionLabel } = useTaskStatusCoordinator(taskId)
-
-const isTerminal = computed(() => {
-  const s = store.taskDetail?.status
-  return s === 'completed' || s === 'failed' || s === 'cancelled'
+const { connectionLabel } = useTaskStatusCoordinator(taskId, {
+  onFirstLoadError: () => {
+    loadError.value = true
+  }
 })
+
+const isTerminal = computed(() => isTerminalTaskStatus(store.taskDetail?.status))
 
 const hasAssets = computed(() => {
   const d = store.taskDetail
@@ -187,8 +189,8 @@ const imageUrls = computed(() =>
 
 const progressStatus = computed(() => {
   const s = store.taskDetail?.status
-  if (s === 'completed') return 'success' as const
-  if (s === 'failed' || s === 'cancelled') return 'exception' as const
+  if (s === TaskStatus.COMPLETED) return 'success' as const
+  if (s === TaskStatus.FAILED || s === TaskStatus.CANCELLED) return 'exception' as const
   return undefined
 })
 

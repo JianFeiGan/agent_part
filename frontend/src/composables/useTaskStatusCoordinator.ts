@@ -1,13 +1,18 @@
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useWorkbenchStore } from '@/stores/workbench'
 import { getTaskStatus } from '@/api/tasks'
+import { isTerminalTaskStatus, isRunningTaskStatus } from '@/types/task'
 import type { TaskWsEvent } from '@/types/task'
 
 /** 连接模式：页面只消费该状态，不直接协调 WS/轮询 */
 export type TaskConnectionMode = 'connecting' | 'websocket' | 'polling' | 'closed'
 
 const POLL_INTERVAL_MS = 5000
-const TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'failed', 'cancelled'])
+
+/** 断线后是否启动轮询：按 Spec 仅 running */
+export function shouldPollForStatus(status: string | null | undefined): boolean {
+  return isRunningTaskStatus(status)
+}
 
 /**
  * 任务实时状态协调器。
@@ -16,7 +21,10 @@ const TERMINAL_STATUSES: ReadonlySet<string> = new Set(['completed', 'failed', '
  * - WS 断开/不可用且任务仍 running 时，每 5s 轮询轻量状态
  * - 进入终态后停止轮询并补拉完整详情
  */
-export function useTaskStatusCoordinator(taskId: string) {
+export function useTaskStatusCoordinator(
+  taskId: string,
+  options?: { onFirstLoadError?: () => void }
+) {
   const store = useWorkbenchStore()
   const connectionMode = ref<TaskConnectionMode>('connecting')
 
@@ -38,10 +46,6 @@ export function useTaskStatusCoordinator(taskId: string) {
     }
   })
 
-  function isTerminal(status: string | undefined | null): boolean {
-    return !!status && TERMINAL_STATUSES.has(status)
-  }
-
   function stopPolling() {
     if (pollTimer) {
       clearInterval(pollTimer)
@@ -60,7 +64,8 @@ export function useTaskStatusCoordinator(taskId: string) {
     try {
       await store.loadTask(taskId)
     } catch {
-      // 失败由拦截器提示
+      // 失败由拦截器提示；首屏失败回调给页面进 error 态
+      options?.onFirstLoadError?.()
     }
   }
 
@@ -68,7 +73,7 @@ export function useTaskStatusCoordinator(taskId: string) {
     try {
       const status = await getTaskStatus(taskId)
       store.applyStatusSnapshot(status)
-      if (isTerminal(status.status)) {
+      if (isTerminalTaskStatus(status.status)) {
         stopPolling()
         connectionMode.value = 'closed'
         await fetchFullDetail()
@@ -88,8 +93,7 @@ export function useTaskStatusCoordinator(taskId: string) {
   }
 
   function shouldPoll(): boolean {
-    // 按 Spec：仅 running 断线时轮询；pending/终态不启动轮询
-    return store.taskDetail?.status === 'running'
+    return shouldPollForStatus(store.taskDetail?.status)
   }
 
   function finishToTerminal() {
@@ -129,10 +133,11 @@ export function useTaskStatusCoordinator(taskId: string) {
             store.handleWsEvent({
               type: 'progress_update',
               progress: data.progress ?? 0,
-              current_step: data.current_step ?? ''
+              current_step: data.current_step ?? '',
+              status: data.status
             })
           }
-          if (isTerminal(store.taskDetail?.status)) {
+          if (isTerminalTaskStatus(store.taskDetail?.status)) {
             ws?.close()
             finishToTerminal()
           }
@@ -143,9 +148,9 @@ export function useTaskStatusCoordinator(taskId: string) {
 
       ws.onclose = () => {
         store.setWsConnected(false)
-        if (stopped || isTerminal(store.taskDetail?.status)) {
+        if (stopped || isTerminalTaskStatus(store.taskDetail?.status)) {
           connectionMode.value = 'closed'
-          if (isTerminal(store.taskDetail?.status)) {
+          if (isTerminalTaskStatus(store.taskDetail?.status)) {
             void fetchFullDetail()
           }
           return
@@ -181,7 +186,7 @@ export function useTaskStatusCoordinator(taskId: string) {
 
   onMounted(async () => {
     await fetchFullDetail()
-    if (isTerminal(store.taskDetail?.status)) {
+    if (isTerminalTaskStatus(store.taskDetail?.status)) {
       connectionMode.value = 'closed'
       return
     }
