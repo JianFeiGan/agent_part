@@ -32,6 +32,8 @@ export function useTaskStatusCoordinator(
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let stopped = false
+  /** 终态后是否已补拉过详情，避免 WS close 与 onmessage 双拉 */
+  let terminalDetailFetched = false
 
   const connectionLabel = computed(() => {
     switch (connectionMode.value) {
@@ -64,9 +66,17 @@ export function useTaskStatusCoordinator(
     try {
       await store.loadTask(taskId)
     } catch {
-      // 失败由拦截器提示；首屏失败回调给页面进 error 态
-      options?.onFirstLoadError?.()
+      // 仅首屏无数据时进入 error；终态补拉失败保留已有详情
+      if (!store.taskDetail) {
+        options?.onFirstLoadError?.()
+      }
     }
+  }
+
+  async function fetchTerminalDetailOnce() {
+    if (terminalDetailFetched) return
+    terminalDetailFetched = true
+    await fetchFullDetail()
   }
 
   async function pollOnce() {
@@ -76,7 +86,7 @@ export function useTaskStatusCoordinator(
       if (isTerminalTaskStatus(status.status)) {
         stopPolling()
         connectionMode.value = 'closed'
-        await fetchFullDetail()
+        await fetchTerminalDetailOnce()
       }
     } catch {
       // 拦截器已提示；保留轮询等下一次
@@ -100,7 +110,7 @@ export function useTaskStatusCoordinator(
     stopPolling()
     clearReconnect()
     connectionMode.value = 'closed'
-    void fetchFullDetail()
+    void fetchTerminalDetailOnce()
   }
 
   function buildWsUrl(): string {
@@ -146,11 +156,13 @@ export function useTaskStatusCoordinator(
       }
 
       ws.onclose = () => {
-        if (stopped || isTerminalTaskStatus(store.taskDetail?.status)) {
+        if (stopped) {
           connectionMode.value = 'closed'
-          if (isTerminalTaskStatus(store.taskDetail?.status)) {
-            void fetchFullDetail()
-          }
+          return
+        }
+        if (isTerminalTaskStatus(store.taskDetail?.status)) {
+          connectionMode.value = 'closed'
+          void fetchTerminalDetailOnce()
           return
         }
         if (shouldPoll()) {
