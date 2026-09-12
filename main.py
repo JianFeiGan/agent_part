@@ -11,7 +11,7 @@ Description:
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -44,9 +44,7 @@ def _configured_tenant_ids() -> list[str]:
         return []
 
     tenant_ids = {
-        str(t.get("tenant_id"))
-        for t in tokens
-        if isinstance(t, dict) and t.get("tenant_id")
+        str(t.get("tenant_id")) for t in tokens if isinstance(t, dict) and t.get("tenant_id")
     }
     return sorted(tenant_ids)
 
@@ -55,8 +53,8 @@ def _configured_tenant_ids() -> list[str]:
 async def lifespan(app: FastAPI):
     """应用生命周期管理。
 
-启动时初始化 Redis 连接、数据库和 seed 模型厂商预置数据，
-回收上次运行残留的中断任务，关闭时清理资源。
+    启动时初始化 Redis 连接、数据库和 seed 模型厂商预置数据，
+    回收上次运行残留的中断任务，关闭时清理资源。
     """
     # 启动时
     logger.info("正在启动应用...")
@@ -85,7 +83,6 @@ async def lifespan(app: FastAPI):
         logger.info("数据库初始化成功")
     except Exception as e:
         logger.warning(f"数据库初始化失败: {e}")
-
 
     # Seed 模型厂商预置数据
     try:
@@ -201,7 +198,26 @@ async def root() -> dict:
         "message": "欢迎使用商品视觉生成器 API",
         "docs": "/docs",
         "health": "/health",
+        "ready": "/ready",
     }
+
+
+# 运维探针别名（与 /api/v1/health、/api/v1/ready 等价）
+@app.get("/health", include_in_schema=False)
+async def health_alias() -> dict[str, object]:
+    """liveness 别名，便于 compose/nginx 直接探测。"""
+    from src.api.router.health import health_check
+
+    result = await health_check()
+    return result.model_dump()
+
+
+@app.get("/ready", include_in_schema=False)
+async def ready_alias(response: Response) -> dict[str, object]:
+    """readiness 别名。"""
+    from src.api.router.health import ready_check
+
+    return await ready_check(response)
 
 
 if __name__ == "__main__":

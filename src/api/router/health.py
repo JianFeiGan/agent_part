@@ -2,17 +2,22 @@
 健康检查路由。
 
 Description:
-    提供服务健康状态检查接口，用于监控系统服务运行状态。
+    /health 仅进程存活（liveness）。
+    /ready 探测 PostgreSQL 与 Redis（readiness），供 compose/负载均衡使用。
 @author ganjianfei
-@version 1.0.0
-2026-03-25
+@version 1.1.0
+2026-09-12
 """
 
-from fastapi import APIRouter
+from collections.abc import Awaitable
+from typing import Any, cast
+
+from fastapi import APIRouter, Response
+from sqlalchemy import text
 
 from src.api.schema.common import HealthResponse
 from src.api.service.redis_client import RedisClient
-from src.config.settings import get_settings
+from src.db.postgres import get_db_session
 
 router = APIRouter()
 
@@ -31,27 +36,38 @@ async def _get_redis_client() -> RedisClient | None:
     return _redis_client
 
 
-@router.get("/health", response_model=HealthResponse, summary="健康检查")
-async def health_check() -> HealthResponse:
-    """健康检查接口。
-
-    Returns:
-        服务健康状态信息，包括版本、Redis 连接状态等。
-    """
-    settings = get_settings()
-
-    redis_status = "connected"
+async def _check_redis() -> str:
+    """探测 Redis：connected / disconnected / not_configured。"""
     try:
         redis_client = await _get_redis_client()
         if redis_client and redis_client._client:
-            await redis_client._client.ping()
-        else:
-            redis_status = "not_configured"
+            ping = cast(Awaitable[Any], redis_client._client.ping())
+            await ping
+            return "connected"
+        return "not_configured"
     except Exception:
-        redis_status = "disconnected"
+        return "disconnected"
 
-    overall_status = "ok" if redis_status == "connected" else "degraded"
 
+async def _check_postgres() -> str:
+    """探测 PostgreSQL：connected / disconnected。"""
+    try:
+        async with get_db_session() as session:
+            await session.execute(text("SELECT 1"))
+        return "connected"
+    except Exception:
+        return "disconnected"
+
+
+@router.get("/health", response_model=HealthResponse, summary="存活探针（liveness）")
+async def health_check() -> HealthResponse:
+    """liveness：进程可响应即 200，不强制依赖 DB。
+
+    Returns:
+        服务健康状态信息。
+    """
+    redis_status = await _check_redis()
+    overall_status = "ok" if redis_status != "disconnected" else "degraded"
     return HealthResponse(
         status=overall_status,
         version="0.1.0",
@@ -59,8 +75,27 @@ async def health_check() -> HealthResponse:
     )
 
 
+@router.get("/ready", summary="就绪探针（readiness：DB + Redis）")
+async def ready_check(response: Response) -> dict[str, Any]:
+    """readiness：PostgreSQL 与 Redis 均可用才返回 200。
+
+    Returns:
+        依赖探测明细；任一失败时 HTTP 503。
+    """
+    postgres = await _check_postgres()
+    redis = await _check_redis()
+    ready = postgres == "connected" and redis == "connected"
+    if not ready:
+        response.status_code = 503
+    return {
+        "status": "ready" if ready else "not_ready",
+        "postgres": postgres,
+        "redis": redis,
+    }
+
+
 @router.get("/", summary="API 根路径")
-async def api_root() -> dict:
+async def api_root() -> dict[str, Any]:
     """API 根路径。
 
     Returns:
