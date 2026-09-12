@@ -233,3 +233,6 @@ frontend/package-lock.json
 # Redis dump（含真实数据，禁止入仓）
 frontend/dump.rdb
 *.rdb
+
+# 架构图视觉自检产物（本地 QA，不入库）
+docs/architecture-map.visual-check.*
