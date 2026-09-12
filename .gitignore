@@ -223,7 +223,8 @@ openspec/
 .codex/
 .zcode/
 .output/
-.github/
+.github/*
+!.github/workflows/
 .codex/
 .trae/
 output/
