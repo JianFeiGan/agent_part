@@ -1,7 +1,7 @@
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useWorkbenchStore } from '@/stores/workbench'
 import { getTaskStatus } from '@/api/tasks'
-import type { TaskWsEvent, TaskStatus } from '@/types/task'
+import type { TaskWsEvent } from '@/types/task'
 
 /** 连接模式：页面只消费该状态，不直接协调 WS/轮询 */
 export type TaskConnectionMode = 'connecting' | 'websocket' | 'polling' | 'closed'
@@ -88,8 +88,15 @@ export function useTaskStatusCoordinator(taskId: string) {
   }
 
   function shouldPoll(): boolean {
-    const status = store.taskDetail?.status as TaskStatus | undefined
-    return status === 'running' || status === 'pending'
+    // 按 Spec：仅 running 断线时轮询；pending/终态不启动轮询
+    return store.taskDetail?.status === 'running'
+  }
+
+  function finishToTerminal() {
+    stopPolling()
+    clearReconnect()
+    connectionMode.value = 'closed'
+    void fetchFullDetail()
   }
 
   function buildWsUrl(): string {
@@ -126,8 +133,8 @@ export function useTaskStatusCoordinator(taskId: string) {
             })
           }
           if (isTerminal(store.taskDetail?.status)) {
-            stopPolling()
             ws?.close()
+            finishToTerminal()
           }
         } catch {
           // 忽略无法解析的帧
@@ -136,18 +143,18 @@ export function useTaskStatusCoordinator(taskId: string) {
 
       ws.onclose = () => {
         store.setWsConnected(false)
-        if (stopped) {
+        if (stopped || isTerminal(store.taskDetail?.status)) {
           connectionMode.value = 'closed'
+          if (isTerminal(store.taskDetail?.status)) {
+            void fetchFullDetail()
+          }
           return
         }
         if (shouldPoll()) {
           startPolling()
           reconnectTimer = setTimeout(connectWs, 10_000)
-        } else if (isTerminal(store.taskDetail?.status)) {
-          connectionMode.value = 'closed'
         } else {
           connectionMode.value = 'closed'
-          startPolling()
         }
       }
 
@@ -155,8 +162,8 @@ export function useTaskStatusCoordinator(taskId: string) {
         store.setWsConnected(false)
       }
     } catch {
-      connectionMode.value = 'polling'
       if (shouldPoll()) startPolling()
+      else connectionMode.value = 'closed'
     }
   }
 

@@ -24,7 +24,10 @@ commits: 694f325..472a793
 - `npm run lint` — 0 errors，5 个既有 warning
 - `npm run build` — PASS
 
-**Journey log**
+**Self-review fix (post-impl)**
+
+- WS 进入终态时补拉完整详情（原先只 close）。
+- 轮询严格限定 `running`；`pending`/终态不启动轮询。
 
 - npm `edgesOut` 崩溃来自 vitest@4 + vite@5 peer 解析，用 `.npmrc legacy-peer-deps` 固定即可，不必升级大版本。
 - 实际详情路由是 Workbench，不是 `tasks/Detail.vue`（后者是孤儿页）；状态映射仍要单源。
