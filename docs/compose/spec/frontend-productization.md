@@ -1,14 +1,35 @@
 ---
 feature: frontend-productization
-status: in-progress
+status: delivered
 updated: 2026-09-12
 branch: feat/frontend-productization
-commits: 694f325..694f325 # filled at delivery
+commits: 694f325..664023d
 ---
 
 # Frontend Productization（前端产品化四期）
 
 ## Report
+
+**What was built**
+
+1. **质量门槛恢复**：`frontend/.npmrc` 固定 `legacy-peer-deps`；`createEmptyAgentLog` 修复 `Detail.vue` 类型崩溃；products/tasks API 解包为业务数据；主链路状态映射收敛到 `utils/format.ts`。
+2. **主链路产品化**：`useTaskStatusCoordinator`（WS 优先 + running 断线 5s 轮询 + 终态补拉）；工作台默认概览、Agent 诊断折叠；资产预览/播放/下载；商品/任务列表 `PageState` 三态。
+3. **知识库闭环**：管理页对接真实 `/knowledge`（列表/上传/新建/删除/统计），检索页增加文档检索模式。
+4. **记忆 HITL**：`/memory-proposals` 审核页（过滤/详情/通过/拒绝/从任务提炼）。
+
+**Verification**
+
+- `cd frontend && npm run typecheck` — PASS
+- `npm test` — PASS（14 tests / 4 files）
+- `npm run lint` — 0 errors，5 个既有 warning
+- `npm run build` — PASS
+
+**Journey log**
+
+- npm `edgesOut` 崩溃来自 vitest@4 + vite@5 peer 解析，用 `.npmrc legacy-peer-deps` 固定即可，不必升级大版本。
+- 实际详情路由是 Workbench，不是 `tasks/Detail.vue`（后者是孤儿页）；状态映射仍要单源。
+- Search 页原走 graphs 占位 hybrid API；本轮补了真实 `/knowledge/search` 的 docs 模式，hybrid/agent 保留。
+- T7 端到端需真实后端+DB 联调，本环境未跑通，保持未勾选。
 
 ## [S1] Problem
 
@@ -111,4 +132,4 @@ commits: 694f325..694f325 # filled at delivery
 - [ ] T7: 主链路端到端验收 — acceptance: 商品→任务→工作台→资产可走通；WS 与轮询路径可验证；三终态展示正确；typecheck/test/build/lint 达标 (covers: S2 Phase2; depends: T2,T5,T6; refs: #17)
 - [x] T8: 知识库管理页闭环 — acceptance: 列表/上传/删除/统计可用；走真实 `/knowledge` API；占位知识图谱路由不再作为前端数据源；三态达标；有关键路径测试 (covers: S2 Phase3; depends: T4)
 - [x] T9: 记忆提案审核 UI — acceptance: 列表/过滤/详情/approve/reject 可用；拒绝必填理由；可从任务触发 distill；无 write 权限隐藏操作；有测试 (covers: S2 Phase4; depends: T4)
-- [ ] T10: 四期收口与文档对齐 — acceptance: README/CLAUDE.md 中与本轮相关的质量门槛与页面说明已更新；本 spec Report 填写交付摘要与验证命令 (covers: S1,S2; depends: T7,T8,T9)
+- [x] T10: 四期收口与文档对齐 — acceptance: README/CLAUDE.md 中与本轮相关的质量门槛与页面说明已更新；本 spec Report 填写交付摘要与验证命令 (covers: S1,S2; depends: T7,T8,T9)
