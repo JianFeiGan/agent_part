@@ -197,10 +197,10 @@ const getStepLabel = (step: string) => {
 const loadTasks = async () => {
   loading.value = true
   try {
-    const response = await getTasks(queryParams)
-    // 拦截器已统一处理错误提示并 reject，此处不再二次弹错
-    taskList.value = response.data.data.items
-    total.value = response.data.data.total
+    // 拦截器已统一处理错误提示并 reject，此处拿到业务数据
+    const page = await getTasks(queryParams)
+    taskList.value = page.items
+    total.value = page.total
   } catch (error) {
     console.error('加载任务列表失败:', error)
   } finally {

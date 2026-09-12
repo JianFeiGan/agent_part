@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `product-visual-generator`（README 对外称 **Agent Part**）——基于 LangGraph 的多 Agent 跨境电商内容生成系统：商品分析 → AI 文案 → 图片/视频生成 → 合规检查 → 多平台（Amazon/eBay/Shopify）刊登，配一个 DevTools 风格的可观测工作台（DAG + 提示词轨迹 + WebSocket 实时推送）。
 
-- 包名 `product-visual-generator`，版本 0.2.0，Python ≥3.11（开发目标 3.11，非 3.13）
+- 包名 `product-visual-generator`，版本 0.3.0，Python ≥3.11（开发目标 3.11，非 3.13）
 - 详细架构文档在 `AGENTS.md`（22.8K）与 `docs-site/concepts/architecture.md`；本文件只覆盖**动手前必须知道**的部分，不重复二者。
 
 ## 常用命令
@@ -20,7 +20,9 @@ cp .env.example .env         # 首次：至少配 QWEN_API_KEY
 
 # 前端（frontend/）
 npm install && npm run dev   # :5173，vite 已代理 /api → :8000、/ws → :8000
-npm run build                # vite build
+# frontend/.npmrc 已设 legacy-peer-deps=true（vitest@4 + vite@5 的 npm peer 解析会崩）
+npm run build                # typecheck + vite build
+
 
 # 测试
 uv run pytest                          # 全量

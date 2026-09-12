@@ -215,8 +215,8 @@ const rules: FormRules = {
 // 加载商品列表
 const loadProducts = async () => {
   try {
-    const response = await getProducts({ page: 1, page_size: 100 })
-    productList.value = response.data.data.items
+    const page = await getProducts({ page: 1, page_size: 100 })
+    productList.value = page.items
 
     // 如果有预设的商品 ID
     const preselectedProductId = route.query.product_id

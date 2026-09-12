@@ -142,9 +142,10 @@ const queryParams = reactive<ProductQueryParams>({
 const loadProducts = async () => {
   loading.value = true
   try {
-    const response = await getProducts(queryParams)
-    productList.value = response.data.data.items
-    total.value = response.data.data.total
+    // 拦截器已统一处理错误提示并 reject，此处拿到业务数据
+    const page = await getProducts(queryParams)
+    productList.value = page.items
+    total.value = page.total
   } catch (error) {
     console.error('加载商品列表失败:', error)
   } finally {

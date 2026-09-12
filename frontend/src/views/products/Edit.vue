@@ -155,8 +155,7 @@ const rules: FormRules = {
 const loadProduct = async () => {
   loading.value = true
   try {
-    const response = await getProductById(productId)
-    const product = response.data.data
+    const product = await getProductById(productId)
     Object.assign(formData, {
       name: product.name,
       brand: product.brand,

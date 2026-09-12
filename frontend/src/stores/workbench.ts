@@ -81,8 +81,7 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   async function loadTask(taskId: string) {
     loading.value = true
     try {
-      const response = await getTaskById(taskId)
-      taskDetail.value = response.data.data
+      taskDetail.value = await getTaskById(taskId)
       // 构建 agentLogMap
       const map = new Map<string, AgentLog>()
       if (taskDetail.value?.agent_logs) {
