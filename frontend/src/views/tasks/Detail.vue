@@ -142,8 +142,9 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getTaskById, cancelTask } from '@/api/tasks'
-import { createEmptyAgentLog } from '@/types/task'
-import type { TaskDetail, AgentLog } from '@/types/task'
+import { createEmptyAgentLog, TaskTypeLabels } from '@/types/task'
+import type { TaskDetail, AgentLog, TaskType } from '@/types/task'
+import { getTaskStatusLabel, getTaskStatusTagType } from '@/utils/format'
 
 /**
  * 任务详情页面
@@ -229,33 +230,11 @@ const formatTime = (time: string | null) => {
   return time.replace('T', ' ').substring(0, 19)
 }
 
-// 任务类型标签
-const taskTypeLabels: Record<string, string> = {
-  'image_only': '图片生成',
-  'video_only': '视频生成',
-  'image_and_video': '图片+视频'
-}
-
-// 状态标签
-const statusLabels: Record<string, string> = {
-  'pending': '待处理',
-  'running': '运行中',
-  'completed': '已完成',
-  'failed': '失败'
-}
-
-const getTaskTypeLabel = (type: string) => taskTypeLabels[type] || type
-const getStatusLabel = (status: string) => statusLabels[status] || status
-
-const getStatusType = (status: string) => {
-  const typeMap: Record<string, string> = {
-    'pending': 'info',
-    'running': 'warning',
-    'completed': 'success',
-    'failed': 'danger'
-  }
-  return typeMap[status] || 'info'
-}
+// 状态/类型标签统一走 format 与 types 单源（ADR-0002）
+const getTaskTypeLabel = (type: string) =>
+  TaskTypeLabels[type as TaskType] || type
+const getStatusLabel = (status: string) => getTaskStatusLabel(status)
+const getStatusType = (status: string) => getTaskStatusTagType(status)
 
 const stepLabels: Record<string, string> = {
   'init': '初始化',

@@ -1,19 +1,33 @@
 <template>
   <div class="knowledge-search-page">
-    <!-- 模式切换 -->
+    <!-- 模式切换：默认走真实文档检索；图谱/Agent 端点已 deprecated，仅作兼容入口 -->
     <el-card style="margin-bottom: 16px">
       <el-radio-group v-model="mode">
-        <el-radio-button value="hybrid">图谱混合检索</el-radio-button>
-        <el-radio-button value="agent">Agent 问答</el-radio-button>
         <el-radio-button value="docs">文档检索</el-radio-button>
+        <el-radio-button value="hybrid">
+          图谱混合检索
+          <el-tag size="small" type="warning" style="margin-left: 4px">废弃</el-tag>
+        </el-radio-button>
+        <el-radio-button value="agent">
+          Agent 问答
+          <el-tag size="small" type="warning" style="margin-left: 4px">废弃</el-tag>
+        </el-radio-button>
       </el-radio-group>
+      <el-alert
+        v-if="mode !== 'docs'"
+        type="warning"
+        :closable="false"
+        show-icon
+        style="margin-top: 12px"
+        title="该模式调用已废弃的 graphs 内存占位端点，请改用文档检索（/api/v1/knowledge/search）"
+      />
     </el-card>
 
     <!-- 输入区 -->
     <el-card style="margin-bottom: 16px">
       <el-input
         v-model="query"
-        :placeholder="mode === 'hybrid' ? '输入问题，检索知识图谱（向量 + 关键词）' : '输入问题，多 Agent 协作回答'"
+        :placeholder="placeholder"
         clearable
         @keyup.enter="handleSubmit"
       >
@@ -23,20 +37,24 @@
       </el-input>
     </el-card>
 
-    <!-- 混合/文档检索结果 -->
-    <el-card v-if="(mode === 'hybrid' || mode === 'docs') && displayResults.length" v-loading="loading">
+    <!-- 检索结果 -->
+    <el-card v-if="mode !== 'agent' && displayResults.length" v-loading="loading">
       <template #header>
         <span>检索结果（{{ displayResults.length }}）</span>
       </template>
       <el-timeline>
-        <el-timeline-item v-for="r in displayResults" :key="r.id" :timestamp="`score: ${(r.score * 100).toFixed(1)}%`">
+        <el-timeline-item
+          v-for="r in displayResults"
+          :key="r.id"
+          :timestamp="`score: ${(r.score * 100).toFixed(1)}%`"
+        >
           <div class="result-content">{{ r.content }}</div>
           <div v-if="r.source" class="result-source">来源：{{ r.source }}</div>
         </el-timeline-item>
       </el-timeline>
     </el-card>
 
-    <!-- Agent 问答结果 -->
+    <!-- Agent 问答结果（兼容入口） -->
     <el-card v-if="mode === 'agent' && answer" v-loading="loading">
       <template #header>
         <span>回答<template v-if="sessionId">（会话 {{ sessionId }}）</template></span>
@@ -45,7 +63,9 @@
     </el-card>
 
     <!-- 空状态 -->
-    <el-card v-if="queried && ((mode !== 'agent' && !displayResults.length) || (mode === 'agent' && !answer))">
+    <el-card
+      v-if="queried && ((mode !== 'agent' && !displayResults.length) || (mode === 'agent' && !answer))"
+    >
       <el-empty description="暂无结果" />
     </el-card>
   </div>
@@ -56,14 +76,12 @@ import { ref, computed } from 'vue'
 import { hybridSearch, agentQuery } from '@/api/graph'
 import { searchKnowledge } from '@/api/knowledge'
 
-/** 检索模式：graph 混合检索 / agent 问答 / 真实文档检索 */
-const mode = ref<'hybrid' | 'agent' | 'docs'>('hybrid')
+/** 默认文档检索；hybrid/agent 为废弃 graphs 端点的兼容入口 */
+const mode = ref<'docs' | 'hybrid' | 'agent'>('docs')
 const query = ref('')
 const loading = ref(false)
-/** 是否执行过查询（用于空状态展示） */
 const queried = ref(false)
 
-// 混合检索结果
 interface ResultRow {
   id: string
   content: string
@@ -71,19 +89,20 @@ interface ResultRow {
   source: string | null
 }
 const results = ref<ResultRow[]>([])
-
-/** 文档检索结果（真实 /knowledge/search） */
 const docResults = ref<ResultRow[]>([])
-
-// Agent 问答
 const answer = ref('')
 const sessionId = ref('')
 
+const placeholder = computed(() => {
+  if (mode.value === 'agent') return '输入问题，多 Agent 协作回答（废弃端点）'
+  if (mode.value === 'hybrid') return '输入问题，检索知识图谱（废弃端点）'
+  return '输入问题，检索知识库文档'
+})
+
 const displayResults = computed(() =>
-  mode.value === 'docs' ? docResults.value : results.value
+  mode.value === 'hybrid' ? results.value : docResults.value
 )
 
-/** 执行查询：按当前模式分发 */
 async function handleSubmit() {
   const q = query.value.trim()
   if (!q) return
@@ -103,7 +122,6 @@ async function handleSubmit() {
         source: r.source
       }))
     } else if (mode.value === 'docs') {
-      // 真实知识库向量检索（非 graphs 占位）
       const res = await searchKnowledge({ query: q, top_k: 10 })
       docResults.value = res.results.map((r) => ({
         id: String(r.chunk_id),
@@ -118,7 +136,6 @@ async function handleSubmit() {
     }
     queried.value = true
   } catch (err) {
-    // 错误提示已由全局拦截器统一处理
     console.error('知识检索失败:', err)
   } finally {
     loading.value = false

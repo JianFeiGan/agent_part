@@ -6,6 +6,9 @@ Description:
     下的 documents 端点（src/api/router/knowledge.py）及
     src/rag/* 持久化实现。保留本路由仅为兼容既有客户端，
     所有端点已在 OpenAPI 中标记 deprecated。
+@author ganjianfei
+@version 1.1.0
+2026-09-12
 """
 
 import uuid
@@ -48,7 +51,7 @@ _graphs: dict[str, dict[str, Any]] = {}
 )
 async def create_graph(
     request: KnowledgeGraphCreate,
-    auth: AuthDep = None,
+    auth: AuthDep,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[KnowledgeGraphResponse]:
     """创建知识图谱。
@@ -57,7 +60,7 @@ async def create_graph(
     /api/v1/knowledge documents（src/api/router/knowledge.py）。
     """
     graph_id = f"kg_{uuid.uuid4().hex[:8]}"
-    tenant_id = auth.tenant_id if auth else "dev"
+    tenant_id = auth.tenant_id
 
     graph_data = {
         "id": graph_id,
@@ -84,9 +87,9 @@ async def create_graph(
     deprecated=True,
 )
 async def list_graphs(
+    auth: AuthDep,
     page: int = 1,
     page_size: int = 20,
-    auth: AuthDep = None,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[KnowledgeGraphListResponse]:
     """获取知识图谱列表。
@@ -94,7 +97,7 @@ async def list_graphs(
     Deprecated: 进程内内存占位，不落库。真实知识库管理请使用
     /api/v1/knowledge documents（src/api/router/knowledge.py）。
     """
-    tenant_id = auth.tenant_id if auth else "dev"
+    tenant_id = auth.tenant_id
 
     items = [
         KnowledgeGraphResponse(**g) for g in _graphs.values() if g.get("tenant_id") == tenant_id
@@ -118,7 +121,7 @@ async def list_graphs(
 async def add_document(
     graph_id: str,
     request: AddDocumentRequest,
-    auth: AuthDep = None,
+    auth: AuthDep,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[dict[str, Any]]:
     """添加文档到图谱。
@@ -158,7 +161,7 @@ async def add_document(
 @router.post("/search/hybrid", response_model=ApiResponse[SearchResponse], deprecated=True)
 async def hybrid_search(
     request: HybridSearchRequest,
-    auth: AuthDep = None,
+    auth: AuthDep,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[SearchResponse]:
     """混合检索。
@@ -191,7 +194,7 @@ async def hybrid_search(
 @router.post("/agent/query", response_model=ApiResponse[AgentQueryResponse], deprecated=True)
 async def agent_query(
     request: AgentQueryRequest,
-    auth: AuthDep = None,
+    auth: AuthDep,
     session: AsyncSession = Depends(get_db),
 ) -> ApiResponse[AgentQueryResponse]:
     """Agent 查询入口。

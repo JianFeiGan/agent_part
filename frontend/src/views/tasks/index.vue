@@ -145,7 +145,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getTasks, cancelTask, deleteTask } from '@/api/tasks'
 import type { Task, TaskQueryParams } from '@/types/task'
 import { formatTime, getTaskStatusLabel, getTaskStatusTagType } from '@/utils/format'
-import { TaskStatus, isRunningTaskStatus, isTerminalTaskStatus } from '@/types/task'
+import { TaskStatus, TaskTypeLabels, isRunningTaskStatus, isTerminalTaskStatus } from '@/types/task'
+import type { TaskType } from '@/types/task'
 import PageState from '@/components/PageState.vue'
 
 /**
@@ -180,12 +181,9 @@ const queryParams = reactive<TaskQueryParams>({
   page_size: 10
 })
 
-// 任务类型标签映射
-const taskTypeLabels: Record<string, string> = {
-  'image_only': '图片生成',
-  'video_only': '视频生成',
-  'image_and_video': '图片+视频'
-}
+// 任务类型标签统一使用 types/task 导出，避免与 WorkbenchHeader 重复
+const getTaskTypeLabel = (type?: string) =>
+  type ? (TaskTypeLabels[type as TaskType] ?? type) : '-'
 
 // 步骤标签映射
 const stepLabels: Record<string, string> = {
@@ -200,11 +198,6 @@ const stepLabels: Record<string, string> = {
   'completed': '已完成',
   'error': '错误',
   'cancelled': '已取消'
-}
-
-// 获取任务类型标签
-const getTaskTypeLabel = (type: string | undefined) => {
-  return type ? (taskTypeLabels[type] || type) : '-'
 }
 
 // 获取步骤标签

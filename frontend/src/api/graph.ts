@@ -1,16 +1,13 @@
 /**
- * 知识图谱 API 封装。
- * 对应后端 /api/v1/knowledge/* 下的知识图谱端点。
+ * 知识图谱兼容 API 封装（对应后端已 deprecated 的 graphs 端点）。
+ *
+ * 默认前端路径请使用 `@/api/knowledge` 的 documents/search。
+ * 仅保留 Search 页兼容入口所需的 hybrid / agent 调用。
  *
  * 返回值为 `ApiResponse.data`，错误由全局拦截器统一处理并 reject。
  */
 import request from './index'
 import type {
-  KnowledgeGraph,
-  KnowledgeGraphCreate,
-  KnowledgeGraphListResponse,
-  KnowledgeGraphQueryParams,
-  AddDocumentRequest,
   HybridSearchRequest,
   HybridSearchResponse,
   AgentQueryRequest,
@@ -19,38 +16,7 @@ import type {
 
 const BASE_URL = '/knowledge'
 
-/**
- * 创建知识图谱。
- */
-export async function createGraph(data: KnowledgeGraphCreate): Promise<KnowledgeGraph> {
-  const res = await request.post(`${BASE_URL}/graphs`, data)
-  return res.data.data
-}
-
-/**
- * 获取知识图谱列表。
- */
-export async function listGraphs(
-  params?: KnowledgeGraphQueryParams
-): Promise<KnowledgeGraphListResponse> {
-  const res = await request.get(`${BASE_URL}/graphs`, { params })
-  return res.data.data
-}
-
-/**
- * 向图谱添加文档。
- */
-export async function addGraphDocument(
-  graphId: string,
-  data: AddDocumentRequest
-): Promise<Record<string, unknown>> {
-  const res = await request.post(`${BASE_URL}/graphs/${graphId}/documents`, data)
-  return res.data.data
-}
-
-/**
- * 混合检索（向量 + 关键词）。
- */
+/** @deprecated 走 /api/v1/knowledge/search */
 export async function hybridSearch(
   data: HybridSearchRequest
 ): Promise<HybridSearchResponse> {
@@ -58,9 +24,7 @@ export async function hybridSearch(
   return res.data.data
 }
 
-/**
- * 知识 Agent 问答（多 Agent 协作生成回答）。
- */
+/** @deprecated 走真实知识库检索，而非 graphs agent 占位 */
 export async function agentQuery(data: AgentQueryRequest): Promise<AgentQueryResponse> {
   const res = await request.post(`${BASE_URL}/agent/query`, data)
   return res.data.data
