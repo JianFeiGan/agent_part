@@ -117,6 +117,31 @@ export enum TaskStatus {
   CANCELLED = 'cancelled'
 }
 
+/** 任务终态集合：completed / failed / cancelled */
+export const TERMINAL_TASK_STATUSES: ReadonlySet<TaskStatus> = new Set<TaskStatus>([
+  TaskStatus.COMPLETED,
+  TaskStatus.FAILED,
+  TaskStatus.CANCELLED
+])
+
+/**
+ * 是否处于终态（completed/failed/cancelled）；空值视为非终态。
+ */
+export function isTerminalTaskStatus(
+  status: TaskStatus | string | null | undefined
+): boolean {
+  return !!status && TERMINAL_TASK_STATUSES.has(status as TaskStatus)
+}
+
+/**
+ * 是否处于运行中（仅 running）；空值视为非运行。
+ */
+export function isRunningTaskStatus(
+  status: TaskStatus | string | null | undefined
+): boolean {
+  return status === TaskStatus.RUNNING
+}
+
 /**
  * 任务状态标签映射
  */
@@ -272,6 +297,8 @@ export interface ProgressUpdateEvent {
   type: 'progress_update'
   progress: number
   current_step: string
+  /** 可选：轻量帧携带的任务状态（legacy 兼容） */
+  status?: TaskStatus | string
 }
 
 /** WebSocket 事件联合类型 */

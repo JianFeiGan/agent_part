@@ -93,6 +93,7 @@ Docker：`docker compose up -d`（app :8000 / frontend :3000 / postgres pgvector
 - **`get_settings()` 是 `lru_cache` 单例**：改环境变量后必须 `get_settings.cache_clear()`，否则读不到新值。
 - **Postgres 连接串由 `POSTGRES_*` 分项拼出**（`settings.postgres_url` property），**没有** `DATABASE_URL` 字段。但 `docker-compose.yml` 里给 app 传了 `DATABASE_URL` 环境变量——它对应用代码无效，实际靠 compose 网络 + 分项默认值的组合生效（compose 未覆盖 POSTGRES_HOST，仍是 localhost，容器内连不上 DB）。Alembic 的 `env.py` 里"支持 DATABASE_URL 覆盖"的注释同样是过期信息，真实来源就是 `settings.postgres_url`。
 - **`src/knowledge/graph.py` 是占位实现**（docstring 明说），真实图谱在 `src/rag/graph_builder.py` / `graph_search.py` / `graph_memory.py`。
+- **前端知识库管理必须用 `/api/v1/knowledge` documents，不要调 `/api/v1/knowledge/graphs`**——后者已标 `deprecated=True`，是进程内内存占位。
 - 仓库根目录有 `README.md.bak`、`frontend/dump.rdb` 等遗留文件，不是活跃资产。
 
 ## Agent skills
