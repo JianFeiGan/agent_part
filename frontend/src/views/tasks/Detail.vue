@@ -142,6 +142,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getTaskById, cancelTask } from '@/api/tasks'
+import { createEmptyAgentLog } from '@/types/task'
 import type { TaskDetail, AgentLog } from '@/types/task'
 
 /**
@@ -167,19 +168,17 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 const agentLogs = computed<AgentLog[]>(() => {
   if (!task.value?.agent_logs?.length) {
     // 如果没有日志，返回工作流步骤的默认日志
-    return workflowSteps.map(step => ({
-      agent_name: step.label,
-      step: step.key,
-      start_time: null,
-      end_time: null,
-      status: task.value?.completed_steps?.includes(step.key)
-        ? 'completed'
-        : task.value?.current_step === step.key
-          ? 'running'
-          : 'pending',
-      message: null,
-      output_summary: null
-    }))
+    return workflowSteps.map(step =>
+      createEmptyAgentLog({
+        agent_name: step.label,
+        step: step.key,
+        status: task.value?.completed_steps?.includes(step.key)
+          ? 'completed'
+          : task.value?.current_step === step.key
+            ? 'running'
+            : 'pending'
+      })
+    )
   }
   return task.value.agent_logs
 })
@@ -277,15 +276,10 @@ const getStepLabel = (step: string) => stepLabels[step] || step
 // 加载任务详情
 const loadTask = async () => {
   try {
-    const response = await getTaskById(taskId)
-    if (response.data.code === 200) {
-      task.value = response.data.data
-    } else {
-      ElMessage.error(response.data.message || '加载任务详情失败')
-    }
+    // 拦截器已统一处理错误提示并 reject，此处拿到业务数据
+    task.value = await getTaskById(taskId)
   } catch (error) {
     console.error('加载任务详情失败:', error)
-    ElMessage.error('加载任务详情失败')
   }
 }
 
@@ -310,15 +304,11 @@ const handleCancel = async () => {
       cancelButtonText: '取消',
       type: 'warning'
     })
-    const response = await cancelTask(taskId)
-    if (response.data.code === 200) {
-      ElMessage.success('任务已取消')
-      await loadTask()
-    } else {
-      ElMessage.error(response.data.message || '取消失败')
-    }
+    await cancelTask(taskId)
+    ElMessage.success('任务已取消')
+    await loadTask()
   } catch {
-    // 用户取消
+    // 用户取消或请求失败（失败已由拦截器提示）
   }
 }
 

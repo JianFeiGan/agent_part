@@ -45,11 +45,19 @@
       </el-form>
 
       <!-- 商品表格 -->
-      <el-table
-        v-loading="loading"
-        :data="productList"
-        style="width: 100%"
+      <PageState
+        :kind="listKind"
+        empty-description="还没有商品，先创建一个再生成视觉素材"
+        empty-action-text="创建商品"
+        error-title="商品列表加载失败"
+        :retrying="loading"
+        @retry="loadProducts"
+        @empty-action="handleCreate"
       >
+        <el-table
+          :data="productList"
+          style="width: 100%"
+        >
         <el-table-column prop="product_id" label="商品ID" width="180" />
         <el-table-column prop="name" label="商品名称" min-width="200" show-overflow-tooltip />
         <el-table-column prop="category" label="分类" width="120">
@@ -90,6 +98,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </PageState>
 
       <!-- 分页 -->
       <el-pagination
@@ -107,12 +116,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ProductCategoryLabels } from '@/types/product'
 import type { Product, ProductQueryParams } from '@/types/product'
 import { getProducts, deleteProduct } from '@/api/products'
+import PageState from '@/components/PageState.vue'
 
 /**
  * 商品列表页面
@@ -123,12 +133,20 @@ const router = useRouter()
 
 // 加载状态
 const loading = ref(false)
+const loadFailed = ref(false)
 
 // 商品列表
 const productList = ref<Product[]>([])
 
 // 总数
 const total = ref(0)
+
+const listKind = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
+  if (loading.value && !productList.value.length) return 'loading'
+  if (loadFailed.value && !productList.value.length) return 'error'
+  if (!productList.value.length) return 'empty'
+  return 'ready'
+})
 
 // 查询参数
 const queryParams = reactive<ProductQueryParams>({
@@ -141,12 +159,15 @@ const queryParams = reactive<ProductQueryParams>({
 // 加载商品列表
 const loadProducts = async () => {
   loading.value = true
+  loadFailed.value = false
   try {
-    const response = await getProducts(queryParams)
-    productList.value = response.data.data.items
-    total.value = response.data.data.total
+    // 拦截器已统一处理错误提示并 reject，此处拿到业务数据
+    const page = await getProducts(queryParams)
+    productList.value = page.items
+    total.value = page.total
   } catch (error) {
     console.error('加载商品列表失败:', error)
+    loadFailed.value = true
   } finally {
     loading.value = false
   }

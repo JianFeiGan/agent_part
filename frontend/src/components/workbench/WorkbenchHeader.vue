@@ -8,8 +8,9 @@
       <span class="task-id">{{ store.taskDetail?.task_id }}</span>
       <el-tag :type="statusTagType" size="small">{{ statusLabel }}</el-tag>
       <el-tag v-if="taskTypeLabel" size="small" type="info">{{ taskTypeLabel }}</el-tag>
-      <span v-if="store.wsConnected" class="ws-indicator connected">WS 已连接</span>
-      <span v-else class="ws-indicator disconnected">WS 断开</span>
+      <span class="ws-indicator" :class="store.wsConnected ? 'connected' : 'disconnected'">
+        {{ connectionLabel }}
+      </span>
     </div>
     <div class="header-right">
       <div class="global-metrics">
@@ -40,30 +41,26 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { useWorkbenchStore } from '@/stores/workbench'
-import { TaskStatusLabels, TaskTypeLabels } from '@/types/task'
-import type { TaskStatus, TaskType } from '@/types/task'
+import { getTaskStatusLabel, getTaskStatusTagType } from '@/utils/format'
+import { TaskTypeLabels } from '@/types/task'
+import type { TaskType } from '@/types/task'
 
 const router = useRouter()
 const store = useWorkbenchStore()
+
+withDefaults(
+  defineProps<{
+    connectionLabel?: string
+  }>(),
+  { connectionLabel: '连接中' }
+)
 
 defineEmits<{
   cancel: []
 }>()
 
-const statusLabel = computed(() => {
-  const status = store.taskDetail?.status
-  return status ? (TaskStatusLabels[status as TaskStatus] ?? status) : ''
-})
-
-const statusTagType = computed(() => {
-  const map: Record<string, string> = {
-    pending: 'info',
-    running: 'warning',
-    completed: 'success',
-    failed: 'danger',
-  }
-  return map[store.taskDetail?.status ?? ''] ?? 'info'
-})
+const statusLabel = computed(() => getTaskStatusLabel(store.taskDetail?.status))
+const statusTagType = computed(() => getTaskStatusTagType(store.taskDetail?.status))
 
 const taskTypeLabel = computed(() => {
   const type = store.taskDetail?.task_type

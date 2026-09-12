@@ -5,6 +5,7 @@
       <el-radio-group v-model="mode">
         <el-radio-button value="hybrid">图谱混合检索</el-radio-button>
         <el-radio-button value="agent">Agent 问答</el-radio-button>
+        <el-radio-button value="docs">文档检索</el-radio-button>
       </el-radio-group>
     </el-card>
 
@@ -22,13 +23,13 @@
       </el-input>
     </el-card>
 
-    <!-- 混合检索结果 -->
-    <el-card v-if="mode === 'hybrid' && results.length" v-loading="loading">
+    <!-- 混合/文档检索结果 -->
+    <el-card v-if="(mode === 'hybrid' || mode === 'docs') && displayResults.length" v-loading="loading">
       <template #header>
-        <span>检索结果（{{ results.length }}）</span>
+        <span>检索结果（{{ displayResults.length }}）</span>
       </template>
       <el-timeline>
-        <el-timeline-item v-for="r in results" :key="r.id" :timestamp="`score: ${(r.score * 100).toFixed(1)}%`">
+        <el-timeline-item v-for="r in displayResults" :key="r.id" :timestamp="`score: ${(r.score * 100).toFixed(1)}%`">
           <div class="result-content">{{ r.content }}</div>
           <div v-if="r.source" class="result-source">来源：{{ r.source }}</div>
         </el-timeline-item>
@@ -44,18 +45,19 @@
     </el-card>
 
     <!-- 空状态 -->
-    <el-card v-if="queried && ((mode === 'hybrid' && !results.length) || (mode === 'agent' && !answer))">
+    <el-card v-if="queried && ((mode !== 'agent' && !displayResults.length) || (mode === 'agent' && !answer))">
       <el-empty description="暂无结果" />
     </el-card>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { hybridSearch, agentQuery } from '@/api/graph'
+import { searchKnowledge } from '@/api/knowledge'
 
-/** 检索模式：graph 混合检索 / agent 问答 */
-const mode = ref<'hybrid' | 'agent'>('hybrid')
+/** 检索模式：graph 混合检索 / agent 问答 / 真实文档检索 */
+const mode = ref<'hybrid' | 'agent' | 'docs'>('hybrid')
 const query = ref('')
 const loading = ref(false)
 /** 是否执行过查询（用于空状态展示） */
@@ -70,9 +72,16 @@ interface ResultRow {
 }
 const results = ref<ResultRow[]>([])
 
+/** 文档检索结果（真实 /knowledge/search） */
+const docResults = ref<ResultRow[]>([])
+
 // Agent 问答
 const answer = ref('')
 const sessionId = ref('')
+
+const displayResults = computed(() =>
+  mode.value === 'docs' ? docResults.value : results.value
+)
 
 /** 执行查询：按当前模式分发 */
 async function handleSubmit() {
@@ -82,6 +91,7 @@ async function handleSubmit() {
   loading.value = true
   queried.value = false
   results.value = []
+  docResults.value = []
   answer.value = ''
   try {
     if (mode.value === 'hybrid') {
@@ -91,6 +101,15 @@ async function handleSubmit() {
         content: r.content,
         score: r.score,
         source: r.source
+      }))
+    } else if (mode.value === 'docs') {
+      // 真实知识库向量检索（非 graphs 占位）
+      const res = await searchKnowledge({ query: q, top_k: 10 })
+      docResults.value = res.results.map((r) => ({
+        id: String(r.chunk_id),
+        content: r.content,
+        score: r.similarity,
+        source: r.doc_title
       }))
     } else {
       const res = await agentQuery({ query: q, session_id: sessionId.value || undefined })

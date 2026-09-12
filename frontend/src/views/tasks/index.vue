@@ -41,11 +41,19 @@
       </el-form>
 
       <!-- 任务表格 -->
-      <el-table
-        v-loading="loading"
-        :data="taskList"
-        style="width: 100%"
+      <PageState
+        :kind="listKind"
+        empty-description="还没有生成任务，从商品创建一条吧"
+        empty-action-text="创建任务"
+        error-title="任务列表加载失败"
+        :retrying="loading"
+        @retry="loadTasks"
+        @empty-action="handleCreate"
       >
+        <el-table
+          :data="taskList"
+          style="width: 100%"
+        >
         <el-table-column prop="task_id" label="任务ID" width="180" />
         <el-table-column prop="product_id" label="商品ID" width="180" />
         <el-table-column prop="request.task_type" label="类型" width="120">
@@ -113,6 +121,7 @@
           </template>
         </el-table-column>
       </el-table>
+      </PageState>
 
       <!-- 分页 -->
       <el-pagination
@@ -130,12 +139,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getTasks, cancelTask, deleteTask } from '@/api/tasks'
 import type { Task, TaskQueryParams } from '@/types/task'
 import { formatTime, getTaskStatusLabel, getTaskStatusTagType } from '@/utils/format'
+import PageState from '@/components/PageState.vue'
 
 /**
  * 任务列表页面
@@ -146,12 +156,20 @@ const router = useRouter()
 
 // 加载状态
 const loading = ref(false)
+const loadFailed = ref(false)
 
 // 任务列表
 const taskList = ref<Task[]>([])
 
 // 总数
 const total = ref(0)
+
+const listKind = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
+  if (loading.value && !taskList.value.length) return 'loading'
+  if (loadFailed.value && !taskList.value.length) return 'error'
+  if (!taskList.value.length) return 'empty'
+  return 'ready'
+})
 
 // 查询参数
 const queryParams = reactive<TaskQueryParams>({
@@ -196,13 +214,15 @@ const getStepLabel = (step: string) => {
 // 加载任务列表
 const loadTasks = async () => {
   loading.value = true
+  loadFailed.value = false
   try {
-    const response = await getTasks(queryParams)
-    // 拦截器已统一处理错误提示并 reject，此处不再二次弹错
-    taskList.value = response.data.data.items
-    total.value = response.data.data.total
+    // 拦截器已统一处理错误提示并 reject，此处拿到业务数据
+    const page = await getTasks(queryParams)
+    taskList.value = page.items
+    total.value = page.total
   } catch (error) {
     console.error('加载任务列表失败:', error)
+    loadFailed.value = true
   } finally {
     loading.value = false
   }

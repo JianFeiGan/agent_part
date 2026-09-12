@@ -147,7 +147,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { TaskStatusLabels } from '@/types/task'
+import { getTaskStatusLabel } from '@/utils/format'
 import { getDashboardStats } from '@/api/dashboard'
 import type { RecentTaskItem } from '@/types/dashboard'
 
@@ -162,9 +162,7 @@ const statistics = ref({
 
 const recentTasks = ref<RecentTaskItem[]>([])
 
-const getStatusLabel = (status: string) => {
-  return TaskStatusLabels[status as keyof typeof TaskStatusLabels] || status
-}
+const getStatusLabel = (status: string) => getTaskStatusLabel(status)
 
 const getProgressColor = (status: string) => {
   const map: Record<string, string> = {

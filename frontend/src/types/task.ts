@@ -45,6 +45,38 @@ export interface AgentLog {
 }
 
 /**
+ * 构造一条字段完整的空 AgentLog。
+ *
+ * 工作流步骤合成日志、列表缺省展示等场景必须走这里，
+ * 避免只填部分字段导致 vue-tsc 类型失败。
+ */
+export function createEmptyAgentLog(
+  partial: Pick<AgentLog, 'agent_name' | 'step'> &
+    Partial<Omit<AgentLog, 'agent_name' | 'step'>>
+): AgentLog {
+  return {
+    start_time: null,
+    end_time: null,
+    status: AgentLogStatus.PENDING,
+    message: null,
+    output_summary: null,
+    input_data: null,
+    output_data: null,
+    prompt_template: null,
+    prompt_variables: null,
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+    cost_cny: 0,
+    latency_ms: null,
+    model_name: null,
+    provider: null,
+    child_calls: [],
+    ...partial
+  }
+}
+
+/**
  * 子调用记录（工具调用、嵌套 LLM 调用）
  */
 export interface ChildCallRecord {

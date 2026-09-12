@@ -1,6 +1,11 @@
-import type { AxiosResponse } from 'axios'
+/**
+ * 知识库 API。
+ *
+ * 走真实 `/api/v1/knowledge`（document processor + vector store），
+ * 不要使用 `/knowledge/graphs` 的内存占位实现。
+ * 返回值为 `ApiResponse.data`。
+ */
 import request from './index'
-import type { ApiResponse } from '@/types/api'
 import type {
   KnowledgeDocument,
   KnowledgeDocumentCreate,
@@ -11,39 +16,30 @@ import type {
   KnowledgeStats
 } from '@/types/knowledge'
 
-/**
- * 知识库 API
- * @description 知识库管理相关接口
- */
-
 const BASE_URL = '/knowledge'
 
-/**
- * 获取文档列表
- */
-export function getDocuments(
+/** 获取文档列表 */
+export async function getDocuments(
   params: KnowledgeQueryParams
-): Promise<AxiosResponse<ApiResponse<KnowledgeDocumentListResponse>>> {
-  return request.get(`${BASE_URL}/documents`, { params })
+): Promise<KnowledgeDocumentListResponse> {
+  const res = await request.get(`${BASE_URL}/documents`, { params })
+  return res.data.data
 }
 
-/**
- * 创建文档
- */
-export function createDocument(
+/** 创建文档 */
+export async function createDocument(
   data: KnowledgeDocumentCreate
-): Promise<AxiosResponse<ApiResponse<KnowledgeDocument>>> {
-  return request.post(`${BASE_URL}/documents`, data)
+): Promise<KnowledgeDocument> {
+  const res = await request.post(`${BASE_URL}/documents`, data)
+  return res.data.data
 }
 
-/**
- * 上传文档文件
- */
-export function uploadDocument(
+/** 上传文档文件 */
+export async function uploadDocument(
   file: File,
   docType: string,
   category?: string
-): Promise<AxiosResponse<ApiResponse<KnowledgeDocument>>> {
+): Promise<KnowledgeDocument> {
   const formData = new FormData()
   formData.append('file', file)
 
@@ -52,35 +48,29 @@ export function uploadDocument(
     params.category = category
   }
 
-  return request.post(`${BASE_URL}/documents/upload`, formData, {
+  const res = await request.post(`${BASE_URL}/documents/upload`, formData, {
     headers: {
       'Content-Type': 'multipart/form-data'
     },
     params
   })
+  return res.data.data
 }
 
-/**
- * 删除文档
- */
-export function deleteDocument(
-  docId: number
-): Promise<AxiosResponse<ApiResponse<{ deleted_id: number }>>> {
-  return request.delete(`${BASE_URL}/documents/${docId}`)
+/** 删除文档 */
+export async function deleteDocument(docId: number): Promise<{ deleted_id: number }> {
+  const res = await request.delete(`${BASE_URL}/documents/${docId}`)
+  return res.data.data
 }
 
-/**
- * 检索知识库
- */
-export function searchKnowledge(
-  data: SearchRequest
-): Promise<AxiosResponse<ApiResponse<SearchResponse>>> {
-  return request.post(`${BASE_URL}/search`, data)
+/** 检索知识库 */
+export async function searchKnowledge(data: SearchRequest): Promise<SearchResponse> {
+  const res = await request.post(`${BASE_URL}/search`, data)
+  return res.data.data
 }
 
-/**
- * 获取知识库统计
- */
-export function getKnowledgeStats(): Promise<AxiosResponse<ApiResponse<KnowledgeStats>>> {
-  return request.get(`${BASE_URL}/stats`)
+/** 知识库统计 */
+export async function getKnowledgeStats(): Promise<KnowledgeStats> {
+  const res = await request.get(`${BASE_URL}/stats`)
+  return res.data.data
 }
