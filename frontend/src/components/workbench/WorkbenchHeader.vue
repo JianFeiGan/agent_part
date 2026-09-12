@@ -19,13 +19,13 @@
         <span>💰 ¥{{ store.totalCost.toFixed(3) }}</span>
       </div>
       <el-progress
-        v-if="store.taskDetail?.status === 'running'"
+        v-if="isRunningTaskStatus(store.taskDetail?.status)"
         :percentage="store.taskDetail?.progress ?? 0"
         :stroke-width="6"
         style="width: 120px"
       />
       <el-button
-        v-if="store.taskDetail?.status === 'running'"
+        v-if="isRunningTaskStatus(store.taskDetail?.status)"
         type="warning"
         size="small"
         @click="$emit('cancel')"
@@ -42,7 +42,7 @@ import { useRouter } from 'vue-router'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import { useWorkbenchStore } from '@/stores/workbench'
 import { getTaskStatusLabel, getTaskStatusTagType } from '@/utils/format'
-import { TaskTypeLabels } from '@/types/task'
+import { TaskTypeLabels, isRunningTaskStatus } from '@/types/task'
 import type { TaskType } from '@/types/task'
 
 const router = useRouter()

@@ -58,7 +58,7 @@
           </div>
 
           <el-alert
-            v-if="store.taskDetail?.status === 'failed' && store.taskDetail.error_message"
+            v-if="store.taskDetail?.status === TaskStatus.FAILED && store.taskDetail.error_message"
             class="overview-error"
             type="error"
             :title="store.taskDetail.error_message"

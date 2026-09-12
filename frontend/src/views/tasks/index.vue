@@ -73,7 +73,7 @@
             <div class="progress-cell">
               <el-progress
                 :percentage="row.progress || 0"
-                :status="row.status === 'completed' ? 'success' : (row.status === 'failed' || row.status === 'cancelled') ? 'exception' : undefined"
+                :status="progressStatus(row.status)"
               />
             </div>
           </template>
@@ -88,7 +88,7 @@
             <el-tooltip v-if="row.error_message" :content="row.error_message" placement="top">
               <el-text type="danger" truncated>{{ row.error_message }}</el-text>
             </el-tooltip>
-            <span v-else-if="row.status === 'running'">{{ getStepLabel(row.current_step) }}</span>
+            <span v-else-if="isRunningTaskStatus(row.status)">{{ getStepLabel(row.current_step) }}</span>
             <span v-else>-</span>
           </template>
         </el-table-column>
@@ -103,7 +103,7 @@
               详情
             </el-button>
             <el-button
-              v-if="row.status === 'running'"
+              v-if="isRunningTaskStatus(row.status)"
               type="warning"
               link
               @click="handleCancel(row)"
@@ -111,7 +111,7 @@
               取消
             </el-button>
             <el-button
-              v-if="row.status === 'completed' || row.status === 'failed' || row.status === 'cancelled'"
+              v-if="isTerminalTaskStatus(row.status)"
               type="danger"
               link
               @click="handleDelete(row)"
@@ -145,6 +145,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { getTasks, cancelTask, deleteTask } from '@/api/tasks'
 import type { Task, TaskQueryParams } from '@/types/task'
 import { formatTime, getTaskStatusLabel, getTaskStatusTagType } from '@/utils/format'
+import { TaskStatus, isRunningTaskStatus, isTerminalTaskStatus } from '@/types/task'
 import PageState from '@/components/PageState.vue'
 
 /**
@@ -209,6 +210,12 @@ const getTaskTypeLabel = (type: string | undefined) => {
 // 获取步骤标签
 const getStepLabel = (step: string) => {
   return stepLabels[step] || step
+}
+
+function progressStatus(status: TaskStatus) {
+  if (status === TaskStatus.COMPLETED) return 'success' as const
+  if (status === TaskStatus.FAILED || status === TaskStatus.CANCELLED) return 'exception' as const
+  return undefined
 }
 
 // 加载任务列表
