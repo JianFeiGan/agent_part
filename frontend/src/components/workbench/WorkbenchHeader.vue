@@ -8,7 +8,7 @@
       <span class="task-id">{{ store.taskDetail?.task_id }}</span>
       <el-tag :type="statusTagType" size="small">{{ statusLabel }}</el-tag>
       <el-tag v-if="taskTypeLabel" size="small" type="info">{{ taskTypeLabel }}</el-tag>
-      <span class="ws-indicator" :class="store.wsConnected ? 'connected' : 'disconnected'">
+      <span class="ws-indicator" :class="connectionMode === 'websocket' ? 'connected' : 'disconnected'">
         {{ connectionLabel }}
       </span>
     </div>
@@ -51,8 +51,9 @@ const store = useWorkbenchStore()
 withDefaults(
   defineProps<{
     connectionLabel?: string
+    connectionMode?: 'connecting' | 'websocket' | 'polling' | 'closed'
   }>(),
-  { connectionLabel: '连接中' }
+  { connectionLabel: '连接中', connectionMode: 'connecting' }
 )
 
 defineEmits<{

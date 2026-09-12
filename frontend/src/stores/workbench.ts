@@ -23,8 +23,6 @@ export const useWorkbenchStore = defineStore('workbench', () => {
   const taskDetail = ref<TaskDetail | null>(null)
   /** 当前选中的 Agent 节点 ID */
   const selectedAgentId = ref<string | null>(null)
-  /** WebSocket 连接状态 */
-  const wsConnected = ref(false)
   /** 加载状态 */
   const loading = ref(false)
   /** Agent 日志映射：step key → AgentLog */
@@ -162,15 +160,9 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     taskDetail.value.updated_at = snapshot.updated_at
   }
 
-  /** 设置 WebSocket 连接状态 */
-  function setWsConnected(connected: boolean) {
-    wsConnected.value = connected
-  }
-
   return {
     taskDetail,
     selectedAgentId,
-    wsConnected,
     loading,
     agentLogMap,
     selectedAgentLog,
@@ -183,6 +175,5 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     selectAgent,
     handleWsEvent,
     applyStatusSnapshot,
-    setWsConnected,
   }
 })

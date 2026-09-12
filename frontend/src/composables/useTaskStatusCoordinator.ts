@@ -118,9 +118,8 @@ export function useTaskStatusCoordinator(
 
       ws.onopen = () => {
         connectionMode.value = 'websocket'
-        store.setWsConnected(true)
-        stopPolling()
         clearReconnect()
+        stopPolling()
       }
 
       ws.onmessage = (event: MessageEvent) => {
@@ -147,7 +146,6 @@ export function useTaskStatusCoordinator(
       }
 
       ws.onclose = () => {
-        store.setWsConnected(false)
         if (stopped || isTerminalTaskStatus(store.taskDetail?.status)) {
           connectionMode.value = 'closed'
           if (isTerminalTaskStatus(store.taskDetail?.status)) {
@@ -164,7 +162,7 @@ export function useTaskStatusCoordinator(
       }
 
       ws.onerror = () => {
-        store.setWsConnected(false)
+        // onclose 随后触发并降级
       }
     } catch {
       if (shouldPoll()) startPolling()
@@ -181,7 +179,6 @@ export function useTaskStatusCoordinator(
       ws = null
     }
     connectionMode.value = 'closed'
-    store.setWsConnected(false)
   }
 
   onMounted(async () => {

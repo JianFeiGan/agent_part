@@ -2,6 +2,7 @@
   <div class="task-workbench" v-loading="store.loading">
     <WorkbenchHeader
       :connection-label="connectionLabel"
+      :connection-mode="connectionMode"
       @cancel="handleCancel"
     />
 
@@ -170,7 +171,7 @@ const taskId = route.params.id as string
 const showDiagnostics = ref(false)
 const loadError = ref(false)
 
-const { connectionLabel } = useTaskStatusCoordinator(taskId, {
+const { connectionLabel, connectionMode } = useTaskStatusCoordinator(taskId, {
   onFirstLoadError: () => {
     loadError.value = true
   }
