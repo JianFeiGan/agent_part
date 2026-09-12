@@ -1,9 +1,9 @@
 ---
 feature: frontend-productization
-status: delivered
+status: in-progress
 updated: 2026-09-12
 branch: feat/frontend-productization
-commits: 694f325..664023d
+commits: 694f325..472a793
 ---
 
 # Frontend Productization（前端产品化四期）
@@ -29,7 +29,7 @@ commits: 694f325..664023d
 - npm `edgesOut` 崩溃来自 vitest@4 + vite@5 peer 解析，用 `.npmrc legacy-peer-deps` 固定即可，不必升级大版本。
 - 实际详情路由是 Workbench，不是 `tasks/Detail.vue`（后者是孤儿页）；状态映射仍要单源。
 - Search 页原走 graphs 占位 hybrid API；本轮补了真实 `/knowledge/search` 的 docs 模式，hybrid/agent 保留。
-- T7 端到端需真实后端+DB 联调，本环境未跑通，保持未勾选。
+- T7 端到端需真实后端+DB 联调，本环境未跑通，**故 status 仍为 in-progress**，保持未勾选。
 
 ## [S1] Problem
 
