@@ -23,8 +23,14 @@ from src.agents.listing_compliance_checker import ComplianceCheckerAgent
 from src.agents.listing_copywriter import AICopywritingAgent
 from src.agents.listing_push_service import ListingPushService
 from src.db.postgres import get_db_session
+from src.graph import listing_persistence
 from src.graph.listing_state import ListingState
-from src.models.listing import ListingProduct, ListingTask, Platform, TaskStatus
+from src.models.listing import (
+    ListingProduct,
+    ListingTask,
+    Platform,
+    TaskStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -45,20 +51,84 @@ class ListingWorkflow:
         self.app = self._builder.compile(checkpointer=self._checkpointer)
 
     def _build_graph(self) -> None:
-        """构建状态图。"""
+        """构建状态图。
+
+        拓扑:
+            import_product ──(error)──▶ finalize
+            import_product ──(ok)──▶ optimize_assets ─┐
+                                      generate_copy ──┴─▶ compliance_check
+            compliance_check ──(有阻断)──▶ finalize
+            compliance_check ──(全通过)──▶ platform_push ──▶ finalize ──▶ END
+        """
         self._builder.add_node("import_product", self._import_node)
         self._builder.add_node("optimize_assets", self._asset_optimize_node)
         self._builder.add_node("generate_copy", self._copy_node)
         self._builder.add_node("compliance_check", self._compliance_node)
         self._builder.add_node("platform_push", self._push_node)
+        self._builder.add_node("finalize", self._finalize_node)
 
         self._builder.set_entry_point("import_product")
-        self._builder.add_edge("import_product", "optimize_assets")
-        self._builder.add_edge("import_product", "generate_copy")
+        self._builder.add_conditional_edges(
+            "import_product",
+            self._route_after_import,
+            ["optimize_assets", "generate_copy", "finalize"],
+        )
         self._builder.add_edge("optimize_assets", "compliance_check")
         self._builder.add_edge("generate_copy", "compliance_check")
+        # 合规门禁路由在 Task 6 替换为条件边
         self._builder.add_edge("compliance_check", "platform_push")
-        self._builder.add_edge("platform_push", END)
+        self._builder.add_edge("platform_push", "finalize")
+        self._builder.add_edge("finalize", END)
+
+    @staticmethod
+    def _route_after_import(state: ListingState) -> list[str]:
+        """import 后路由：有致命错误直接进 finalize，否则并行生成素材与文案。"""
+        if state.error:
+            return ["finalize"]
+        return ["optimize_assets", "generate_copy"]
+
+    async def _finalize_node(self, state: ListingState) -> dict:
+        """汇总工作流结果，计算并持久化任务终态。
+
+        终态规则:
+            - 有致命错误且无推送成功 → failed
+            - 有合规阻断且未推送 → reviewing（挂起，等待人工审核）
+            - 全部目标平台推送成功 → published
+            - 部分推送成功 → partial
+            - 其余（推送全部失败等）→ failed
+        """
+        push_results: dict[str, Any] = state.push_results or {}
+        succeeded = {name for name, r in push_results.items() if r.success}
+        target_names = {p.value for p in state.target_platforms}
+
+        if state.error and not succeeded:
+            final_status = TaskStatus.FAILED.value
+        elif state.blocked_platforms and not push_results:
+            final_status = TaskStatus.REVIEWING.value
+        elif push_results:
+            if target_names and succeeded >= target_names:
+                final_status = TaskStatus.PUBLISHED.value
+            elif succeeded:
+                final_status = TaskStatus.PARTIAL.value
+            else:
+                final_status = TaskStatus.FAILED.value
+        else:
+            final_status = TaskStatus.FAILED.value
+
+        logger.info(
+            f"刊登工作流结束: task_id={state.task_id}, final={final_status}, "
+            f"pushed={sorted(succeeded)}, blocked={[p.value for p in state.blocked_platforms]}"
+        )
+
+        if state.task_id is not None:
+            await listing_persistence.update_task_status(
+                state.task_id, state.tenant_id, final_status, workflow_state="finalized"
+            )
+
+        return {
+            "current_step": "finalized",
+            "step_results": {**state.step_results, "final_status": final_status},
+        }
 
     async def _import_node(self, state: ListingState) -> dict:
         """商品导入节点。
@@ -67,7 +137,11 @@ class ListingWorkflow:
         表拉取 AI 生成图片填充到 source_images，实现视觉生成产物的复用。
         """
         if not state.product:
-            return {"error": "No product provided"}
+            return {
+                "error": "No product provided",
+                "errors": [{"node": "import_product", "error": "No product provided"}],
+                "current_step": "import_failed",
+            }
 
         product = state.product
         source_product_id = product.attributes.get("source_product_id")
@@ -86,8 +160,13 @@ class ListingWorkflow:
                     )
             except Exception as e:
                 logger.error(f"加载 AI 生成图失败: {e}")
+                return {
+                    "product": product,
+                    "errors": [{"node": "import_product", "error": str(e)}],
+                    "current_step": "imported",
+                }
 
-        return {"product": product}
+        return {"product": product, "current_step": "imported"}
 
     async def _asset_optimize_node(self, state: ListingState) -> dict:
         """素材优化节点：调用 AssetOptimizerAgent。"""
@@ -164,7 +243,7 @@ class ListingWorkflow:
 
     async def run(
         self,
-        product: ListingProduct,
+        product: ListingProduct | None,
         target_platforms: list[Platform],
         thread_id: str = "default",
     ) -> dict:

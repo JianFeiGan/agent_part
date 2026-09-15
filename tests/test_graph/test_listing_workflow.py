@@ -49,8 +49,9 @@ class TestListingWorkflow:
             )
 
             assert result is not None
-            # 工作流现在包含 platform_push 节点
-            assert result.get("current_step") in ("push_completed", "push_partial")
+            # finalize 节点统一收口，终态写入 step_results
+            assert result.get("current_step") == "finalized"
+            assert result.get("step_results", {}).get("final_status") == "published"
             assert result.get("copywriting_packages")
             assert Platform.AMAZON in result.get("copywriting_packages", {})
 
@@ -81,3 +82,21 @@ class TestListingWorkflow:
             )
 
             mock_agent.execute_sync.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_import_failure_routes_to_finalize(self) -> None:
+        """无商品时快速终止：不生成文案、不推送，终态 failed。"""
+        with patch("src.graph.listing_workflow.ListingPushService") as mock_push_cls:
+            workflow = ListingWorkflow()
+
+            result = await workflow.run(
+                product=None,
+                target_platforms=[Platform.AMAZON],
+                thread_id="wf-fail-001",
+            )
+
+            assert result.get("current_step") == "finalized"
+            assert result.get("step_results", {}).get("final_status") == "failed"
+            assert result.get("error") == "No product provided"
+            assert not result.get("copywriting_packages")
+            mock_push_cls.return_value.push_to_platforms.assert_not_called()
