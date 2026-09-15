@@ -6,7 +6,12 @@ import pytest
 
 from src.agents.listing_platform_adapter import PushResult
 from src.graph.listing_workflow import ListingWorkflow
-from src.models.listing import AssetPackage, ListingProduct, Platform
+from src.models.listing import (
+    AssetPackage,
+    CopywritingPackage,
+    ListingProduct,
+    Platform,
+)
 
 
 @pytest.fixture
@@ -269,3 +274,246 @@ class TestListingWorkflow:
 
         mock_push.retry_failed.assert_called_once()
         assert result["step_results"]["final_status"] == "failed"
+
+    @pytest.mark.asyncio
+    async def test_workflow_persists_each_stage(
+        self, product: ListingProduct
+    ) -> None:
+        """task_id 非空时：状态流转与各阶段产物均持久化。"""
+        with (
+            patch("src.graph.listing_workflow.listing_persistence") as mock_persist,
+            patch("src.graph.listing_workflow.ListingPushService") as mock_push_cls,
+        ):
+            for name in (
+                "update_task_status",
+                "save_asset_packages",
+                "save_copywriting_packages",
+                "save_compliance_reports",
+                "save_push_results",
+            ):
+                setattr(mock_persist, name, AsyncMock())
+
+            mock_push = MagicMock()
+            mock_push.push_to_platforms = AsyncMock(
+                return_value={
+                    "amazon": PushResult(
+                        success=True, platform=Platform.AMAZON, listing_id="L-5"
+                    )
+                }
+            )
+            mock_push_cls.return_value = mock_push
+
+            workflow = ListingWorkflow()
+            result = await workflow.run(
+                product=product,
+                target_platforms=[Platform.AMAZON],
+                thread_id="wf-persist-001",
+                task_id=99,
+                tenant_id="tenant-x",
+            )
+
+            # 状态流转：generating → pushing → published
+            statuses = [
+                c.args[2] for c in mock_persist.update_task_status.call_args_list
+            ]
+            assert statuses == ["generating", "pushing", "published"]
+
+            mock_persist.save_asset_packages.assert_called_once()
+            mock_persist.save_copywriting_packages.assert_called_once()
+            mock_persist.save_compliance_reports.assert_called_once()
+            mock_persist.save_push_results.assert_called_once()
+            # 租户 ID 贯穿
+            assert mock_persist.save_push_results.call_args.args[1] == "tenant-x"
+            assert result["step_results"]["final_status"] == "published"
+
+    @pytest.mark.asyncio
+    async def test_workflow_without_task_id_skips_persistence(
+        self, product: ListingProduct
+    ) -> None:
+        """task_id 为 None（纯内存运行）时不触碰持久化。"""
+        with (
+            patch("src.graph.listing_workflow.listing_persistence") as mock_persist,
+            patch("src.graph.listing_workflow.ListingPushService") as mock_push_cls,
+        ):
+            for name in (
+                "update_task_status",
+                "save_asset_packages",
+                "save_copywriting_packages",
+                "save_compliance_reports",
+                "save_push_results",
+            ):
+                setattr(mock_persist, name, AsyncMock())
+
+            mock_push = MagicMock()
+            mock_push.push_to_platforms = AsyncMock(
+                return_value={
+                    "amazon": PushResult(
+                        success=True, platform=Platform.AMAZON, listing_id="L-6"
+                    )
+                }
+            )
+            mock_push_cls.return_value = mock_push
+
+            workflow = ListingWorkflow()
+            await workflow.run(
+                product=product,
+                target_platforms=[Platform.AMAZON],
+                thread_id="wf-nopersist-001",
+            )
+
+            mock_persist.update_task_status.assert_not_called()
+            mock_persist.save_asset_packages.assert_not_called()
+            mock_persist.save_push_results.assert_not_called()
+
+
+class TestResumePush:
+    """人工审核后恢复推送。"""
+
+    @pytest.mark.asyncio
+    async def test_resume_push_success(self) -> None:
+        """恢复推送：推送指定平台并按累计结果计算终态。"""
+        task_po = MagicMock()
+        task_po.tenant_id = "t1"
+        task_po.product_sku = "SKU-1"
+        task_po.target_platforms = ["amazon", "ebay"]
+
+        product_po = MagicMock()
+        product_po.id = 7
+        product_po.sku = "SKU-1"
+        product_po.title = "Resume Product"
+        product_po.description = "desc"
+        product_po.category = "Cat"
+        product_po.brand = "Brand"
+        product_po.source_images = []
+        product_po.attributes = {}
+
+        session = AsyncMock()
+        session.get = AsyncMock(return_value=task_po)
+        exec_result = MagicMock()
+        exec_result.scalar_one_or_none.return_value = product_po
+        session.execute = AsyncMock(return_value=exec_result)
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=session)
+        cm.__aexit__ = AsyncMock(return_value=None)
+
+        asset_pkg = AssetPackage(
+            listing_task_id=1, platform=Platform.AMAZON, main_image="https://x/m.jpg"
+        )
+        copy_pkg = CopywritingPackage(
+            listing_task_id=1, platform=Platform.AMAZON, title="Resume Product"
+        )
+
+        with (
+            patch("src.graph.listing_workflow.get_db_session", return_value=cm),
+            patch("src.graph.listing_workflow.listing_persistence") as mock_persist,
+            patch("src.graph.listing_workflow.ListingPushService") as mock_push_cls,
+        ):
+            mock_persist.load_asset_packages = AsyncMock(
+                return_value={Platform.AMAZON: asset_pkg}
+            )
+            mock_persist.load_copywriting_packages = AsyncMock(
+                return_value={Platform.AMAZON: copy_pkg}
+            )
+            mock_persist.update_task_status = AsyncMock()
+            mock_persist.save_push_results = AsyncMock()
+            mock_persist.load_push_result_statuses = AsyncMock(
+                return_value={"amazon": True, "ebay": True}
+            )
+
+            mock_push = MagicMock()
+            mock_push.push_to_platforms = AsyncMock(
+                return_value={
+                    "amazon": PushResult(
+                        success=True, platform=Platform.AMAZON, listing_id="L-7"
+                    ),
+                    "ebay": PushResult(
+                        success=True, platform=Platform.EBAY, listing_id="E-7"
+                    ),
+                }
+            )
+            mock_push_cls.return_value = mock_push
+
+            workflow = ListingWorkflow()
+            outcome = await workflow.resume_push(
+                task_id=1,
+                tenant_id="t1",
+                platforms=[Platform.AMAZON, Platform.EBAY],
+            )
+
+            assert outcome["final_status"] == "published"
+            assert outcome["push_results"]["amazon"].success is True
+            # 末次状态更新为终态
+            last_status_call = mock_persist.update_task_status.call_args_list[-1]
+            assert last_status_call.args[2] == "published"
+
+    @pytest.mark.asyncio
+    async def test_resume_push_all_failed_back_to_reviewing(self) -> None:
+        """恢复推送全部失败 → 回到 reviewing 保持挂起。"""
+        task_po = MagicMock()
+        task_po.tenant_id = "t1"
+        task_po.product_sku = "SKU-1"
+        task_po.target_platforms = ["amazon"]
+
+        product_po = MagicMock()
+        product_po.id = 7
+        product_po.sku = "SKU-1"
+        product_po.title = "P"
+        product_po.description = None
+        product_po.category = None
+        product_po.brand = None
+        product_po.source_images = []
+        product_po.attributes = {}
+
+        session = AsyncMock()
+        session.get = AsyncMock(return_value=task_po)
+        exec_result = MagicMock()
+        exec_result.scalar_one_or_none.return_value = product_po
+        session.execute = AsyncMock(return_value=exec_result)
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=session)
+        cm.__aexit__ = AsyncMock(return_value=None)
+
+        failure = PushResult(
+            success=False, platform=Platform.AMAZON, error="boom", error_code="HTTP_500"
+        )
+
+        with (
+            patch("src.graph.listing_workflow.get_db_session", return_value=cm),
+            patch("src.graph.listing_workflow.listing_persistence") as mock_persist,
+            patch("src.graph.listing_workflow.ListingPushService") as mock_push_cls,
+        ):
+            mock_persist.load_asset_packages = AsyncMock(return_value={})
+            mock_persist.load_copywriting_packages = AsyncMock(return_value={})
+            mock_persist.update_task_status = AsyncMock()
+            mock_persist.save_push_results = AsyncMock()
+            mock_persist.load_push_result_statuses = AsyncMock(
+                return_value={"amazon": False}
+            )
+
+            mock_push = MagicMock()
+            mock_push.push_to_platforms = AsyncMock(return_value={"amazon": failure})
+            mock_push.retry_failed = AsyncMock(return_value={"amazon": failure})
+            mock_push_cls.return_value = mock_push
+
+            workflow = ListingWorkflow()
+            outcome = await workflow.resume_push(
+                task_id=1, tenant_id="t1", platforms=[Platform.AMAZON]
+            )
+
+            assert outcome["final_status"] == "reviewing"
+
+    @pytest.mark.asyncio
+    async def test_resume_push_task_not_found(self) -> None:
+        """任务不存在或租户不匹配 → ValueError。"""
+        session = AsyncMock()
+        session.get = AsyncMock(return_value=None)
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=session)
+        cm.__aexit__ = AsyncMock(return_value=None)
+
+        with patch("src.graph.listing_workflow.get_db_session", return_value=cm):
+            workflow = ListingWorkflow()
+            with pytest.raises(ValueError, match="不存在"):
+                await workflow.resume_push(
+                    task_id=999, tenant_id="t1", platforms=[Platform.AMAZON]
+                )

@@ -16,17 +16,20 @@ from typing import Any
 
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
+from sqlalchemy import select
 
 from src.agents.listing_asset_loader import ListingAssetLoader
 from src.agents.listing_asset_optimizer import AssetOptimizerAgent
 from src.agents.listing_compliance_checker import ComplianceCheckerAgent
 from src.agents.listing_copywriter import AICopywritingAgent
 from src.agents.listing_push_service import ListingPushService
+from src.db.listing_models import ListingProductPO, ListingTaskPO
 from src.db.postgres import get_db_session
 from src.graph import listing_persistence
 from src.graph.listing_state import ListingState
 from src.models.listing import (
     ComplianceStatus,
+    ImageRef,
     ListingProduct,
     ListingTask,
     Platform,
@@ -194,8 +197,13 @@ class ListingWorkflow:
         try:
             agent = AssetOptimizerAgent(settings=self._settings)
             result = agent.execute_sync(state)
+            packages = result.get("asset_packages", state.asset_packages)
+            if state.task_id is not None:
+                await listing_persistence.save_asset_packages(
+                    state.task_id, state.tenant_id, packages
+                )
             return {
-                "asset_packages": result.get("asset_packages", state.asset_packages),
+                "asset_packages": packages,
                 "current_step": "assets_optimized",
             }
         except Exception as e:
@@ -216,8 +224,13 @@ class ListingWorkflow:
         try:
             agent = AICopywritingAgent(settings=self._settings)
             result = await agent.execute(state)
+            packages = result.get("copywriting_packages", {})
+            if state.task_id is not None:
+                await listing_persistence.save_copywriting_packages(
+                    state.task_id, state.tenant_id, packages
+                )
             return {
-                "copywriting_packages": result.get("copywriting_packages", {}),
+                "copywriting_packages": packages,
                 "current_step": "copy_generated",
             }
         except Exception as e:
@@ -243,6 +256,10 @@ class ListingWorkflow:
         if blocked:
             logger.warning(
                 f"合规阻断平台: {[p.value for p in blocked]}，任务挂起等待人工审核"
+            )
+        if state.task_id is not None:
+            await listing_persistence.save_compliance_reports(
+                state.task_id, state.tenant_id, reports
             )
         return {
             "compliance_reports": reports,
@@ -350,11 +367,126 @@ class ListingWorkflow:
         product: ListingProduct | None,
         target_platforms: list[Platform],
         thread_id: str = "default",
+        task_id: int | None = None,
+        tenant_id: str = "",
     ) -> dict:
-        """执行刊登工作流。"""
+        """执行刊登工作流。
+
+        Args:
+            product: 标准化商品；None 时走 import 失败快速终止。
+            target_platforms: 目标平台。
+            thread_id: LangGraph 会话 ID。
+            task_id: 关联刊登任务 ID；提供时各阶段产物与任务状态持久化。
+            tenant_id: 租户 ID（持久化与资产加载的租户隔离）。
+        """
+        if task_id is not None:
+            await listing_persistence.update_task_status(
+                task_id, tenant_id, TaskStatus.GENERATING.value,
+                workflow_state="import_product",
+            )
         config = {"configurable": {"thread_id": thread_id}}
         initial_state = ListingState(
             product=product,
             target_platforms=target_platforms,
+            task_id=task_id,
+            tenant_id=tenant_id,
         )
         return await self.app.ainvoke(initial_state, config=config)
+
+    async def resume_push(
+        self,
+        *,
+        task_id: int,
+        tenant_id: str,
+        platforms: list[Platform],
+    ) -> dict[str, Any]:
+        """人工审核后恢复推送。
+
+        从数据库加载商品、素材包、文案包，仅推送指定平台
+        （显式列出的合规 FAIL 平台视为人工确认放行）。
+        终态按任务累计推送结果计算：
+            全部目标平台成功 → published；部分成功 → partial；
+            全部失败 → reviewing（保持挂起，可再次恢复）。
+
+        Args:
+            task_id: 刊登任务 ID。
+            tenant_id: 租户 ID。
+            platforms: 本次要推送的平台（须为目标平台子集）。
+
+        Returns:
+            {"push_results": dict[str, PushResult], "final_status": str}
+
+        Raises:
+            ValueError: 任务/商品不存在、租户不匹配或无可推送平台。
+        """
+        async with get_db_session() as session:
+            task_po = await session.get(ListingTaskPO, task_id)
+            if not task_po or task_po.tenant_id != tenant_id:
+                raise ValueError(f"刊登任务 {task_id} 不存在")
+            target = [Platform(p) for p in task_po.target_platforms]
+            result = await session.execute(
+                select(ListingProductPO).where(
+                    ListingProductPO.sku == task_po.product_sku,
+                    ListingProductPO.tenant_id == tenant_id,
+                )
+            )
+            product_po = result.scalar_one_or_none()
+            if not product_po:
+                raise ValueError(f"商品 {task_po.product_sku} 不存在")
+
+        push_set = [p for p in platforms if p in target]
+        if not push_set:
+            raise ValueError("无可推送平台：所申请平台均不在任务目标平台内")
+
+        product = ListingProduct(
+            id=product_po.id,
+            sku=product_po.sku,
+            title=product_po.title,
+            description=product_po.description,
+            category=product_po.category,
+            brand=product_po.brand,
+            source_images=[ImageRef(**img) for img in (product_po.source_images or [])],
+            attributes=product_po.attributes or {},
+        )
+        asset_packages = await listing_persistence.load_asset_packages(
+            task_id, tenant_id
+        )
+        copywriting_packages = await listing_persistence.load_copywriting_packages(
+            task_id, tenant_id
+        )
+
+        await listing_persistence.update_task_status(
+            task_id, tenant_id, TaskStatus.PUSHING.value, workflow_state="resume_push"
+        )
+
+        results = await self._push_with_retry(
+            product=product,
+            asset_packages=asset_packages,
+            copywriting_packages=copywriting_packages,
+            platforms=push_set,
+            task_id=task_id,
+            tenant_id=tenant_id,
+        )
+
+        # 终态基于任务累计推送结果（含历史成功）
+        statuses = await listing_persistence.load_push_result_statuses(
+            task_id, tenant_id
+        )
+        succeeded = {name for name, ok in statuses.items() if ok}
+        target_names = {p.value for p in target}
+        if succeeded >= target_names:
+            final_status = TaskStatus.PUBLISHED.value
+        elif succeeded:
+            final_status = TaskStatus.PARTIAL.value
+        else:
+            final_status = TaskStatus.REVIEWING.value
+
+        await listing_persistence.update_task_status(
+            task_id, tenant_id, final_status, workflow_state="resume_push_done"
+        )
+
+        logger.info(
+            f"恢复推送完成: task_id={task_id}, final={final_status}, "
+            f"pushed={sorted(succeeded)}"
+        )
+        return {"push_results": results, "final_status": final_status}
