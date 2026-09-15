@@ -39,7 +39,12 @@ from src.db.listing_models import (
 )
 from src.db.postgres import get_db_session
 from src.db.repository import BaseRepository
-from src.graph.listing_persistence import update_task_status
+from src.graph.listing_persistence import (
+    load_asset_packages,
+    load_copywriting_packages,
+    save_compliance_reports,
+    update_task_status,
+)
 from src.models.listing import ComplianceReport, ComplianceStatus, ListingProduct, Platform
 from src.models.listing_converter import product_to_listing
 
@@ -449,41 +454,31 @@ async def run_compliance_check(
 
         product = _po_to_product(product_po)
         platforms = [Platform(p) for p in task_po.target_platforms]
+
+        # 加载工作流已持久化的真实产物，而非凭空捏造
+        copywriting_packages = await load_copywriting_packages(task_id, auth.tenant_id)
+        if not copywriting_packages:
+            return ApiResponse(
+                code=409,
+                message=f"任务 {task_id} 尚无已生成文案，请先执行生成流程",
+                data=None,
+            )
+        asset_packages = await load_asset_packages(task_id, auth.tenant_id)
+
         state = ListingState(
             product=product,
             target_platforms=platforms,
+            task_id=task_id,
+            tenant_id=auth.tenant_id,
+            asset_packages=asset_packages,
+            copywriting_packages=copywriting_packages,
         )
-        # 为每个平台创建空的文案包以触发检查
-        for platform in platforms:
-            from src.models.listing import CopywritingPackage
-
-            state.copywriting_packages[platform] = CopywritingPackage(
-                listing_task_id=task_id,
-                platform=platform,
-                language="en",
-                title=product.title,
-                bullet_points=[],
-                description=product.description or "",
-            )
 
         agent = ComplianceCheckerAgent()
         result = agent.execute_sync(state)
 
-        # 保存到数据库
-        for platform, report in result["compliance_reports"].items():
-            report_po_data = {
-                "overall": report.overall.value,
-                "image_issues": [i.model_dump() for i in report.image_issues],
-                "text_issues": [i.model_dump() for i in report.text_issues],
-                "forbidden_words": report.forbidden_words,
-            }
-            po = ComplianceReportPO(
-                tenant_id=auth.tenant_id,
-                task_id=task_id,
-                platform=platform.value,
-                report_data=report_po_data,
-            )
-            session.add(po)
+        # upsert 保存，重复复查不产生重复行
+        await save_compliance_reports(task_id, auth.tenant_id, result["compliance_reports"])
 
     reports = {
         platform.value: _report_to_response(report)
