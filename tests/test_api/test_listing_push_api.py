@@ -165,3 +165,132 @@ class TestListingPushAPI:
             response = client.get("/api/v1/listing/tasks/9999/push-results")
             data = response.json()
             assert data["code"] == 404
+
+
+class TestResumePushAPI:
+    """测试人工审核后恢复推送 API。"""
+
+    def test_resume_push_not_reviewing_returns_409(self, client: TestClient) -> None:
+        """非 reviewing 状态不可恢复推送。"""
+        mock_task_po = _make_task_po(id=1, status="pushing", tenant_id="dev")
+        cm, mock_session = _mock_get_db()
+        mock_session.get = AsyncMock(return_value=mock_task_po)
+
+        with patch("src.api.router.listing_push.get_db_session", return_value=cm):
+            resp = client.post("/api/v1/listing/tasks/1/resume-push", json={})
+
+        assert resp.json()["code"] == 409
+
+    def test_resume_push_not_found(self, client: TestClient) -> None:
+        """任务不存在返回 404。"""
+        cm, mock_session = _mock_get_db()
+        mock_session.get = AsyncMock(return_value=None)
+
+        with patch("src.api.router.listing_push.get_db_session", return_value=cm):
+            resp = client.post("/api/v1/listing/tasks/999/resume-push", json={})
+
+        assert resp.json()["code"] == 404
+
+    def test_resume_push_default_excludes_blocked(self, client: TestClient) -> None:
+        """不指定平台时，仅推送未被合规阻断的平台。"""
+        mock_task_po = _make_task_po(
+            id=1,
+            status="reviewing",
+            tenant_id="dev",
+            target_platforms=["amazon", "ebay"],
+        )
+        cm, mock_session = _mock_get_db()
+        mock_session.get = AsyncMock(return_value=mock_task_po)
+
+        outcome = {
+            "push_results": {
+                "amazon": PushResult(
+                    success=True, platform=Platform.AMAZON, listing_id="L-8"
+                )
+            },
+            "final_status": "partial",
+        }
+
+        with (
+            patch("src.api.router.listing_push.get_db_session", return_value=cm),
+            patch(
+                "src.api.router.listing_push.load_blocked_platforms",
+                new_callable=AsyncMock,
+            ) as mock_blocked,
+            patch("src.api.router.listing_push.ListingWorkflow") as mock_workflow_cls,
+        ):
+            mock_blocked.return_value = {Platform.EBAY}
+            mock_workflow_cls.return_value.resume_push = AsyncMock(
+                return_value=outcome
+            )
+
+            resp = client.post("/api/v1/listing/tasks/1/resume-push", json={})
+
+        data = resp.json()
+        assert data["code"] == 200
+        assert data["data"]["status"] == "partial"
+        called = mock_workflow_cls.return_value.resume_push.call_args
+        assert called.kwargs["platforms"] == [Platform.AMAZON]
+
+    def test_resume_push_explicit_platforms_override_blocked(
+        self, client: TestClient
+    ) -> None:
+        """显式列出被阻断平台视为人工放行。"""
+        mock_task_po = _make_task_po(
+            id=1,
+            status="reviewing",
+            tenant_id="dev",
+            target_platforms=["amazon", "ebay"],
+        )
+        cm, mock_session = _mock_get_db()
+        mock_session.get = AsyncMock(return_value=mock_task_po)
+
+        outcome = {
+            "push_results": {
+                "ebay": PushResult(success=True, platform=Platform.EBAY, listing_id="E-9")
+            },
+            "final_status": "partial",
+        }
+
+        with (
+            patch("src.api.router.listing_push.get_db_session", return_value=cm),
+            patch(
+                "src.api.router.listing_push.load_blocked_platforms",
+                new_callable=AsyncMock,
+            ) as mock_blocked,
+            patch("src.api.router.listing_push.ListingWorkflow") as mock_workflow_cls,
+        ):
+            mock_blocked.return_value = {Platform.EBAY}
+            mock_workflow_cls.return_value.resume_push = AsyncMock(
+                return_value=outcome
+            )
+
+            resp = client.post(
+                "/api/v1/listing/tasks/1/resume-push", json={"platforms": ["ebay"]}
+            )
+
+        assert resp.json()["code"] == 200
+        called = mock_workflow_cls.return_value.resume_push.call_args
+        assert called.kwargs["platforms"] == [Platform.EBAY]
+
+    def test_resume_push_no_eligible_platform(self, client: TestClient) -> None:
+        """所申请平台均不在目标平台内时返回 400。"""
+        mock_task_po = _make_task_po(
+            id=1, status="reviewing", tenant_id="dev", target_platforms=["amazon"]
+        )
+        cm, mock_session = _mock_get_db()
+        mock_session.get = AsyncMock(return_value=mock_task_po)
+
+        with (
+            patch("src.api.router.listing_push.get_db_session", return_value=cm),
+            patch(
+                "src.api.router.listing_push.load_blocked_platforms",
+                new_callable=AsyncMock,
+                return_value=set(),
+            ),
+        ):
+            resp = client.post(
+                "/api/v1/listing/tasks/1/resume-push", json={"platforms": ["shopify"]}
+            )
+
+        assert resp.json()["code"] == 400

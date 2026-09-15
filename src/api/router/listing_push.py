@@ -25,13 +25,16 @@ from src.api.schema.listing import (
     PushListingRequest,
     PushResponse,
     PushResultResponse,
+    ResumePushRequest,
 )
 from src.auth.api_key import require_auth
 from src.auth.context import AuthContext
 from src.db.listing_models import ListingProductPO, ListingTaskPO, TaskResultPO
 from src.db.postgres import get_db_session
 from src.db.repository import BaseRepository
-from src.models.listing import Platform
+from src.graph.listing_persistence import load_blocked_platforms
+from src.graph.listing_workflow import ListingWorkflow
+from src.models.listing import Platform, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -287,3 +290,79 @@ async def get_push_results(
             message="成功",
             data=results,
         )
+
+
+@router.post(
+    "/tasks/{task_id}/resume-push",
+    response_model=ApiResponse[PushResponse],
+    status_code=status.HTTP_200_OK,
+    summary="人工审核后恢复推送",
+)
+async def resume_push(
+    task_id: int,
+    auth: AuthContext = Depends(require_auth),
+    request: ResumePushRequest | None = None,
+) -> ApiResponse[PushResponse]:
+    """对处于 reviewing 状态的任务恢复推送。
+
+    不指定平台时推送所有未被合规阻断的平台；
+    显式列出合规 FAIL 平台视为人工确认放行。
+
+    Args:
+        task_id: 任务ID。
+        auth: 认证上下文。
+        request: 恢复推送请求（可选）。
+
+    Returns:
+        各平台推送结果与任务最新状态。
+    """
+    async with get_db_session() as session:
+        task_po = await session.get(ListingTaskPO, task_id)
+        if not task_po or task_po.tenant_id != auth.tenant_id:
+            return ApiResponse(code=404, message=f"任务 {task_id} 不存在", data=None)
+        if task_po.status != TaskStatus.REVIEWING.value:
+            return ApiResponse(
+                code=409,
+                message=f"任务状态为 {task_po.status}，仅 reviewing 状态可恢复推送",
+                data=None,
+            )
+        target = [Platform(p) for p in task_po.target_platforms]
+
+    blocked = await load_blocked_platforms(task_id, auth.tenant_id)
+    if request and request.platforms:
+        push_platforms = [p for p in request.platforms if p in target]
+    else:
+        push_platforms = [p for p in target if p not in blocked]
+    if not push_platforms:
+        return ApiResponse(code=400, message="无可推送平台", data=None)
+
+    workflow = ListingWorkflow()
+    try:
+        outcome = await workflow.resume_push(
+            task_id=task_id,
+            tenant_id=auth.tenant_id,
+            platforms=push_platforms,
+        )
+    except ValueError as e:
+        return ApiResponse(code=404, message=str(e), data=None)
+
+    results = [
+        PushResultResponse(
+            platform=name,
+            success=r.success,
+            listing_id=r.listing_id,
+            url=r.url,
+            error=r.error,
+        )
+        for name, r in outcome["push_results"].items()
+    ]
+
+    return ApiResponse(
+        code=200,
+        message="恢复推送完成",
+        data=PushResponse(
+            task_id=task_id,
+            results=results,
+            status=outcome["final_status"],
+        ),
+    )

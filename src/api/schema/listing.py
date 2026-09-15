@@ -92,6 +92,15 @@ class PushListingRequest(BaseModel):
     )
 
 
+class ResumePushRequest(BaseModel):
+    """人工审核后恢复推送请求。"""
+
+    platforms: list[Platform] = Field(
+        default_factory=list,
+        description="要推送的平台；空 = 所有未被合规阻断的平台（显式列出 FAIL 平台视为人工放行）",
+    )
+
+
 class PushResultResponse(BaseModel):
     """单个平台推送结果。"""
 
