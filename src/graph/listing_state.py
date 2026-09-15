@@ -59,5 +59,6 @@ class ListingState(BaseModel):
     errors: Annotated[list[dict[str, Any]], add] = Field(
         default_factory=list, description="节点错误（累加）"
     )
-    current_step: str = ""
+    # 并行节点（optimize_assets/generate_copy）同 superstep 写本字段，需 last-write-wins reducer
+    current_step: Annotated[str, lambda _old, new: new] = ""
     step_results: dict[str, Any] = Field(default_factory=dict)

@@ -171,33 +171,58 @@ class ListingWorkflow:
     async def _asset_optimize_node(self, state: ListingState) -> dict:
         """素材优化节点：调用 AssetOptimizerAgent。"""
         if not state.product:
-            return {"error": "No product available for asset optimization"}
+            return {
+                "errors": [
+                    {"node": "optimize_assets", "error": "No product available"}
+                ],
+                "current_step": "optimize_skipped",
+            }
 
         try:
             agent = AssetOptimizerAgent(settings=self._settings)
             result = agent.execute_sync(state)
-            return {"asset_packages": result.get("asset_packages", state.asset_packages)}
+            return {
+                "asset_packages": result.get("asset_packages", state.asset_packages),
+                "current_step": "assets_optimized",
+            }
         except Exception as e:
-            logger.error(f"Asset optimization failed: {e}")
-            return {"asset_packages": state.asset_packages}
+            logger.exception(f"Asset optimization failed: {e}")
+            return {
+                "errors": [{"node": "optimize_assets", "error": str(e)}],
+                "current_step": "optimize_failed",
+            }
 
     async def _copy_node(self, state: ListingState) -> dict:
         """文案生成节点：调用 AICopywritingAgent（含 LLM）。"""
         if not state.product:
-            return {"error": "No product available for copywriting"}
+            return {
+                "errors": [{"node": "generate_copy", "error": "No product available"}],
+                "current_step": "copy_skipped",
+            }
 
         try:
             agent = AICopywritingAgent(settings=self._settings)
             result = await agent.execute(state)
-            return {"copywriting_packages": result.get("copywriting_packages", {})}
+            return {
+                "copywriting_packages": result.get("copywriting_packages", {}),
+                "current_step": "copy_generated",
+            }
         except Exception as e:
-            logger.error(f"Copywriting generation failed: {e}")
-            return {"copywriting_packages": {}}
+            logger.exception(f"Copywriting generation failed: {e}")
+            return {
+                "errors": [{"node": "generate_copy", "error": str(e)}],
+                "current_step": "copy_failed",
+            }
 
     async def _compliance_node(self, state: ListingState) -> dict:
         """合规检查节点。"""
         if not state.product:
-            return {"error": "No product available", "current_step": "compliance_failed"}
+            return {
+                "errors": [
+                    {"node": "compliance_check", "error": "No product available"}
+                ],
+                "current_step": "compliance_failed",
+            }
         agent = ComplianceCheckerAgent(settings=self._settings)
         result = agent.execute_sync(state)
         return {

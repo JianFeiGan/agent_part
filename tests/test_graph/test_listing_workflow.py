@@ -100,3 +100,38 @@ class TestListingWorkflow:
             assert result.get("error") == "No product provided"
             assert not result.get("copywriting_packages")
             mock_push_cls.return_value.push_to_platforms.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_asset_optimize_error_is_recorded(
+        self, product: ListingProduct
+    ) -> None:
+        """素材优化异常记入 state.errors，流程继续（文案仍生成）。"""
+        with (
+            patch("src.graph.listing_workflow.AssetOptimizerAgent") as mock_agent_cls,
+            patch("src.graph.listing_workflow.ListingPushService") as mock_push_cls,
+        ):
+            mock_agent = MagicMock()
+            mock_agent.execute_sync = MagicMock(side_effect=RuntimeError("optimizer boom"))
+            mock_agent_cls.return_value = mock_agent
+
+            mock_push = MagicMock()
+            mock_push.push_to_platforms = AsyncMock(
+                return_value={
+                    "amazon": PushResult(
+                        success=True, platform=Platform.AMAZON, listing_id="L-1"
+                    )
+                }
+            )
+            mock_push_cls.return_value = mock_push
+
+            workflow = ListingWorkflow()
+            result = await workflow.run(
+                product=product,
+                target_platforms=[Platform.AMAZON],
+                thread_id="wf-err-001",
+            )
+
+            errors = result.get("errors", [])
+            assert any(e["node"] == "optimize_assets" for e in errors)
+            # 文案节点不受影响，正常产出
+            assert result.get("copywriting_packages")
