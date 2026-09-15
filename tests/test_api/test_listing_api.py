@@ -212,7 +212,7 @@ class TestListingTaskAPI:
             assert data["data"] == []
 
     def test_create_and_list_task(self, client: TestClient) -> None:
-        """测试完整流程：创建任务 → 查询任务。"""
+        """测试完整流程：创建任务（pending）→ 查询任务；后台工作流被隔离 mock。"""
         mock_product_po = _make_product_po(sku="FLOW-TEST-001", title="Flow Test Product")
         mock_task_po = _make_task_po(id=1, product_sku="FLOW-TEST-001", target_platforms=["amazon"])
         mock_product_repo = AsyncMock()
@@ -222,8 +222,6 @@ class TestListingTaskAPI:
         mock_task_repo.list = AsyncMock(return_value=[mock_task_po])
 
         cm, _ = _mock_get_db()
-
-        call_count = [0]
 
         def repo_factory(model, session):
             if model is ListingProductPO:
@@ -235,8 +233,11 @@ class TestListingTaskAPI:
         with (
             patch("src.api.router.listing.get_db_session", return_value=cm),
             patch("src.api.router.listing.BaseRepository", side_effect=repo_factory),
+            patch("src.graph.listing_workflow.ListingWorkflow") as mock_workflow_cls,
         ):
-            # 创建任务
+            mock_workflow_cls.return_value.run = AsyncMock(return_value={})
+
+            # 创建任务：初始状态为 pending
             task_resp = client.post(
                 "/api/v1/listing/tasks",
                 json={
@@ -247,6 +248,10 @@ class TestListingTaskAPI:
             assert task_resp.status_code == 201
             task_data = task_resp.json()
             assert task_data["data"]["product_sku"] == "FLOW-TEST-001"
+            assert task_data["data"]["status"] == "pending"
+
+            # 任务落库状态为 pending（非法的 "running" 已移除）
+            assert mock_task_repo.create.call_args.kwargs["status"] == "pending"
 
             # 查询任务列表
             list_resp = client.get("/api/v1/listing/tasks")

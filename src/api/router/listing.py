@@ -12,6 +12,7 @@ Description:
 2026-04-25
 """
 
+import asyncio
 import logging
 from decimal import Decimal
 
@@ -38,12 +39,44 @@ from src.db.listing_models import (
 )
 from src.db.postgres import get_db_session
 from src.db.repository import BaseRepository
+from src.graph.listing_persistence import update_task_status
 from src.models.listing import ComplianceReport, ComplianceStatus, ListingProduct, Platform
 from src.models.listing_converter import product_to_listing
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _run_listing_workflow(
+    *,
+    task_id: int,
+    tenant_id: str,
+    product: ListingProduct,
+    target_platforms: list[Platform],
+) -> None:
+    """后台执行刊登工作流。
+
+    状态推进与产物持久化由工作流内部完成；
+    此处仅兜底未捕获异常，将任务标记为 failed。
+    """
+    from src.graph.listing_workflow import ListingWorkflow
+
+    try:
+        workflow = ListingWorkflow()
+        await workflow.run(
+            product=product,
+            target_platforms=target_platforms,
+            thread_id=f"listing_{task_id}",
+            task_id=task_id,
+            tenant_id=tenant_id,
+        )
+        logger.info(f"刊登任务 {task_id} 工作流执行结束")
+    except Exception as e:
+        logger.exception(f"刊登任务 {task_id} 工作流执行失败: {e}")
+        await update_task_status(
+            task_id, tenant_id, "failed", workflow_state="workflow_error"
+        )
 
 
 def _po_to_product(po: ListingProductPO) -> ListingProduct:
@@ -195,36 +228,19 @@ async def create_task(
             tenant_id=auth.tenant_id,
             product_sku=request.product_sku,
             target_platforms=[p.value for p in request.target_platforms],
-            status="running",
+            status="pending",
         )
 
     # 异步启动刊登工作流
-    import asyncio
-
-    from src.graph.listing_workflow import ListingWorkflow
-
     product = _po_to_product(product_po)
-    workflow = ListingWorkflow()
-
-    async def _run_workflow() -> None:
-        """后台执行刊登工作流并更新任务状态。"""
-        try:
-            result = await workflow.run(
-                product=product,
-                target_platforms=request.target_platforms,
-                thread_id=f"listing_{task_po.id}",
-            )
-            async with get_db_session() as session:
-                task_repo = BaseRepository(ListingTaskPO, session)
-                await task_repo.update(task_po.id, status="completed")
-            logger.info(f"刊登任务 {task_po.id} 工作流执行完成")
-        except Exception as e:
-            logger.error(f"刊登任务 {task_po.id} 工作流执行失败: {e}")
-            async with get_db_session() as session:
-                task_repo = BaseRepository(ListingTaskPO, session)
-                await task_repo.update(task_po.id, status="failed")
-
-    asyncio.create_task(_run_workflow())
+    asyncio.create_task(
+        _run_listing_workflow(
+            task_id=task_po.id,
+            tenant_id=auth.tenant_id,
+            product=product,
+            target_platforms=request.target_platforms,
+        )
+    )
 
     return ApiResponse(
         code=200,
@@ -233,7 +249,7 @@ async def create_task(
             task_id=task_po.id,
             product_sku=request.product_sku,
             target_platforms=[p.value for p in request.target_platforms],
-            status="running",
+            status="pending",
         ),
     )
 
@@ -289,38 +305,24 @@ async def create_task_from_visual(
             else:
                 raise
 
+        listing_product.id = product_po.id
+
         task_repo = BaseRepository(ListingTaskPO, session)
         task_po = await task_repo.create(
             tenant_id=auth.tenant_id,
             product_sku=listing_product.sku,
             target_platforms=[p.value for p in request.target_platforms],
-            status="running",
+            status="pending",
         )
 
-    import asyncio
-
-    from src.graph.listing_workflow import ListingWorkflow
-
-    workflow = ListingWorkflow()
-
-    async def _run_workflow() -> None:
-        """后台执行刊登工作流。"""
-        try:
-            await workflow.run(
-                product=listing_product,
-                target_platforms=request.target_platforms,
-                thread_id=f"listing_{task_po.id}",
-            )
-            async with get_db_session() as session:
-                task_repo = BaseRepository(ListingTaskPO, session)
-                await task_repo.update(task_po.id, status="completed")
-        except Exception as e:
-            logger.error(f"刊登任务 {task_po.id} 失败: {e}")
-            async with get_db_session() as session:
-                task_repo = BaseRepository(ListingTaskPO, session)
-                await task_repo.update(task_po.id, status="failed")
-
-    asyncio.create_task(_run_workflow())
+    asyncio.create_task(
+        _run_listing_workflow(
+            task_id=task_po.id,
+            tenant_id=auth.tenant_id,
+            product=listing_product,
+            target_platforms=request.target_platforms,
+        )
+    )
 
     return ApiResponse(
         code=200,
@@ -329,7 +331,7 @@ async def create_task_from_visual(
             task_id=task_po.id,
             product_sku=listing_product.sku,
             target_platforms=[p.value for p in request.target_platforms],
-            status="running",
+            status="pending",
         ),
     )
 
