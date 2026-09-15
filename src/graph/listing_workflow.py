@@ -26,6 +26,7 @@ from src.db.postgres import get_db_session
 from src.graph import listing_persistence
 from src.graph.listing_state import ListingState
 from src.models.listing import (
+    ComplianceStatus,
     ListingProduct,
     ListingTask,
     Platform,
@@ -75,8 +76,11 @@ class ListingWorkflow:
         )
         self._builder.add_edge("optimize_assets", "compliance_check")
         self._builder.add_edge("generate_copy", "compliance_check")
-        # 合规门禁路由在 Task 6 替换为条件边
-        self._builder.add_edge("compliance_check", "platform_push")
+        self._builder.add_conditional_edges(
+            "compliance_check",
+            self._route_after_compliance,
+            ["platform_push", "finalize"],
+        )
         self._builder.add_edge("platform_push", "finalize")
         self._builder.add_edge("finalize", END)
 
@@ -86,6 +90,15 @@ class ListingWorkflow:
         if state.error:
             return ["finalize"]
         return ["optimize_assets", "generate_copy"]
+
+    @staticmethod
+    def _route_after_compliance(state: ListingState) -> list[str]:
+        """合规门禁：任一平台 FAIL → 挂起人工审核（finalize，不推送）。"""
+        if state.error:
+            return ["finalize"]
+        if state.blocked_platforms:
+            return ["finalize"]
+        return ["platform_push"]
 
     async def _finalize_node(self, state: ListingState) -> dict:
         """汇总工作流结果，计算并持久化任务终态。
@@ -215,7 +228,7 @@ class ListingWorkflow:
             }
 
     async def _compliance_node(self, state: ListingState) -> dict:
-        """合规检查节点。"""
+        """合规检查节点：输出报告并标记被阻断平台。"""
         if not state.product:
             return {
                 "errors": [
@@ -225,8 +238,15 @@ class ListingWorkflow:
             }
         agent = ComplianceCheckerAgent(settings=self._settings)
         result = agent.execute_sync(state)
+        reports = result.get("compliance_reports", {})
+        blocked = [p for p, r in reports.items() if r.overall == ComplianceStatus.FAIL]
+        if blocked:
+            logger.warning(
+                f"合规阻断平台: {[p.value for p in blocked]}，任务挂起等待人工审核"
+            )
         return {
-            "compliance_reports": result.get("compliance_reports", {}),
+            "compliance_reports": reports,
+            "blocked_platforms": blocked,
             "current_step": "compliance_checked",
         }
 

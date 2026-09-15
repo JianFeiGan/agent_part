@@ -135,3 +135,64 @@ class TestListingWorkflow:
             assert any(e["node"] == "optimize_assets" for e in errors)
             # 文案节点不受影响，正常产出
             assert result.get("copywriting_packages")
+
+    @pytest.mark.asyncio
+    async def test_compliance_fail_parks_reviewing(
+        self, product: ListingProduct
+    ) -> None:
+        """合规 FAIL → 不推送，任务挂起 reviewing。"""
+        from src.models.listing import ComplianceReport, ComplianceStatus
+
+        fail_report = ComplianceReport(
+            listing_task_id=0,
+            platform=Platform.AMAZON,
+            overall=ComplianceStatus.FAIL,
+        )
+
+        with (
+            patch("src.graph.listing_workflow.ComplianceCheckerAgent") as mock_checker_cls,
+            patch("src.graph.listing_workflow.ListingPushService") as mock_push_cls,
+        ):
+            mock_checker = MagicMock()
+            mock_checker.execute_sync = MagicMock(
+                return_value={"compliance_reports": {Platform.AMAZON: fail_report}}
+            )
+            mock_checker_cls.return_value = mock_checker
+
+            workflow = ListingWorkflow()
+            result = await workflow.run(
+                product=product,
+                target_platforms=[Platform.AMAZON],
+                thread_id="wf-review-001",
+            )
+
+            assert result.get("blocked_platforms") == [Platform.AMAZON]
+            assert result.get("step_results", {}).get("final_status") == "reviewing"
+            mock_push_cls.return_value.push_to_platforms.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_compliance_pass_proceeds_to_push(
+        self, product: ListingProduct
+    ) -> None:
+        """合规全部通过 → 正常推送，终态 published。"""
+        with patch("src.graph.listing_workflow.ListingPushService") as mock_push_cls:
+            mock_push = MagicMock()
+            mock_push.push_to_platforms = AsyncMock(
+                return_value={
+                    "amazon": PushResult(
+                        success=True, platform=Platform.AMAZON, listing_id="L-2"
+                    )
+                }
+            )
+            mock_push_cls.return_value = mock_push
+
+            workflow = ListingWorkflow()
+            result = await workflow.run(
+                product=product,
+                target_platforms=[Platform.AMAZON],
+                thread_id="wf-pass-001",
+            )
+
+            assert result.get("blocked_platforms") == []
+            assert result.get("step_results", {}).get("final_status") == "published"
+            mock_push.push_to_platforms.assert_called_once()
