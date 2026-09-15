@@ -250,39 +250,98 @@ class ListingWorkflow:
             "current_step": "compliance_checked",
         }
 
-    async def _push_node(self, state: ListingState) -> dict:
-        """平台推送节点：调用 ListingPushService 并行推送到各平台。"""
-        if not state.product:
-            return {"error": "No product available", "current_step": "push_failed"}
+    async def _push_with_retry(
+        self,
+        *,
+        product: ListingProduct,
+        asset_packages: dict[Platform, Any],
+        copywriting_packages: dict[Platform, Any],
+        platforms: list[Platform],
+        task_id: int | None,
+        tenant_id: str,
+    ) -> dict[str, Any]:
+        """推送指定平台：失败后自动重试一次非永久错误，并按需持久化结果。
 
-        try:
-            push_service = ListingPushService()
-            task = ListingTask(
-                product_id=state.product.id or 0,
-                target_platforms=state.target_platforms,
-                status=TaskStatus.PUSHING,
+        Args:
+            product: 源商品。
+            asset_packages: 各平台素材包。
+            copywriting_packages: 各平台文案包。
+            platforms: 本次要推送的平台。
+            task_id: 关联任务 ID（None 时跳过持久化）。
+            tenant_id: 租户 ID。
+
+        Returns:
+            各平台推送结果 {platform_name: PushResult}。
+        """
+        push_service = ListingPushService()
+        task = ListingTask(
+            id=task_id,
+            product_id=product.id or 0,
+            target_platforms=platforms,
+            status=TaskStatus.PUSHING,
+        )
+
+        results = await push_service.push_to_platforms(
+            product=product,
+            asset_packages=asset_packages,
+            copywriting_packages=copywriting_packages,
+            task=task,
+        )
+
+        # 对非永久性错误自动重试一次（retry_failed 内部排除 PERMANENT_ERROR）
+        if any(not r.success for r in results.values()):
+            failed_names = [n for n, r in results.items() if not r.success]
+            logger.info(f"推送失败平台 {failed_names}，自动重试一次")
+            results = await push_service.retry_failed(
+                product=product,
+                asset_packages=asset_packages,
+                copywriting_packages=copywriting_packages,
+                task=task,
+                previous_results=results,
             )
 
-            push_results = await push_service.push_to_platforms(
+        if task_id is not None:
+            await listing_persistence.save_push_results(task_id, tenant_id, results)
+
+        return results
+
+    async def _push_node(self, state: ListingState) -> dict:
+        """平台推送节点：并行推送到未被阻断的平台。"""
+        if not state.product:
+            return {
+                "errors": [{"node": "platform_push", "error": "No product available"}],
+                "current_step": "push_failed",
+            }
+
+        # 防御：被阻断平台不推送（正常路由不会到达此分支）
+        push_platforms = [
+            p for p in state.target_platforms if p not in state.blocked_platforms
+        ]
+        if not push_platforms:
+            return {"current_step": "push_skipped"}
+
+        if state.task_id is not None:
+            await listing_persistence.update_task_status(
+                state.task_id,
+                state.tenant_id,
+                TaskStatus.PUSHING.value,
+                workflow_state="platform_push",
+            )
+
+        try:
+            push_results = await self._push_with_retry(
                 product=state.product,
                 asset_packages=state.asset_packages,
                 copywriting_packages=state.copywriting_packages,
-                task=task,
+                platforms=push_platforms,
+                task_id=state.task_id,
+                tenant_id=state.tenant_id,
             )
-
-            # 检查是否全部成功
-            all_success = all(r.success for r in push_results.values())
-            current_step = "push_completed" if all_success else "push_partial"
-
-            return {
-                "push_results": push_results,
-                "current_step": current_step,
-            }
-
+            return {"push_results": push_results, "current_step": "push_executed"}
         except Exception as e:
-            logger.error(f"Platform push failed: {e}")
+            logger.exception(f"Platform push failed: {e}")
             return {
-                "error": str(e),
+                "errors": [{"node": "platform_push", "error": str(e)}],
                 "current_step": "push_failed",
             }
 

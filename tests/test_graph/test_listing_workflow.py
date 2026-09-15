@@ -196,3 +196,76 @@ class TestListingWorkflow:
             assert result.get("blocked_platforms") == []
             assert result.get("step_results", {}).get("final_status") == "published"
             mock_push.push_to_platforms.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_push_auto_retries_transient_failure(
+        self, product: ListingProduct
+    ) -> None:
+        """推送遇非永久错误自动重试一次，重试成功则终态 published。"""
+        transient = PushResult(
+            success=False, platform=Platform.AMAZON, error="timeout", error_code="HTTP_503"
+        )
+        retried = PushResult(success=True, platform=Platform.AMAZON, listing_id="L-3")
+
+        mock_push = MagicMock()
+        mock_push.push_to_platforms = AsyncMock(return_value={"amazon": transient})
+        mock_push.retry_failed = AsyncMock(return_value={"amazon": retried})
+
+        with patch("src.graph.listing_workflow.ListingPushService", return_value=mock_push):
+            workflow = ListingWorkflow()
+            result = await workflow.run(
+                product=product,
+                target_platforms=[Platform.AMAZON],
+                thread_id="wf-retry-001",
+            )
+
+        mock_push.retry_failed.assert_called_once()
+        assert result["push_results"]["amazon"].success is True
+        assert result["step_results"]["final_status"] == "published"
+
+    @pytest.mark.asyncio
+    async def test_push_no_retry_when_all_success(
+        self, product: ListingProduct
+    ) -> None:
+        """全部成功时不触发重试。"""
+        mock_push = MagicMock()
+        mock_push.push_to_platforms = AsyncMock(
+            return_value={
+                "amazon": PushResult(success=True, platform=Platform.AMAZON, listing_id="L-4")
+            }
+        )
+        mock_push.retry_failed = AsyncMock()
+
+        with patch("src.graph.listing_workflow.ListingPushService", return_value=mock_push):
+            workflow = ListingWorkflow()
+            result = await workflow.run(
+                product=product,
+                target_platforms=[Platform.AMAZON],
+                thread_id="wf-noretry-001",
+            )
+
+        mock_push.retry_failed.assert_not_called()
+        assert result["step_results"]["final_status"] == "published"
+
+    @pytest.mark.asyncio
+    async def test_push_all_failed_gives_failed_status(
+        self, product: ListingProduct
+    ) -> None:
+        """重试后仍全部失败 → 终态 failed。"""
+        failure = PushResult(
+            success=False, platform=Platform.AMAZON, error="boom", error_code="HTTP_500"
+        )
+        mock_push = MagicMock()
+        mock_push.push_to_platforms = AsyncMock(return_value={"amazon": failure})
+        mock_push.retry_failed = AsyncMock(return_value={"amazon": failure})
+
+        with patch("src.graph.listing_workflow.ListingPushService", return_value=mock_push):
+            workflow = ListingWorkflow()
+            result = await workflow.run(
+                product=product,
+                target_platforms=[Platform.AMAZON],
+                thread_id="wf-allfail-001",
+            )
+
+        mock_push.retry_failed.assert_called_once()
+        assert result["step_results"]["final_status"] == "failed"
