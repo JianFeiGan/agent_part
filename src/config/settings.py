@@ -169,7 +169,10 @@ class Settings(BaseSettings):
     )
 
     # ==================== 分类记忆配置 ====================
-    memory_enabled: bool = Field(default=False, description="启用分类记忆系统")
+    memory_enabled: bool = Field(
+        default=False,
+        description="（预留）分类记忆子系统 MemoryStore 开关；当前运行时未接入，提案审批记忆走 CategoryMemory",
+    )
     memory_auto_classify: bool = Field(default=True, description="自动分类记忆")
     memory_max_per_type: int = Field(default=100, description="每类记忆最大存储数")
     memory_forget_threshold_days: int = Field(default=90, description="记忆遗忘阈值（天）")

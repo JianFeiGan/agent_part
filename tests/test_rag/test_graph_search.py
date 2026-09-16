@@ -25,7 +25,10 @@ class TestLocalSearch:
 
     @pytest.mark.asyncio
     async def test_local_search(self, service: GraphSearchService) -> None:
-        """测试 Local Search 基本流程。"""
+        """测试 Local Search 基本流程（depth=1 单跳）。"""
+        # 显式单跳深度，保持本用例聚焦基本流程
+        service.settings = MagicMock(graph_rag_local_search_depth=1)
+
         # 构造 mock 实体
         mock_entity = MagicMock()
         mock_entity.id = 1
@@ -35,6 +38,7 @@ class TestLocalSearch:
 
         # 构造 mock 边
         mock_edge = MagicMock()
+        mock_edge.id = 100
         mock_edge.source_entity_id = 1
         mock_edge.target_entity_id = 2
         mock_edge.relationship_type = "具有功能"
@@ -47,9 +51,6 @@ class TestLocalSearch:
         mock_result = MagicMock()
         mock_result.scalars = MagicMock(return_value=mock_scalars)
 
-        mock_session = AsyncMock()
-        mock_session.execute = AsyncMock(return_value=mock_result)
-
         # 第二次 execute 返回边
         mock_edge_scalars = MagicMock()
         mock_edge_scalars.all = MagicMock(return_value=[mock_edge])
@@ -58,6 +59,7 @@ class TestLocalSearch:
         mock_edge_result.scalars = MagicMock(return_value=mock_edge_scalars)
 
         # 交替返回实体查询和边查询
+        mock_session = AsyncMock()
         mock_session.execute = AsyncMock(side_effect=[mock_result, mock_edge_result])
 
         # Mock LLM
@@ -75,6 +77,47 @@ class TestLocalSearch:
         assert result.search_mode == "local"
         assert result.entities_used == 1
         assert "智能手表" in result.context
+
+    @pytest.mark.asyncio
+    async def test_local_search_multi_hop(self, service: GraphSearchService) -> None:
+        """测试 depth=2 时邻居实体被逐跳扩展进子图。"""
+        service.settings = MagicMock(graph_rag_local_search_depth=2)
+
+        seed = MagicMock()
+        seed.id, seed.name, seed.entity_type, seed.description = 1, "智能手表", "产品", "健康监测"
+        neighbor = MagicMock()
+        neighbor.id, neighbor.name = 2, "心率传感器"
+        neighbor.entity_type, neighbor.description = "技术", "监测心率"
+
+        edge = MagicMock()
+        edge.id, edge.source_entity_id, edge.target_entity_id = 100, 1, 2
+        edge.relationship_type = "搭载"
+        edge.evidence = "智能手表搭载心率传感器"
+
+        def _result(items: list) -> MagicMock:
+            scalars = MagicMock()
+            scalars.all = MagicMock(return_value=items)
+            r = MagicMock()
+            r.scalars = MagicMock(return_value=scalars)
+            return r
+
+        mock_session = AsyncMock()
+        # 调用顺序：种子实体 -> 第1跳边 -> 邻居实体 -> 第2跳边（空，终止）
+        mock_session.execute = AsyncMock(
+            side_effect=[_result([seed]), _result([edge]), _result([neighbor]), _result([])]
+        )
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content="答案"))
+
+        with patch.object(service, "_get_llm", return_value=mock_llm):
+            result = await service._local_search(
+                mock_session, query="智能手表", category="digital"
+            )
+
+        assert result.entities_used == 2
+        assert "心率传感器" in result.context
+        assert "搭载" in result.context
 
     @pytest.mark.asyncio
     async def test_local_search_no_entities(self, service: GraphSearchService) -> None:

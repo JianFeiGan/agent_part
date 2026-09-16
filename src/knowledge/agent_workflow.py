@@ -285,7 +285,11 @@ class KnowledgeAgentWorkflow:
         if strategy in (STRATEGY_VECTOR, STRATEGY_HYBRID):
             state.vector_results = await self._vector_search(state.query)
         if strategy in (STRATEGY_GRAPH, STRATEGY_HYBRID):
-            state.graph_results = await self._graph_search(state.query)
+            if get_settings().graph_rag_enabled:
+                state.graph_results = await self._graph_search(state.query)
+            elif strategy == STRATEGY_GRAPH:
+                # 图谱增强未启用（graph_rag_enabled=False）：graph 策略降级为 vector
+                state.vector_results = await self._vector_search(state.query)
         state.agent_logs.append(
             {
                 "agent": "Retriever",

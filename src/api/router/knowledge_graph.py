@@ -155,7 +155,7 @@ async def add_document(
     graph["document_count"] += 1
     graph["updated_at"] = datetime.utcnow()
 
-    return ApiResponse.success(result, message="文档添加成功")
+    return ApiResponse.success(result, message=result.get("message", "文档已接收"))
 
 
 @router.post("/search/hybrid", response_model=ApiResponse[SearchResponse], deprecated=True)

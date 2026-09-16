@@ -23,7 +23,7 @@ from src.config.settings import Settings, get_settings
 
 # 配置日志
 logging.basicConfig(
-    level=logging.INFO,
+    level=get_settings().log_level.upper(),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
@@ -89,8 +89,8 @@ async def lifespan(app: FastAPI):
 
     # Seed 模型厂商预置数据
     try:
-        from src.db.postgres import get_db
         from src.db.model_provider_seeder import seed_model_providers
+        from src.db.postgres import get_db
 
         async with get_db() as session:
             # 为 system 租户 seed 预置厂商配置
@@ -134,6 +134,15 @@ def validate_cors_settings(settings: Settings) -> None:
 
 # 创建 FastAPI 应用
 settings = get_settings()
+
+# LangSmith 追踪（仅在 langchain_tracing_v2=True 且 API Key 非空时启用）
+if settings.langchain_tracing_v2 and settings.langchain_api_key:
+    import os
+
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
+    os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
+
 app = FastAPI(
     title="商品视觉生成器 API",
     description="基于 LangChain/LangGraph 的多 Agent 商品视觉生成系统",

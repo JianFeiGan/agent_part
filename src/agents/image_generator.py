@@ -13,6 +13,7 @@ Description:
 2026-03-23
 """
 
+import asyncio
 import base64
 import logging
 import uuid
@@ -114,15 +115,15 @@ class ImageGeneratorAgent(BaseAgent[AgentRuntimeState]):
                     error="缺少图片提示词",
                 )
 
-            generated_images: list[GeneratedImage] = []
+            # 批量生成图片（并发度受 max_concurrent_generations 限制）
+            semaphore = asyncio.Semaphore(self.settings.max_concurrent_generations)
 
-            # 批量生成图片
-            for prompt_data in prompts:
-                images = await self._generate_images(
-                    prompt_data,
-                    state,
-                )
-                generated_images.extend(images)
+            async def _generate_one(prompt_data: dict[str, Any]) -> list[GeneratedImage]:
+                async with semaphore:
+                    return await self._generate_images(prompt_data, state)
+
+            results = await asyncio.gather(*[_generate_one(p) for p in prompts])
+            generated_images: list[GeneratedImage] = [img for batch in results for img in batch]
 
             # 更新状态
             state.generated_images = generated_images
@@ -206,7 +207,9 @@ class ImageGeneratorAgent(BaseAgent[AgentRuntimeState]):
             "3:2": (1536, 1024),
             "2:3": (1024, 1536),
         }
-        return ratio_map.get(ratio, (1024, 1024))
+        return ratio_map.get(
+            ratio, (self.settings.default_image_width, self.settings.default_image_height)
+        )
 
     async def _optimize_prompt(
         self,

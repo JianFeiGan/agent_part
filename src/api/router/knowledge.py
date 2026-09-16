@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.crud import resolve_tenant
 from src.api.deps import AuthDep
 from src.api.schema.common import Result
+from src.config.settings import get_settings
 from src.db import get_db
 from src.db.models import KnowledgeDoc
 from src.db.vector_store import VectorStore
@@ -27,6 +28,37 @@ from src.rag.embeddings import get_embedding_service
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+async def _auto_build_graph(
+    session: AsyncSession,
+    chunks: list[dict[str, Any]],
+    category: str | None,
+    tenant_id: str,
+) -> None:
+    """文档入库后自动构建图谱（best-effort，受 graph_rag_auto_build 控制）。
+
+    在文档提交后独立事务执行，失败回滚仅记日志，不影响文档入库结果。
+
+    Args:
+        session: 数据库会话。
+        chunks: 文档分块列表。
+        category: 商品类目。
+        tenant_id: 租户 ID。
+    """
+    if not get_settings().graph_rag_auto_build or not chunks:
+        return
+    try:
+        from src.rag.graph_builder import get_graph_builder
+
+        stats = await get_graph_builder().build_from_chunks(
+            session, chunks, category or "general", tenant_id=tenant_id
+        )
+        await session.commit()
+        logger.info(f"Auto-built knowledge graph: {stats}")
+    except Exception as e:
+        await session.rollback()
+        logger.warning(f"Auto graph build failed (doc ingestion unaffected): {e}")
 
 
 # ==================== 请求/响应模型 ====================
@@ -167,6 +199,8 @@ async def create_document(
         f"Created knowledge document: id={doc.id}, title='{doc.title}', tenant_id={tenant_id}"
     )
 
+    await _auto_build_graph(session, chunks, doc.category, tenant_id)
+
     return Result.success(
         KnowledgeDocumentResponse(
             id=doc.id,
@@ -259,6 +293,8 @@ async def upload_document(
         await session.refresh(doc)
 
         logger.info(f"Uploaded knowledge document: id={doc.id}, file='{file.filename}'")
+
+        await _auto_build_graph(session, chunks, doc.category, tenant_id)
 
         return Result.success(
             KnowledgeDocumentResponse(

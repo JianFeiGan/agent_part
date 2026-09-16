@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
+from src.config.settings import get_settings
 from src.graph.state import AgentLog, AgentState, GenerationRequest, create_initial_state
 from src.models.product import Product
 
@@ -376,7 +377,7 @@ class WorkflowBuilder:
         base_agent = ImageGeneratorAgent(
             tenant_id=self._tenant_id, task_id=self._task_id
         )
-        if self._rag_enabled and self._retriever:
+        if self._rag_enabled and self._retriever and get_settings().image_rag_enabled:
             from src.agents.rag_image_generator import RAGEnhancedImageGenerator
 
             return RAGEnhancedImageGenerator(

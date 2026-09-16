@@ -183,25 +183,51 @@ class GraphSearchService:
                 communities_used=0,
             )
 
-        # 2. 查询关系
+        # 2. 查询关系（按 graph_rag_local_search_depth 逐跳扩展邻居实体）
         entity_ids = [e.id for e in unique_entities]
         edge_tenant_condition = (
             (GraphRAGEdge.tenant_id == tenant_id) if tenant_id else GraphRAGEdge.tenant_id.is_(None)
         )
 
-        stmt = (
-            select(GraphRAGEdge)
-            .where(edge_tenant_condition)
-            .where(
-                GraphRAGEdge.source_entity_id.in_(entity_ids)
-                | GraphRAGEdge.target_entity_id.in_(entity_ids)
+        edges: list[GraphRAGEdge] = []
+        seen_edge_ids: set[int] = set()
+        max_depth = max(1, self.settings.graph_rag_local_search_depth)
+
+        for _hop in range(max_depth):
+            stmt = (
+                select(GraphRAGEdge)
+                .where(edge_tenant_condition)
+                .where(
+                    GraphRAGEdge.source_entity_id.in_(entity_ids)
+                    | GraphRAGEdge.target_entity_id.in_(entity_ids)
+                )
             )
-        )
-        if category:
-            stmt = stmt.where(GraphRAGEdge.category == category)
-        stmt = stmt.limit(20)
-        result = await session.execute(stmt)
-        edges = result.scalars().all()
+            if category:
+                stmt = stmt.where(GraphRAGEdge.category == category)
+            stmt = stmt.limit(20)
+            result = await session.execute(stmt)
+            hop_edges = [e for e in result.scalars().all() if e.id not in seen_edge_ids]
+            if not hop_edges:
+                break
+            seen_edge_ids.update(e.id for e in hop_edges)
+            edges.extend(hop_edges)
+
+            # 还有后续跳时，将邻居实体纳入子图作为下一跳前沿
+            if _hop == max_depth - 1:
+                break
+            neighbor_ids = {
+                *(e.source_entity_id for e in hop_edges),
+                *(e.target_entity_id for e in hop_edges),
+            } - seen_ids
+            if not neighbor_ids:
+                break
+            neighbor_result = await session.execute(
+                select(GraphRAGEntity).where(GraphRAGEntity.id.in_(neighbor_ids))
+            )
+            neighbors = list(neighbor_result.scalars().all())
+            seen_ids.update(n.id for n in neighbors)
+            unique_entities.extend(neighbors)
+            entity_ids = [n.id for n in neighbors]
 
         # 3. 构建子图上下文
         context_parts: list[str] = []
