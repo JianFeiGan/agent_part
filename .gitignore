@@ -224,9 +224,7 @@ openspec/
 .zcode/
 .output/
 .github/
-.codex/
 .trae/
-output/
 frontend/package-lock.json
 .DS_Store
 
@@ -236,3 +234,6 @@ frontend/dump.rdb
 
 # 架构图视觉自检产物（本地 QA，不入库）
 docs/architecture-map.visual-check.*
+
+# TRAE HTML 分享产物（导出包，不入库）
+.trae-html-share-packages/
