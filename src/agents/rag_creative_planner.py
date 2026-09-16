@@ -12,12 +12,19 @@ Description:
 2026-04-05
 """
 
+import logging
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.base import (
+    CATEGORY_MEMORY_FALLBACK,
+    AgentResult,
+    AgentRole,
+    AgentRuntimeState,
+    BaseAgent,
+)
 from src.agents.llm_json import extract_json
 from src.models.creative import (
     ColorInfo,
@@ -26,6 +33,8 @@ from src.models.creative import (
     CreativePlan,
     VisualStyle,
 )
+
+logger = logging.getLogger(__name__)
 
 # 预设配色方案
 PRESET_PALETTES: dict[str, dict[str, Any]] = {
@@ -115,6 +124,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
                     "【品牌视觉规范】\n{brand_guidelines}\n\n"
                     "【类目风格参考】\n{category_styles}\n\n"
                     "【成功案例灵感】\n{case_inspirations}\n\n"
+                    "【类目记忆】\n{category_memory_context}\n\n"
                     "输出JSON格式，包含：\n"
                     "- theme_name: 创意主题名称\n"
                     "- theme_description: 主题描述\n"
@@ -184,11 +194,28 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
                 brand_guidelines,
                 category_styles,
                 case_inspirations,
+                rag_sources,
             ) = await self._retrieve_creative_knowledge(state)
+
+            # 检索类目记忆（Graph RAG / CategoryMemory）
+            category = (
+                product.category.value
+                if hasattr(product.category, "value")
+                else str(product.category)
+            )
+            category_memory = await self._retrieve_category_memory_context(
+                self._session, category
+            )
 
             # 生成创意方案
             creative_plan = await self._generate_creative_plan_with_rag(
-                product, report, state, brand_guidelines, category_styles, case_inspirations
+                product,
+                report,
+                state,
+                brand_guidelines,
+                category_styles,
+                case_inspirations,
+                category_memory,
             )
 
             # 更新状态
@@ -202,6 +229,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
                     "creative_plan": creative_plan.model_dump(),
                     "color_palette": creative_plan.color_palette.model_dump(),
                     "rag_enhanced": bool(brand_guidelines or category_styles or case_inspirations),
+                    "rag_sources": rag_sources,
                 },
             )
 
@@ -211,66 +239,79 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
                 error=f"创意策划失败: {e}",
             )
 
-    async def _retrieve_creative_knowledge(self, state: "AgentRuntimeState") -> tuple[str, str, str]:
-        """检索创意相关知识。
+    async def _retrieve_creative_knowledge(
+        self, state: "AgentRuntimeState"
+    ) -> tuple[str, str, str, list[dict[str, Any]]]:
+        """检索创意相关知识（领域方法：品牌规范+类目风格+成功案例）。
 
         Args:
             state: 当前状态。
 
         Returns:
-            (品牌规范, 类目风格, 成功案例) 三元组。
+            (品牌规范, 类目风格, 成功案例, RAG 来源列表) 四元组；
+            检索失败时返回空上下文降级。
         """
+        empty: tuple[str, str, str, list[dict[str, Any]]] = ("", "", "", [])
         if not self.has_rag() or not self._session:
-            return "", "", ""
+            return empty
 
         product = state.product_info
         if not product:
-            return "", "", ""
+            return empty
 
         from src.rag.retriever import KnowledgeRetriever
 
         if not isinstance(self._retriever, KnowledgeRetriever):
-            return "", "", ""
+            return empty
 
-        brand_guidelines = ""
-        category_styles = ""
-        case_inspirations = ""
-
-        # 检索品牌视觉规范
-        if product.brand:
-            brand_results = await self._retriever.retrieve(
-                self._session,
-                query=f"{product.brand} 视觉规范 色彩 Logo使用",
-                doc_type="brand_guide",
-                top_k=3,
-            )
-            if brand_results.results:
-                brand_guidelines = "\n".join([r.content[:400] for r in brand_results.results[:2]])
-
-        # 检索类目风格知识
         category = (
             product.category.value if hasattr(product.category, "value") else str(product.category)
         )
-        style_results = await self._retriever.retrieve(
-            self._session,
-            query=f"{category} 视觉风格 配色方案 拍摄风格",
-            doc_type="category_knowledge",
-            top_k=3,
+        style_preference = (
+            state.generation_request.style_preference if state.generation_request else None
         )
-        if style_results.results:
-            category_styles = "\n".join([r.content[:400] for r in style_results.results[:2]])
 
-        # 检索成功案例
-        case_results = await self._retriever.retrieve(
-            self._session,
-            query=f"{category} 创意方案 成功案例",
-            doc_type="case_study",
-            top_k=2,
+        try:
+            result = await self._retriever.retrieve_for_creative_planning(
+                self._session,
+                category=category,
+                brand=product.brand or None,
+                style_preference=style_preference,
+                tenant_id=self._tenant_id,
+            )
+        except Exception as e:
+            logger.warning("创意策划知识检索失败，按无知识降级: %s", e)
+            return empty
+
+        # 按文档类型分桶
+        brand_parts: list[str] = []
+        style_parts: list[str] = []
+        case_parts: list[str] = []
+        for r in result.results:
+            if r.doc_type == "brand_guide":
+                brand_parts.append(r.content[:400])
+            elif r.doc_type == "category_knowledge":
+                style_parts.append(r.content[:400])
+            elif r.doc_type == "case_study":
+                case_parts.append(r.content[:300])
+
+        rag_sources = [
+            {
+                "query": result.query,
+                "chunk_id": r.chunk_id,
+                "doc_id": r.doc_id,
+                "similarity": r.similarity,
+            }
+            for r in result.results
+        ]
+        state.rag_sources = rag_sources
+
+        return (
+            "\n".join(brand_parts[:2]),
+            "\n".join(style_parts[:2]),
+            "\n".join(case_parts[:2]),
+            rag_sources,
         )
-        if case_results.results:
-            case_inspirations = "\n".join([r.content[:300] for r in case_results.results[:2]])
-
-        return brand_guidelines, category_styles, case_inspirations
 
     async def _generate_creative_plan_with_rag(
         self,
@@ -280,6 +321,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
         brand_guidelines: str,
         category_styles: str,
         case_inspirations: str,
+        category_memory: str = "",
     ) -> CreativePlan:
         """使用RAG知识生成创意方案。
 
@@ -290,6 +332,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
             brand_guidelines: 品牌规范。
             category_styles: 类目风格。
             case_inspirations: 成功案例。
+            category_memory: 类目记忆上下文。
 
         Returns:
             创意方案。
@@ -308,6 +351,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
                     "brand_guidelines": brand_guidelines or "暂无品牌规范",
                     "category_styles": category_styles or "暂无类目风格参考",
                     "case_inspirations": case_inspirations or "暂无成功案例参考",
+                    "category_memory_context": category_memory or CATEGORY_MEMORY_FALLBACK,
                     "product_info": product_info,
                     "requirement_report": requirement_report,
                     "style_preference": style_preference,

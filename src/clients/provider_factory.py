@@ -18,10 +18,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.clients.protocols import ImageProviderProtocol, LLMProviderProtocol, VideoProviderProtocol
 from src.clients.provider_result import get_api_key_value
-from src.config.settings import Settings, get_settings
+from src.config.settings import get_settings
 
 if TYPE_CHECKING:
-    from langchain_core.language_models import BaseChatModel
+    pass
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +235,7 @@ def _create_video_from_config(
     Raises:
         ValueError: 不支持的视频厂商。
     """
-    from src.clients.kling_video_client import KlingVideoClient, KLING_API_BASE
+    from src.clients.kling_video_client import KLING_API_BASE, KlingVideoClient
 
     extra_creds = config.extra_credentials or {}
 
@@ -312,7 +312,7 @@ def _create_video_from_settings(**kwargs: Any) -> VideoProviderProtocol | None:
     Returns:
         视频 Provider 实例，未配置时返回 None。
     """
-    from src.clients.kling_video_client import KlingVideoClient, KLING_API_BASE
+    from src.clients.kling_video_client import KLING_API_BASE, KlingVideoClient
 
     settings = get_settings()
     if settings.kling_access_key and settings.kling_secret_key:

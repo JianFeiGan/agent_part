@@ -10,9 +10,12 @@ Description:
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from src.clients.provider_result import ImageGenerationResult, VideoGenerationResult
+
+if TYPE_CHECKING:
+    from langchain_core.language_models import BaseChatModel
 
 
 @runtime_checkable
@@ -31,7 +34,7 @@ class LLMProviderProtocol(Protocol):
         """
         ...
 
-    def create_chat_model(self) -> "BaseChatModel":
+    def create_chat_model(self) -> BaseChatModel:
         """创建 LangChain BaseChatModel 实例。
 
         Returns:

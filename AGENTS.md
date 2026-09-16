@@ -29,11 +29,11 @@
 |------|----------|
 | **语言** | Python 3.11+ |
 | **LLM 框架** | LangChain 0.3+, LangGraph 0.2+ |
-| **主力 LLM** | 阿里云通义千问 (qwen3.5-flash) |
-| **图像生成** | 阿里云通义万象 (wanx-v1) |
+| **主力 LLM** | 多 Provider 可配：DashScope 千问 / 百炼 OpenAI 兼容 / SenseNova（默认 `llm_model=deepseek-v4-flash`，`qwen_llm_model=qwen-plus`） |
+| **图像生成** | DashScope 万象 / SenseNova（默认 `image_model=sensenova-u1-fast`），Provider 可配 |
 | **视频生成** | 可灵 AI (kling-v1) |
 | **向量数据库** | PostgreSQL + PGVector |
-| **Embedding** | BGE-large-zh (本地部署) |
+| **Embedding** | BGE-large-zh (本地部署，默认) 或千问 text-embedding-v3 |
 | **API 框架** | FastAPI |
 | **前端框架** | Vue 3 + TypeScript + Element Plus |
 | **存储** | PostgreSQL (向量/关系数据) + Redis (任务状态) + 本地/OSS (资源文件) |
@@ -124,77 +124,98 @@ agent_part/
 ├── run_workflow.py         # CLI 工作流运行脚本
 ├── pyproject.toml          # 项目配置 (依赖、工具配置)
 ├── uv.lock                 # 依赖锁定文件
+├── alembic.ini             # Alembic 迁移配置
+├── docker-compose.yml      # Docker 编排
 │
 ├── src/                    # 后端源码
 │   ├── agents/             # Agent 实现
-│   │   ├── base.py         # Agent 基类
-│   │   ├── orchestrator.py # 编排调度 Agent
-│   │   ├── requirement_analyzer.py  # 需求分析 Agent
-│   │   ├── creative_planner.py      # 创意策划 Agent
-│   │   ├── visual_designer.py       # 视觉设计 Agent
-│   │   ├── image_generator.py       # 图片生成 Agent
-│   │   ├── video_generator.py       # 视频生成 Agent
-│   │   └── quality_reviewer.py      # 质量审核 Agent
+│   │   ├── base.py                    # Agent 基类（LLM 调用/RAG 检索/类目记忆）
+│   │   ├── orchestrator.py            # 编排调度 Agent
+│   │   ├── requirement_analyzer.py    # 需求分析 Agent
+│   │   ├── creative_planner.py        # 创意策划 Agent
+│   │   ├── visual_designer.py         # 视觉设计 Agent
+│   │   ├── image_generator.py         # 图片生成 Agent
+│   │   ├── video_generator.py         # 视频生成 Agent
+│   │   ├── quality_reviewer.py        # 质量审核 Agent
+│   │   ├── rag_*.py                   # RAG 增强 Agent (4个: 需求分析/创意策划/质量审核/图片生成)
+│   │   └── listing_*.py               # 刊登工作流 Agent (14个: 导入/素材/文案/合规/推送/平台适配器等)
 │   │
 │   ├── graph/              # LangGraph 状态图
-│   │   ├── state.py        # AgentState 定义
-│   │   └── workflow.py     # 工作流构建
+│   │   ├── state.py                 # 视觉生成 AgentState 定义
+│   │   ├── workflow.py              # 视觉生成工作流构建
+│   │   ├── listing_state.py         # 刊登 ListingState 定义
+│   │   ├── listing_workflow.py      # 刊登工作流构建
+│   │   └── listing_persistence.py   # 刊登产物持久化
 │   │
 │   ├── models/             # 数据模型
 │   │   ├── product.py      # 商品信息模型
 │   │   ├── creative.py     # 创意方案模型
 │   │   ├── storyboard.py   # 分镜脚本模型
-│   │   └── assets.py       # 生成资产模型
+│   │   ├── assets.py       # 生成资产模型
+│   │   └── listing.py      # 刊登模型
 │   │
 │   ├── api/                # API 层
-│   │   ├── router/         # 路由定义
-│   │   │   ├── health.py   # 健康检查
-│   │   │   ├── products.py # 商品管理
-│   │   │   └── tasks.py    # 任务管理
+│   │   ├── router/         # 路由定义 (15个模块，见 §5.1)
 │   │   ├── schema/         # 请求/响应模型
-│   │   └── service/        # 服务层
-│   │       ├── redis_client.py    # Redis 客户端
-│   │       └── task_manager.py    # 任务管理器
+│   │   ├── crud/           # 数据访问层
+│   │   ├── service/        # 服务层 (task_manager/redis_client/asset_persister/conversation_recorder)
+│   │   └── deps.py         # 依赖注入（认证/会话）
+│   │
+│   ├── auth/               # API Token 认证 + 多租户上下文
+│   │
+│   ├── clients/            # 外部服务客户端
+│   │   ├── protocols.py             # Provider 协议定义
+│   │   ├── provider_factory.py      # Provider 工厂（数据库配置优先）
+│   │   ├── openai_compatible_llm.py # OpenAI 兼容 LLM Provider
+│   │   ├── dashscope_image_client.py# DashScope 图片生成
+│   │   ├── openai_compatible_image.py# SenseNova 图片生成
+│   │   ├── kling_video_client.py    # 可灵 AI 视频生成
+│   │   └── qwen_*.py                # 千问 LLM/Embedding 客户端
 │   │
 │   ├── db/                 # 数据库模块
-│   │   ├── __init__.py     # 模块导出
 │   │   ├── postgres.py     # PostgreSQL 连接管理
 │   │   ├── models.py       # SQLAlchemy 模型
-│   │   └── vector_store.py # 向量存储接口
+│   │   ├── vector_store.py # PGVector 向量存储
+│   │   ├── repository.py   # 通用仓储
+│   │   └── listing_models.py / asset_repository.py / ...
 │   │
-│   ├── rag/                # RAG 检索增强模块
-│   │   ├── __init__.py     # 模块导出
-│   │   ├── embeddings.py   # BGE Embedding 封装
-│   │   ├── retriever.py    # 知识检索器
-│   │   ├── chunker.py      # 语义分块
-│   │   ├── document_processor.py  # 文档处理
-│   │   └── logger.py       # RAG 日志服务
+│   ├── rag/                # RAG 检索增强模块 (15个文件，见 §3.2.4)
 │   │
-│   ├── config/             # 配置管理
-│   │   └── settings.py     # Settings 配置类
+│   ├── knowledge/          # 知识库 Agent（图谱工作流/文档入库）
+│   │   ├── agent_workflow.py # 查询分析→策略路由→融合 工作流
+│   │   ├── graph.py          # 知识图谱
+│   │   └── ingestion.py      # 文档入库（占位实现）
 │   │
-│   └── tools/              # 工具集成 (预留)
+│   ├── storage/            # 文件存储（本地/OSS，工厂模式）
+│   │
+│   └── config/             # 配置管理
+│       └── settings.py     # Settings 配置类
 │
-├── frontend/               # 前端源码
+├── frontend/               # 前端源码 (Vue 3 + TS)
 │   ├── src/
 │   │   ├── api/            # API 调用封装
-│   │   ├── components/     # Vue 组件
+│   │   ├── components/     # Vue 组件（含 workbench/ Agent 可观测工作台）
 │   │   ├── views/          # 页面视图
 │   │   ├── stores/         # Pinia 状态管理
 │   │   ├── router/         # Vue Router 路由
+│   │   ├── workflow/       # DAG 拓扑与节点渲染
 │   │   └── types/          # TypeScript 类型
 │   ├── package.json
 │   └── vite.config.ts
 │
-├── tests/                  # 测试用例
-│   ├── test_agents/        # Agent 测试
-│   ├── test_graph/         # 工作流测试
-│   ├── test_models/        # 模型测试
-│   └── test_tools/         # 工具测试
+├── migrations/             # Alembic 迁移脚本
+├── scripts/                # SQL 迁移/运维脚本
+├── docs/                   # 设计文档 (adr/ agents/ compose/)
+├── docs-site/              # 文档站 (mkdocs)
 │
-└── documents/              # 开发文档
-    ├── 商品视觉生成系统开发计划_2026-03-23.md
-    └── 操作文档.md
+└── tests/                  # 测试用例
+    ├── test_agents/        # Agent 测试（含 listing/RAG）
+    ├── test_api/           # API 测试（含认证/租户隔离）
+    ├── test_db/            # 数据层测试
+    ├── test_graph/         # 工作流测试
+    ├── test_rag/           # RAG 管道测试
+    ├── test_e2e/           # 端到端测试
+    └── test_models/ 等     # 其余按域分组
 ```
 
 ### 3.2 核心模块说明
@@ -307,6 +328,7 @@ QualityReport (质量报告)
 | `RAGEnhancedRequirementAnalyzer` | 检索品牌规范、类目知识辅助商品分析 |
 | `RAGEnhancedCreativePlanner` | 获取品牌视觉规范、类目风格参考 |
 | `RAGEnhancedQualityReviewer` | 加载合规规则进行内容审核 |
+| `RAGEnhancedImageGenerator` | 生成参考图检索增强（`image_rag_enabled` 开启时生效） |
 
 **检索流程**:
 
@@ -412,15 +434,19 @@ class AgentState(BaseModel):
 
 ### 5.1 端点列表
 
+所有业务端点挂载在 `/api/v1` 前缀下（15 个路由模块，40+ 端点）。核心端点：
+
 | 端点 | 方法 | 描述 |
 |------|------|------|
-| `/` | GET | API 欢迎信息 |
-| `/health` | GET | 健康检查 |
+| `/api/v1/` | GET | API 欢迎信息 |
+| `/api/v1/health` | GET | 健康检查 |
 | `/api/v1/products` | POST | 创建商品 |
 | `/api/v1/products/{id}` | GET | 获取商品详情 |
 | `/api/v1/tasks` | POST | 创建生成任务 |
 | `/api/v1/tasks/{id}` | GET | 获取任务状态 |
 | `/api/v1/tasks/{id}/cancel` | POST | 取消任务 |
+
+完整端点（知识库 / 刊登 / 适配器配置 / 仪表盘 / 资产 / Graph RAG / 记忆提炼 / AI 会话 / 模型厂商等）见运行时 `/docs` 交互式文档。
 
 ### 5.2 请求示例
 

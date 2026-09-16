@@ -49,7 +49,7 @@ Agent 工作流将自动执行 7 步流程：
 编排调度 → 需求分析 → 创意策划 → 视觉设计 → 图片生成 → 视频生成 → 质量审核
 ```
 
-- 图片由 DashScope 万象 API 生成（wanx-v1 / wan2.7-image-pro）
+- 图片由 DashScope 万象 / SenseNova 生成（wanx-v1 / sensenova-u1-fast，Provider 可配）
 - 视频由可灵 AI 生成（kling-v1）
 - 需求分析、创意策划、质量审核三个 Agent 自动注入 RAG 知识增强
 

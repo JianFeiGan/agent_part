@@ -19,7 +19,13 @@ from typing import Any
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.base import (
+    CATEGORY_MEMORY_FALLBACK,
+    AgentResult,
+    AgentRole,
+    AgentRuntimeState,
+    BaseAgent,
+)
 from src.agents.llm_json import extract_json
 from src.models.assets import (
     AssetCollection,
@@ -84,6 +90,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
                     "你是一个专业的电商视觉内容质量审核专家。"
                     "请结合以下合规规则，对生成的内容进行全面质量评估。\n\n"
                     "【合规审核规则】\n{compliance_rules}\n\n"
+                    "【类目记忆】\n{category_memory_context}\n\n"
                     "评估维度：\n"
                     "1. 清晰度 (clarity): 图片/视频是否清晰\n"
                     "2. 构图 (composition): 构图是否合理美观\n"
@@ -150,12 +157,22 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
             # 加载合规规则
             await self._load_compliance_rules(state)
 
+            # 检索类目记忆（Graph RAG / CategoryMemory）
+            category = (
+                product.category.value
+                if hasattr(product.category, "value")
+                else str(product.category)
+            )
+            category_memory = await self._retrieve_category_memory_context(
+                self._session, category
+            )
+
             quality_reports: list[QualityReport] = []
             all_issues: list[dict[str, Any]] = []
 
             # 审核图片
             for image in state.generated_images:
-                report = await self._review_image_with_rag(image, product, state)
+                report = await self._review_image_with_rag(image, product, state, category_memory)
                 quality_reports.append(report)
                 if report.issues:
                     all_issues.extend(
@@ -167,7 +184,9 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
 
             # 审核视频
             if state.generated_video:
-                report = await self._review_video_with_rag(state.generated_video, product, state)
+                report = await self._review_video_with_rag(
+                    state.generated_video, product, state, category_memory
+                )
                 quality_reports.append(report)
                 if report.issues:
                     all_issues.extend(
@@ -210,6 +229,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
                     "asset_collection": asset_collection.model_dump(),
                     "final_results": final_results,
                     "compliance_rules_applied": len(self._compliance_rules),
+                    "rag_sources": state.rag_sources,
                 },
             )
 
@@ -220,7 +240,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
             )
 
     async def _load_compliance_rules(self, state: AgentRuntimeState) -> None:
-        """从知识库加载合规规则。
+        """从知识库加载合规规则（领域方法：retrieve_compliance_rules）。
 
         Args:
             state: 当前状态。
@@ -235,13 +255,16 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
             self._compliance_rules = []
             return
 
-        # 检索合规规则
-        results = await self._retriever.retrieve(
-            self._session,
-            query="禁止词列表 广告法规定 平台内容规范 敏感内容",
-            doc_type="compliance_rule",
-            top_k=5,
-        )
+        try:
+            # 检索合规规则
+            results = await self._retriever.retrieve_compliance_rules(
+                self._session,
+                tenant_id=self._tenant_id,
+            )
+        except Exception as e:
+            logger.warning("合规规则检索失败，按无规则降级: %s", e)
+            self._compliance_rules = []
+            return
 
         self._compliance_rules = [
             {
@@ -268,6 +291,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
         image: GeneratedImage,
         product: Any,
         state: AgentRuntimeState,
+        category_memory: str = "",
     ) -> QualityReport:
         """使用RAG规则审核图片。
 
@@ -275,6 +299,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
             image: 图片对象。
             product: 商品信息。
             state: 当前状态。
+            category_memory: 类目记忆上下文。
 
         Returns:
             质量报告。
@@ -290,6 +315,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
                     prompt,
                     {
                         "compliance_rules": compliance_rules_text or "暂无特定合规规则",
+                        "category_memory_context": category_memory or CATEGORY_MEMORY_FALLBACK,
                         "product_name": product.name,
                         "content_type": f"图片-{image.image_type}",
                         "content_description": image.prompt,
@@ -351,6 +377,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
         video: GeneratedVideo,
         product: Any,
         state: AgentRuntimeState,
+        category_memory: str = "",
     ) -> QualityReport:
         """使用RAG规则审核视频。
 
@@ -358,6 +385,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
             video: 视频对象。
             product: 商品信息。
             state: 当前状态。
+            category_memory: 类目记忆上下文。
 
         Returns:
             质量报告。
@@ -373,6 +401,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
                     prompt,
                     {
                         "compliance_rules": compliance_rules_text or "暂无特定合规规则",
+                        "category_memory_context": category_memory or CATEGORY_MEMORY_FALLBACK,
                         "product_name": product.name,
                         "content_type": "视频",
                         "content_description": video.visual_prompt or "",

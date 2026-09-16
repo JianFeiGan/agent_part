@@ -154,14 +154,15 @@ class GraphSearchService:
         for keyword in keywords:
             stmt = (
                 select(GraphRAGEntity)
-                .where(GraphRAGEntity.category == category)
                 .where(tenant_condition)
                 .where(
                     (GraphRAGEntity.name.ilike(f"%{keyword}%"))
                     | (GraphRAGEntity.description.ilike(f"%{keyword}%"))
                 )
-                .limit(5)
             )
+            if category:
+                stmt = stmt.where(GraphRAGEntity.category == category)
+            stmt = stmt.limit(5)
             result = await session.execute(stmt)
             seed_entities.extend(result.scalars().all())
 
@@ -190,14 +191,15 @@ class GraphSearchService:
 
         stmt = (
             select(GraphRAGEdge)
-            .where(GraphRAGEdge.category == category)
             .where(edge_tenant_condition)
             .where(
                 GraphRAGEdge.source_entity_id.in_(entity_ids)
                 | GraphRAGEdge.target_entity_id.in_(entity_ids)
             )
-            .limit(20)
         )
+        if category:
+            stmt = stmt.where(GraphRAGEdge.category == category)
+        stmt = stmt.limit(20)
         result = await session.execute(stmt)
         edges = result.scalars().all()
 
@@ -275,11 +277,12 @@ class GraphSearchService:
         max_communities = self.settings.graph_rag_global_search_max_communities
         stmt = (
             select(CommunitySummary)
-            .where(CommunitySummary.category == category)
             .where(tenant_condition)
             .order_by(CommunitySummary.rank.desc())
-            .limit(max_communities)
         )
+        if category:
+            stmt = stmt.where(CommunitySummary.category == category)
+        stmt = stmt.limit(max_communities)
         result = await session.execute(stmt)
         communities = result.scalars().all()
 

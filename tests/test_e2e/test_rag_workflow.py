@@ -12,14 +12,14 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.agents.rag_requirement_analyzer import RAGEnhancedRequirementAnalyzer
 from src.agents.rag_creative_planner import RAGEnhancedCreativePlanner
 from src.agents.rag_quality_reviewer import RAGEnhancedQualityReviewer
+from src.agents.rag_requirement_analyzer import RAGEnhancedRequirementAnalyzer
+from src.db.vector_store import SearchResult
 from src.graph.state import AgentState
 from src.graph.workflow import WorkflowBuilder
 from src.models.product import Product, ProductCategory
 from src.rag.retriever import KnowledgeRetriever, RetrievalResult
-from src.db.vector_store import SearchResult
 
 
 @pytest.fixture

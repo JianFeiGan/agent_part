@@ -1,6 +1,6 @@
 """刊登 API 测试（mock 数据库层）。"""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -40,8 +40,8 @@ def _make_product_po(**kwargs) -> MagicMock:
         "dimensions": None,
         "source_images": [],
         "attributes": {},
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
     }
     defaults.update(kwargs)
     po = MagicMock(spec=ListingProductPO)
@@ -59,8 +59,8 @@ def _make_task_po(**kwargs) -> MagicMock:
         "status": "pending",
         "workflow_state": None,
         "auto_execute": False,
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
     }
     defaults.update(kwargs)
     po = MagicMock(spec=ListingTaskPO)
@@ -81,7 +81,7 @@ def _make_compliance_po(**kwargs) -> MagicMock:
             "text_issues": [],
             "forbidden_words": [],
         },
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
     }
     defaults.update(kwargs)
     po = MagicMock(spec=ComplianceReportPO)

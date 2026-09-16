@@ -85,7 +85,7 @@ npm run dev
 |------|--------|------|
 | `KLING_ACCESS_KEY` | — | 可灵 AI Access Key（视频生成） |
 | `KLING_SECRET_KEY` | — | 可灵 AI Secret Key（视频生成） |
-| `IMAGE_MODEL` | `wanx-v1` | 图片生成模型（DashScope 万象） |
+| `IMAGE_MODEL` | `sensenova-u1-fast` | 图片生成模型（SenseNova；DashScope 万象可选 `wanx-v1`） |
 | `VIDEO_MODEL` | `kling-v1` | 视频生成模型（可灵 AI） |
 
 ### Embedding 与 RAG
@@ -176,18 +176,18 @@ echo -n "your-secret-token" | sha256sum
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `ALLOW_MOCK_ASSETS` | `true` | 无 API Key 时允许 Mock 降级生成占位资产 |
+| `ALLOW_MOCK_ASSETS` | `false` | 无 API Key 时允许 Mock 降级生成占位资产（默认 fail-closed，本地开发可设 `true`） |
 
 ## 优雅降级
 
-Agent Part 支持在缺少 API Key 时自动降级：
+Agent Part 支持在缺少 API Key 时降级（Mock 需显式开启）：
 
-- **无 DashScope API Key** → 图片生成降级为 Mock 占位（标记 `is_mock=True`）
-- **无可灵 AI Key** → 视频生成降级为 Mock 占位（标记 `is_mock=True`）
-- **LLM 降级链** → DashScope SDK → 千问 → OpenAI 兼容千问 → 规则生成
-- **Embedding 降级** → 千问 API → 本地 BGE-large-zh
+- **无图片 Provider Key** 且 `ALLOW_MOCK_ASSETS=true` → 图片生成降级为 Mock 占位（标记 `is_mock=True`）；默认 `false` 时任务明确失败
+- **无可灵 AI Key** 且 `ALLOW_MOCK_ASSETS=true` → 视频生成降级为 Mock 占位（标记 `is_mock=True`）；默认 `false` 时任务明确失败
+- **LLM 兜底** → SettingsFallbackLLMProvider 按配置兜底（SenseNova → DashScope）；文案场景调用失败回退规则草稿
+- **Embedding** → 由 `EMBEDDING_PROVIDER` 选择通道（`local` 默认 / `qwen`），无自动跨通道降级
 
-> **注意**：生产环境必须设置 `ALLOW_MOCK_ASSETS=false`，否则会静默产出标记为"已完成"的假图/假视频。
+> **注意**：`ALLOW_MOCK_ASSETS` 默认 `false`（fail-closed）。仅本地/CI 无 Key 体验时设为 `true`，此时占位资产会被明确标记 `is_mock=True`，不会冒充真实产出。
 
 ## 验证安装
 

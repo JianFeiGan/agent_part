@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.crud import resolve_tenant
@@ -29,8 +30,6 @@ router = APIRouter()
 
 
 # ==================== 请求/响应模型 ====================
-
-from pydantic import BaseModel, Field
 
 
 class KnowledgeDocumentCreate(BaseModel):

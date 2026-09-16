@@ -12,7 +12,6 @@ from fastapi import APIRouter
 
 from src.api.schema.common import HealthResponse
 from src.api.service.redis_client import RedisClient
-from src.config.settings import get_settings
 
 router = APIRouter()
 
@@ -38,8 +37,6 @@ async def health_check() -> HealthResponse:
     Returns:
         服务健康状态信息，包括版本、Redis 连接状态等。
     """
-    settings = get_settings()
-
     redis_status = "connected"
     try:
         redis_client = await _get_redis_client()

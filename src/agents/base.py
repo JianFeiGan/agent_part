@@ -23,6 +23,12 @@ from src.config.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
 
+# 类目记忆为空时的统一占位文案
+CATEGORY_MEMORY_FALLBACK = "（无相关类目记忆）"
+
+# 类目记忆注入 prompt 的最大字符数（超出截断）
+CATEGORY_MEMORY_MAX_CHARS = 4000
+
 if TYPE_CHECKING:
     pass
 
@@ -152,6 +158,55 @@ class BaseAgent(ABC, Generic[StateT]):
             是否有 RAG 能力。
         """
         return self._retriever is not None and self.settings.rag_enabled
+
+    @staticmethod
+    def _truncate_context(context: str, max_chars: int = CATEGORY_MEMORY_MAX_CHARS) -> str:
+        """截断超长上下文，超出部分以省略号结尾。
+
+        Args:
+            context: 原始上下文文本。
+            max_chars: 最大保留字符数。
+
+        Returns:
+            截断后的文本；未超长时原样返回。
+        """
+        if len(context) <= max_chars:
+            return context
+        return context[:max_chars] + "..."
+
+    async def _retrieve_category_memory_context(
+        self,
+        session: Any,
+        category: str,
+    ) -> str:
+        """检索类目记忆上下文（鸭子类型，失败时返回空串）。
+
+        通过 retriever 的 retrieve_category_memory_context 领域方法获取
+        类目记忆；无 session、retriever 不支持该方法或调用失败时返回空串。
+
+        Args:
+            session: 数据库会话。
+            category: 商品类目。
+
+        Returns:
+            截断后的类目记忆文本，无数据时返回空串。
+        """
+        if not self.has_rag() or session is None or not category:
+            return ""
+
+        fetch = getattr(self._retriever, "retrieve_category_memory_context", None)
+        if fetch is None:
+            return ""
+
+        try:
+            result = await fetch(session, category, tenant_id=self._tenant_id)
+        except Exception as e:
+            logger.warning(f"类目记忆检索失败，按无记忆降级: {e}")
+            return ""
+
+        if not isinstance(result, str):
+            return ""
+        return self._truncate_context(result)
 
     def _create_llm(self) -> BaseChatModel:
         """创建LLM实例（配置驱动）。

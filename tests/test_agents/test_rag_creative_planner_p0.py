@@ -9,7 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.agents.base import AgentRole
 from src.agents.rag_creative_planner import RAGEnhancedCreativePlanner
 from src.graph.state import AgentState
 from src.models.product import Product, ProductCategory

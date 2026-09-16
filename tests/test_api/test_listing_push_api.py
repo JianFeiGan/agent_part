@@ -1,6 +1,6 @@
 """刊登推送 API 测试（mock 数据库层）。"""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -33,8 +33,8 @@ def _make_task_po(**kwargs) -> MagicMock:
         "status": "pending",
         "workflow_state": None,
         "auto_execute": False,
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
     }
     defaults.update(kwargs)
     po = MagicMock(spec=_TaskPO)
@@ -55,7 +55,7 @@ def _make_result_po(**kwargs) -> MagicMock:
             "url": "https://amazon.com/dp/B08XYZ",
             "error": None,
         },
-        "created_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
     }
     defaults.update(kwargs)
     po = MagicMock(spec=TaskResultPO)

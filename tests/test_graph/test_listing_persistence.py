@@ -8,9 +8,6 @@ from src.agents.listing_platform_adapter import PushResult
 from src.graph import listing_persistence
 from src.models.listing import (
     AssetPackage,
-    ComplianceReport,
-    ComplianceStatus,
-    CopywritingPackage,
     Platform,
 )
 

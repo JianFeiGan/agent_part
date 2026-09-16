@@ -28,7 +28,6 @@ import jwt
 from src.clients.provider_result import (
     ProviderUnavailableError,
     VideoGenerationResult,
-    is_video_provider_configured,
 )
 from src.config.settings import Settings, get_settings
 

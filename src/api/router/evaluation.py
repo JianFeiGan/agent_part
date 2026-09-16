@@ -120,7 +120,7 @@ async def get_hit_rate(
             total_retrievals=stats["total_retrievals"],
             unique_chunks_hit=chunk_stats["unique_chunks_hit"],
             unique_docs_hit=len(
-                set(c["chunk_id"] // 100 for c in chunk_stats.get("top_chunks", []))
+                {c["chunk_id"] // 100 for c in chunk_stats.get("top_chunks", [])}
             ),
             avg_results_per_query=round(avg_results, 2),
             top_hit_chunks=chunk_stats.get("top_chunks", []),
@@ -154,10 +154,9 @@ async def compare_rag_vs_non_rag(
     else:
         start_date = datetime.utcnow() - timedelta(days=30)
 
-    if request.end_date:
-        end_date = datetime.fromisoformat(request.end_date)
-    else:
-        end_date = datetime.utcnow()
+    end_date = (
+        datetime.fromisoformat(request.end_date) if request.end_date else datetime.utcnow()
+    )
 
     # 统计启用 RAG 的任务
     rag_result = await session.execute(
@@ -167,7 +166,7 @@ async def compare_rag_vs_non_rag(
         ).where(
             GenerationTask.created_at >= start_date,
             GenerationTask.created_at <= end_date,
-            GenerationTask.rag_enabled == True,
+            GenerationTask.rag_enabled.is_(True),
             GenerationTask.status == "completed",
             GenerationTask.tenant_id == tenant_id,
         )
@@ -182,7 +181,7 @@ async def compare_rag_vs_non_rag(
         ).where(
             GenerationTask.created_at >= start_date,
             GenerationTask.created_at <= end_date,
-            GenerationTask.rag_enabled == False,
+            GenerationTask.rag_enabled.is_(False),
             GenerationTask.status == "completed",
             GenerationTask.tenant_id == tenant_id,
         )
@@ -240,8 +239,6 @@ async def get_evaluation_report(
         评估报告。
     """
     logger = get_rag_logger()
-
-    tenant_id = auth.tenant_id if auth else "dev"
 
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=days)
@@ -310,8 +307,6 @@ async def get_optimize_suggestions(
         优化建议列表。
     """
     logger = get_rag_logger()
-
-    tenant_id = auth.tenant_id if auth else "dev"
 
     # 获取最近 7 天的统计
     end_date = datetime.utcnow()

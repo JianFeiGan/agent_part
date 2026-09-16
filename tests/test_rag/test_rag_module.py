@@ -12,9 +12,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.rag.chunker import SemanticChunker, Chunk
-from src.rag.retriever import KnowledgeRetriever, RetrievalResult
 from src.db.vector_store import SearchResult
+from src.rag.chunker import Chunk, SemanticChunker
+from src.rag.retriever import KnowledgeRetriever, RetrievalResult
 
 
 def _create_search_result(
@@ -111,10 +111,12 @@ class TestKnowledgeRetriever:
     @pytest.fixture
     def retriever(self) -> KnowledgeRetriever:
         """创建检索器实例。"""
-        with patch("src.rag.retriever.get_embedding_service") as mock_emb:
-            with patch("src.rag.retriever.VectorStore") as mock_vs:
-                mock_emb.return_value = MagicMock()
-                return KnowledgeRetriever()
+        with (
+            patch("src.rag.retriever.get_embedding_service") as mock_emb,
+            patch("src.rag.retriever.VectorStore"),
+        ):
+            mock_emb.return_value = MagicMock()
+            return KnowledgeRetriever()
 
     def test_build_context(self, retriever: KnowledgeRetriever) -> None:
         """测试上下文构建。"""

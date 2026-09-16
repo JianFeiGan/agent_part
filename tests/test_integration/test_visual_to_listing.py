@@ -10,8 +10,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from src.agents.listing_asset_optimizer import AssetOptimizerAgent
 from src.agents.listing_asset_loader import ListingAssetLoader
+from src.agents.listing_asset_optimizer import AssetOptimizerAgent
 from src.graph.listing_state import ListingState
 from src.models.listing import Platform
 from src.models.listing_converter import product_to_listing

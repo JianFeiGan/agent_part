@@ -1,6 +1,6 @@
 """适配器配置 API 测试。"""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -20,8 +20,8 @@ def _make_mock_po(**kwargs) -> MagicMock:
         "tenant_id": "tenant-a",
         "credentials": {"client_id": "test", "client_secret": "secret"},
         "is_active": True,
-        "created_at": datetime.now(timezone.utc),
-        "updated_at": datetime.now(timezone.utc),
+        "created_at": datetime.now(UTC),
+        "updated_at": datetime.now(UTC),
     }
     defaults.update(kwargs)
     po = MagicMock(spec=AdapterConfigPO)
@@ -65,8 +65,8 @@ class TestAdapterConfigAPI:
                 po.tenant_id = "tenant-a"
                 po.credentials = {"client_id": "abc", "client_secret": "xyz"}
                 po.is_active = True
-                po.created_at = datetime.now(timezone.utc)
-                po.updated_at = datetime.now(timezone.utc)
+                po.created_at = datetime.now(UTC)
+                po.updated_at = datetime.now(UTC)
 
             mock_session.refresh = AsyncMock(side_effect=_refresh_side_effect)
 

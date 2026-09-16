@@ -168,7 +168,7 @@ async def hybrid_search(
 
     Deprecated: 兼容保留。检索请走 /api/v1/knowledge/search 或 src/rag/*。
     """
-    workflow = KnowledgeAgentWorkflow()
+    workflow = KnowledgeAgentWorkflow(session=session, tenant_id=auth.tenant_id)
     state = await workflow.run(request.query)
 
     results = [
@@ -203,7 +203,7 @@ async def agent_query(
     """
     session_id = request.session_id or f"session_{uuid.uuid4().hex[:8]}"
 
-    workflow = KnowledgeAgentWorkflow()
+    workflow = KnowledgeAgentWorkflow(session=session, tenant_id=auth.tenant_id)
     state = await workflow.run(request.query)
 
     return ApiResponse.success(

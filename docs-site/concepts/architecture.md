@@ -6,7 +6,7 @@ Agent Part 采用分层架构，由前端管理后台、API 层、LangGraph 工�
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                     Vue 3 管理后台 (14 页面)                      │
+│                     Vue 3 管理后台 (17 页面)                      │
 │  仪表盘 │ 商品管理 │ 任务管理 │ 知识库 │ 刊登工具 │ AI 会话       │
 └──────────────────────────┬───────────────────────────────────────┘
                            │ REST API / WebSocket
@@ -52,7 +52,7 @@ Agent Part 采用分层架构，由前端管理后台、API 层、LangGraph 工�
 2. **RequirementAnalyzer** — 分析商品信息，提取卖点、关键特性、目标人群
 3. **CreativePlanner** — 生成创意方案、配色方案、风格方向
 4. **VisualDesigner** — 设计图片提示词、分镜脚本
-5. **ImageGenerator** — 调用 DashScope 万象 API 生成图片（wanx-v1, wan2.7-image-pro）
+5. **ImageGenerator** — 调用图片生成 API（DashScope 万象 wanx-v1 / SenseNova sensenova-u1-fast，Provider 可配）
 6. **VideoGenerator** — 调用可灵 AI API 生成视频（kling-v1, HS256 JWT 鉴权）
 7. **QualityReviewer** — 审核生成质量，评分、问题检测
 
@@ -89,13 +89,13 @@ RAG 增强：当 `rag_enabled=true` 时，需求分析、创意策划、质量�
 
 ### 知识库 Agent 工作流
 
-3 个 Agent 协同完成智能检索与问答（答案生成由 LLM 直接完成，非独立 Agent）：
+五阶段管道协同完成智能检索与问答（`src/knowledge/agent_workflow.py`）：
 
-1. **QueryAnalyzer** — 分析查询意图（FACT/REASONING/COMPARISON/AGGREGATION），提取实体
-2. **StrategyRouter** — 路由到最佳检索策略
-3. **HybridRetriever** — 执行混合检索（向量 + 图谱）
+1. **QueryAnalyzer** — 分析查询意图（FACT/REASONING/COMPARISON/AGGREGATION），提取实体（LLM 优先，关键词规则兜底）
+2. **StrategyRouter** — 按规则路由到最佳检索策略
+3. **Retriever** — 执行向量检索（KnowledgeRetriever）和/或图谱检索（GraphSearchService）
 4. **ResultFuser** — RRF 融合多路检索结果
-5. **AnswerGenerator** — 基于检索上下文生成答案
+5. **AnswerGenerator** — 基于融合上下文生成答案（LLM 优先，Top-1 摘录兜底）
 
 策略路由规则：
 
@@ -149,7 +149,7 @@ Query → GraphRAGState (状态流转)
 | **工作流引擎** | LangChain, LangGraph |
 | **后端** | FastAPI, Pydantic v2, SQLAlchemy 2.0 (async) |
 | **语言模型** | 千问百炼 (OpenAI 兼容 + DashScope SDK 双通道) |
-| **图片生成** | DashScope 万象 (wanx-v1, wan2.7-image-pro) |
+| **图片生成** | DashScope 万象 (wanx-v1) / SenseNova (sensenova-u1-fast)，Provider 可配 |
 | **视频生成** | 可灵 AI (kling-v1, HS256 JWT 鉴权) |
 | **向量检索** | PGVector, BGE-large-zh (本地), 千问 text-embedding-v3 (API) |
 | **图谱检索** | Graph RAG (实体/关系/社区/摘要) |
@@ -220,10 +220,10 @@ Query → GraphRAGState (状态流转)
 
 | 场景 | 降级策略 |
 |------|----------|
-| 无 DashScope API Key | 图片生成降级为 Mock 占位（`is_mock=True`） |
-| 无可灵 AI Key | 视频生成降级为 Mock 占位（`is_mock=True`） |
-| LLM 不可用 | DashScope SDK → 千问 OpenAI 兼容 → 规则生成 |
-| Embedding 不可用 | 千问 API → 本地 BGE-large-zh |
+| 无图片 Provider Key 且 `ALLOW_MOCK_ASSETS=true` | 图片生成降级为 Mock 占位（`is_mock=True`）；默认 `false` 时任务明确失败（fail-closed） |
+| 无可灵 AI Key 且 `ALLOW_MOCK_ASSETS=true` | 视频生成降级为 Mock 占位（`is_mock=True`）；默认 `false` 时任务明确失败 |
+| LLM 不可用 | SettingsFallbackLLMProvider 按配置兜底（SenseNova → DashScope）；文案场景调用失败回退规则草稿 |
+| Embedding | 由 `EMBEDDING_PROVIDER` 选择通道（`local` 默认 / `qwen`），无自动跨通道降级 |
 | 无数据库 | RAG 功能禁用，Agent 使用基础版本 |
 
-> **生产环境注意**：必须设置 `ALLOW_MOCK_ASSETS=false`，否则会静默产出标记为"已完成"的假图/假视频。
+> **生产环境注意**：`ALLOW_MOCK_ASSETS` 默认 `false`（fail-closed）。仅本地/CI 无 Key 体验时设为 `true`，此时占位资产会被明确标记 `is_mock=True`。

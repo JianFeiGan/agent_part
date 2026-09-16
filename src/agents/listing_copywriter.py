@@ -25,7 +25,11 @@ logger = logging.getLogger(__name__)
 
 
 class LLMProvider(StrEnum):
-    """LLM 提供商。"""
+    """LLM 提供商（历史枚举，仅保留兼容）。
+
+    实际 LLM 创建走 SettingsFallbackLLMProvider 统一配置驱动，
+    不再按枚举硬编码厂商客户端。
+    """
 
     TONGYI = "tongyi"
     CLAUDE = "claude"
@@ -40,18 +44,52 @@ class AICopywritingAgent:
     2. LLM 润色优化
     3. 返回最终文案
 
-    LLM 降级策略: 通义千问 → Claude → 规则模式
+    LLM 降级策略: 配置的 LLM Provider（SettingsFallbackLLMProvider，
+    SenseNova/DashScope 按配置兜底）→ 调用失败时保留规则草稿。
     """
 
-    def __init__(self, settings: Any | None = None) -> None:
+    def __init__(
+        self,
+        settings: Any | None = None,
+        retriever: Any | None = None,
+        session: Any | None = None,
+    ) -> None:
         """初始化。
 
         Args:
             settings: 可选配置。
+            retriever: 可选知识检索器，用于类目记忆增强。
+            session: 可选数据库会话，用于类目记忆检索。
         """
         self._settings = settings or get_settings()
+        self._retriever = retriever
+        self._session = session
         self._llm: BaseChatModel | None = None
         self._current_provider: LLMProvider = LLMProvider.TONGYI
+
+    async def _retrieve_category_memory(self, category: str) -> str:
+        """检索类目记忆上下文（失败时返回空串降级）。
+
+        Args:
+            category: 商品类目。
+
+        Returns:
+            格式化后的类目记忆文本，无数据或失败时返回空字符串。
+        """
+        if not category or self._retriever is None or self._session is None:
+            return ""
+
+        fetch = getattr(self._retriever, "retrieve_category_memory_context", None)
+        if fetch is None:
+            return ""
+
+        try:
+            result = await fetch(self._session, category, tenant_id=None)
+        except Exception as e:
+            logger.warning(f"类目记忆检索失败，按无记忆降级: {e}")
+            return ""
+
+        return result if isinstance(result, str) else ""
 
     def _create_llm(self, provider: LLMProvider | None = None) -> BaseChatModel:
         """创建指定 LLM 实例（配置驱动）。
@@ -136,20 +174,31 @@ class AICopywritingAgent:
         return {"copywriting_packages": copywriting_packages}
 
     async def _enhance_package(
-        self, package: CopywritingPackage, product: ListingProduct
+        self,
+        package: CopywritingPackage,
+        product: ListingProduct,
+        category_memory: str = "",
     ) -> CopywritingPackage:
-        """使用 LLM 增强文案包。"""
+        """使用 LLM 增强文案包。
+
+        Args:
+            package: 规则生成的文案草稿。
+            product: 商品信息。
+            category_memory: 类目记忆上下文，注入到每个润色 prompt 中。
+        """
+        memory_section = f"\n类目记忆：{category_memory}" if category_memory else "\n类目记忆：（无相关类目记忆）"
+
         # 增强标题
         package.title = await self._enhance_with_llm(
             package.title,
-            f"商品：{product.title}\n品牌：{product.brand or '无'}\n类目：{product.category or '无'}",
+            f"商品：{product.title}\n品牌：{product.brand or '无'}\n类目：{product.category or '无'}{memory_section}",
         )
 
         # 增强描述
         if package.description:
             package.description = await self._enhance_with_llm(
                 package.description,
-                f"商品：{product.title}\n品牌：{product.brand or '无'}",
+                f"商品：{product.title}\n品牌：{product.brand or '无'}{memory_section}",
             )
 
         # 增强五点描述
@@ -157,7 +206,7 @@ class AICopywritingAgent:
         for bullet in package.bullet_points:
             enhanced = await self._enhance_with_llm(
                 bullet,
-                f"商品：{product.title}\n品牌：{product.brand or '无'}",
+                f"商品：{product.title}\n品牌：{product.brand or '无'}{memory_section}",
             )
             enhanced_bullets.append(enhanced)
         package.bullet_points = enhanced_bullets
@@ -180,11 +229,14 @@ class AICopywritingAgent:
         if not packages:
             return {"copywriting_packages": {}}
 
+        # 检索类目记忆（仅在存在目标平台时）
+        category_memory = await self._retrieve_category_memory(product.category or "")
+
         # 尝试 LLM 增强
         enhanced: dict[Platform, CopywritingPackage] = {}
         for platform, package in packages.items():
             try:
-                enhanced_package = await self._enhance_package(package, product)
+                enhanced_package = await self._enhance_package(package, product, category_memory)
                 enhanced[platform] = enhanced_package
                 logger.info(f"LLM-enhanced copywriting for {platform.value}")
             except Exception:

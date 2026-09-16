@@ -371,20 +371,22 @@ class WorkflowBuilder:
         Returns:
             Agent 实例。
         """
+        from src.agents.image_generator import ImageGeneratorAgent
+
+        base_agent = ImageGeneratorAgent(
+            tenant_id=self._tenant_id, task_id=self._task_id
+        )
         if self._rag_enabled and self._retriever:
             from src.agents.rag_image_generator import RAGEnhancedImageGenerator
 
             return RAGEnhancedImageGenerator(
+                base_agent=base_agent,
                 retriever=self._retriever,
                 session=self._session,
                 tenant_id=self._tenant_id,
                 task_id=self._task_id,
             )
-        from src.agents.image_generator import ImageGeneratorAgent
-
-        return ImageGeneratorAgent(
-            tenant_id=self._tenant_id, task_id=self._task_id
-        )
+        return base_agent
 
     def add_agent_nodes(self) -> "WorkflowBuilder":
         """添加所有Agent节点。
