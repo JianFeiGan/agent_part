@@ -25,5 +25,4 @@
 ## 更多资源
 
 - [API 文档](http://localhost:8000/docs) — FastAPI 自动生成的交互式 API 文档
-- [CHANGELOG](https://github.com/JianFeiGan/agent_part/blob/master/CHANGELOG.md) — 版本变更记录
 - [CONTRIBUTING](https://github.com/JianFeiGan/agent_part/blob/master/CONTRIBUTING.md) — 贡献指南

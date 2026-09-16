@@ -169,6 +169,8 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
 │                                                               │
 │  刊登工作流:                                                    │
 │  ImportProduct -> [AssetOptimizer | Copywriter] -> Compliance   │
+│       -> PlatformPush -> Finalize                                │
+│       （合规阻断挂起人工审核 / 失败自动重试一次 / 产物持久化）      │
 │                                                               │
 │  知识库 Agent 工作流:                                           │
 │  QueryAnalyzer -> StrategyRouter -> Retriever -> ResultFuser    │
@@ -185,8 +187,6 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
  │  15+ 表 (向量/图谱/记忆)  │  缓存   │  本地/OSS │
  └─────────────────────────────────────────────┘
 ```
-
-> 📊 更详细的类图与时序图见 [`docs/class-diagram.mermaid`](docs/class-diagram.mermaid) 与 [`docs/sequence-diagram.mermaid`](docs/sequence-diagram.mermaid)。
 
 > 🗺️ **交互式项目地图**：浏览器直接打开 [`docs/architecture-map.html`](docs/architecture-map.html)——12 个核心组件、3 条引导视图（视觉生成主路径 / 鉴权与租户 / RAG 与记忆），每个节点可点击跳转到对应源码（revision 锁定 `69cf4d8`）。规格源文件在 [`docs/architecture-map.json`](docs/architecture-map.json)。
 
@@ -256,7 +256,7 @@ npm run dev
 | `RAG_ENABLED` | `true` | 启用 RAG 知识检索 |
 | `RETRIEVAL_TOP_K` | `5` | 检索返回数量 |
 | `SIMILARITY_THRESHOLD` | `0.7` | 相似度阈值 |
-| `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL 连接 URL |
+| `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `localhost` / `5432` / `postgres` / - / `pvg` | PostgreSQL 连接分项（由 `Settings.postgres_url` 拼接；无 `DATABASE_URL` 配置项） |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis 连接 URL |
 | `STORAGE_TYPE` | `local` | 存储类型：`local` 或 `oss` |
 | `ALLOW_MOCK_ASSETS` | `false` | 无 API Key 时允许 Mock 降级（默认 fail-closed，本地开发可设 `true`） |
@@ -309,7 +309,7 @@ agent_part/
 │   └── storage/                  # 文件存储 (本地/OSS)
 ├── frontend/                     # Vue 3 前端
 │   └── src/
-│       ├── views/                # 页面组件 (15个)
+│       ├── views/                # 页面组件 (17个)
 │       ├── components/workbench/ #   Agent 可观测工作台组件
 │       ├── api/                  # API 调用层
 │       ├── types/                # TypeScript 类型
@@ -371,7 +371,7 @@ uv run mypy src/
 
 - [x] **v0.1.0** - LangGraph 7-Agent 视觉生成工作流 + RAG 知识库 + 合规检查 + Vue 3 管理后台
 - [x] **v0.2.0** - 千问百炼对接 + AI 会话追踪 + Agent 可观测工作台（DAG + 提示词轨迹）
-- [ ] **v0.3.0** - 高级 RAG（HyDE / 多查询重写）+ GraphRAG 增强 + 生产级刊登 + 图片 RAG
+- [x] **v0.3.0** - 高级 RAG（HyDE / 多查询重写）+ GraphRAG 增强 + 生产级刊登 + 图片 RAG
 - [ ] **v0.4.0** - Agent 自适应重试与自愈 + 工作流可视化编辑器
 - [ ] **v1.0.0** - 多租户 SaaS 化 + 插件式 Agent 市场 + 全面生产就绪
 
@@ -493,7 +493,8 @@ uv run mypy src/
 │        -> VisualDesigner -> [ImageGen | VideoGen] -> Reviewer     │
 │                                                               │
 │  Listing: ImportProduct -> [AssetOptimizer | Copywriter]       │
-│         -> Compliance                                            │
+│         -> Compliance -> PlatformPush -> Finalize               │
+│         (blocked = human review / auto retry once / persisted)   │
 │                                                               │
 │  Knowledge: QueryAnalyzer -> StrategyRouter -> Retriever        │
 │           -> ResultFuser -> AnswerGenerator                      │
@@ -564,7 +565,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 - [x] **v0.1.0** - LangGraph 7-Agent visual workflow + RAG + compliance + Vue 3 dashboard
 - [x] **v0.2.0** - Qwen/Bailian integration + AI conversation tracking + observable workbench
-- [ ] **v0.3.0** - Advanced RAG (HyDE / multi-query) + GraphRAG + production listing + image RAG
+- [x] **v0.3.0** - Advanced RAG (HyDE / multi-query) + GraphRAG + production listing + image RAG
 - [ ] **v1.0.0** - Multi-tenant SaaS + plugin Agent marketplace + full production readiness
 
 ## 🤝 Contributing

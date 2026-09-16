@@ -90,9 +90,9 @@ async def lifespan(app: FastAPI):
     # Seed 模型厂商预置数据
     try:
         from src.db.model_provider_seeder import seed_model_providers
-        from src.db.postgres import get_db
+        from src.db.postgres import get_db_session
 
-        async with get_db() as session:
+        async with get_db_session() as session:
             # 为 system 租户 seed 预置厂商配置
             await seed_model_providers(session, "system")
             await session.commit()
@@ -146,7 +146,7 @@ if settings.langchain_tracing_v2 and settings.langchain_api_key:
 app = FastAPI(
     title="商品视觉生成器 API",
     description="基于 LangChain/LangGraph 的多 Agent 商品视觉生成系统",
-    version="0.1.0",
+    version="0.3.0",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,

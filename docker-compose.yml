@@ -7,7 +7,12 @@ services:
       - "8000:8000"
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/agent_part
+      # 注意：代码读取 POSTGRES_* 分项（Settings.postgres_url 拼接），DATABASE_URL 无效
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: agent_part
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
       REDIS_URL: redis://redis:6379/0
     depends_on:
       postgres:

@@ -36,6 +36,8 @@ Docker Compose 包含以下服务：
 | postgres | pgvector/pgvector:pg16 | 5432 |
 | redis | redis:6-alpine | 6379 |
 
+> 注：仅 app(8000) 与 frontend(3000) 映射到主机端口；postgres/redis 仅在 Compose 内部网络暴露，如需主机访问请自行添加 `ports` 映射。
+
 ## 方式二：本地开发
 
 ### 后端
@@ -75,9 +77,12 @@ npm run dev
 |------|--------|------|
 | `QWEN_API_KEY` | — | 千问 API Key（阿里云百炼平台），同时支持 OpenAI 兼容和 DashScope 原生协议 |
 | `DASHSCOPE_API_KEY` | — | DashScope API Key，未配置时回退到 QWEN_API_KEY |
+| `SENSENOVA_API_KEY` | — | 商汤 SenseNova API Key（LLM 兜底首选通道，也是默认图片模型的 Provider Key） |
+| `SENSENOVA_BASE_URL` | `https://token.sensenova.cn/v1` | SenseNova API 基址 |
 | `LLM_PROVIDER` | `dashscope` | LLM 提供商：`dashscope`（DashScope SDK）或 `qwen`（OpenAI 兼容） |
 | `QWEN_API_BASE` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 千问 OpenAI 兼容端点 |
-| `QWEN_LLM_MODEL` | `qwen-plus` | LLM 模型名称 |
+| `LLM_MODEL` | `deepseek-v4-flash` | 兜底 LLM（SettingsFallbackLLMProvider，SenseNova → DashScope）使用的模型名称 |
+| `QWEN_LLM_MODEL` | `qwen-plus` | 千问 LLM 模型名称 |
 
 ### 图片与视频生成
 
@@ -98,6 +103,8 @@ npm run dev
 | `QWEN_EMBEDDING_MODEL` | `text-embedding-v3` | 千问 Embedding 模型名称 |
 | `QWEN_EMBEDDING_DIMENSIONS` | `1024` | 千问 Embedding 向量维度 |
 | `RAG_ENABLED` | `true` | 启用 RAG 知识检索增强 |
+| `EMBEDDING_DIMENSION` | `1024` | 向量列维度（BGE-large-zh=1024；text-embedding-v3 支持 768/1024/1536），更换模型需同步调整并做 Alembic 列迁移 |
+| `GRAPH_RAG_ENABLED` | `false` | 启用 Graph RAG 知识图谱增强（默认关闭，未启用时图谱检索策略降级为向量检索） |
 | `CHUNK_SIZE` | `512` | 文档分块大小 (tokens) |
 | `CHUNK_OVERLAP` | `64` | 分块重叠大小 (tokens) |
 | `RETRIEVAL_TOP_K` | `5` | 检索返回文档数量 |
@@ -114,6 +121,7 @@ npm run dev
 | `POSTGRES_DB` | `pvg` | PostgreSQL 数据库名 |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis 连接 URL |
 | `REDIS_PREFIX` | `pvg:` | Redis Key 前缀 |
+| `DB_AUTO_CREATE` | `true` | 启动时自动 create_all 建表（开发便利）；生产建议 `false` 并改用 Alembic 迁移 |
 
 ### 存储
 

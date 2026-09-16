@@ -7,19 +7,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 `product-visual-generator`（README 对外称 **Agent Part**）——基于 LangGraph 的多 Agent 跨境电商内容生成系统：商品分析 → AI 文案 → 图片/视频生成 → 合规检查 → 多平台（Amazon/eBay/Shopify）刊登，配一个 DevTools 风格的可观测工作台（DAG + 提示词轨迹 + WebSocket 实时推送）。
 
 - 包名 `product-visual-generator`，版本 0.3.0，Python ≥3.11（开发目标 3.11，非 3.13）
-- 详细架构文档在 `AGENTS.md`（22.8K）与 `docs-site/concepts/architecture.md`；本文件只覆盖**动手前必须知道**的部分，不重复二者。
+- 详细架构文档在 `AGENTS.md`（约 25K）与 `docs-site/concepts/architecture.md`；本文件只覆盖**动手前必须知道**的部分，不重复二者。
 
 ## 常用命令
 
 ```bash
 # 后端
-uv sync                      # 安装依赖（含 dev extra）
+uv sync                      # 安装依赖（默认含 dev dependency-group；pytest/ruff/mypy 在 dev extra，需 uv sync --extra dev）
 uv run python main.py        # 启动 API（:8000，/docs）
 uv run python run_workflow.py # 无 API 直接跑一遍视觉生成工作流（rich 输出）
 cp .env.example .env         # 首次：至少配 QWEN_API_KEY
 
 # 前端（frontend/）
-npm install && npm run dev   # :5173，vite 已代理 /api → :8000、/ws → :8000
+npm install && npm run dev   # :5173，vite 代理 /api → :8000（ws:true，REST 与 WebSocket 共用 /api 前缀，无独立 /ws 代理）
 # frontend/.npmrc 已设 legacy-peer-deps=true（vitest@4 + vite@5 的 npm peer 解析会崩）
 npm run build                # typecheck + vite build
 
@@ -48,15 +48,15 @@ Docker：`docker compose up -d`（app :8000 / frontend :3000 / postgres pgvector
 
 ## 架构骨架（跨文件才能拼出的部分）
 
-**三条独立的 LangGraph 工作流**，不要混用它们的 state：
+**两条 LangGraph 工作流 + 一条知识库问答管道**（后者是普通 Python 五阶段管道，非 LangGraph 状态机），不要混用它们的 state：
 
 | 工作流 | 入口 | State | 节点 |
 |---|---|---|---|
 | 视觉生成 | `src/graph/workflow.py` `ProductVisualWorkflow` | `graph/state.py` `AgentState` | Orchestrator → RequirementAnalyzer → CreativePlanner → VisualDesigner → [ImageGen \| VideoGen] → QualityReviewer |
-| 刊登 | `src/graph/listing_workflow.py` `ListingWorkflow` | `graph/listing_state.py` `ListingState` | ImportProduct → [AssetOptimizer ‖ Copywriter] → ComplianceCheck → PlatformPush |
-| 知识库问答 | `src/knowledge/agent_workflow.py` | GraphRAGState | QueryAnalyzer → StrategyRouter → HybridRetriever → ResultFuser → AnswerGenerator |
+| 刊登 | `src/graph/listing_workflow.py` `ListingWorkflow` | `graph/listing_state.py` `ListingState` | ImportProduct → [AssetOptimizer ‖ Copywriter] → ComplianceCheck（任一平台 FAIL 则挂起人工审核）→ PlatformPush（失败自动重试一次）→ Finalize（持久化终态） |
+| 知识库问答 | `src/knowledge/agent_workflow.py` `KnowledgeAgentWorkflow` | `KnowledgeAgentState`（dataclass） | QueryAnalyzer → StrategyRouter → Retriever（vector/graph/hybrid）→ ResultFuser → AnswerGenerator |
 
-三者统一从 `src/graph/__init__.py` 导入（`AgentState` / `ListingState` / `ProductVisualWorkflow` / `ListingWorkflow`）。
+前两者统一从 `src/graph/__init__.py` 导入（`AgentState` / `ListingState` / `ProductVisualWorkflow` / `ListingWorkflow`）；知识库管道在 `src/knowledge`，不经该入口导出。
 
 **分层**：`src/api/router`（FastAPI 路由，全部挂在 `/api/v1`，见 `router/__init__.py`）→ `src/api/service`（`task_manager` 异步任务 + `redis_client` 状态 + `asset_persister`）→ `src/agents` / `src/graph` → `src/clients`（外部厂商）→ `src/db` / `src/storage` / `src/rag`。
 
@@ -88,13 +88,12 @@ Docker：`docker compose up -d`（app :8000 / frontend :3000 / postgres pgvector
 
 ## 踩过的坑
 
-- **两个同名 `TaskStatus`**：生成任务（`frontend/src/types/task.ts:80`，枚举 5 态）与刊登任务（`frontend/src/types/listing.ts:12`，联合类型 8 态，独有 `generating`/`reviewing`/`pushing`/`published`/`partial`，partial=部分平台成功）共享 `pending`/`completed`/`failed` 名字但语义不同、互不可换，误用会静默显示错状态；改状态代码前先确认是哪一套（详见 `CONTEXT.md` 与 `docs/adr/0002-two-taskstatus-types.md`）。
+- **两个同名 `TaskStatus`**：生成任务（`frontend/src/types/task.ts:112`，枚举 5 态）与刊登任务（`frontend/src/types/listing.ts:12`，联合类型 8 态，独有 `generating`/`reviewing`/`pushing`/`published`/`partial`，partial=部分平台成功）共享 `pending`/`completed`/`failed` 名字但语义不同、互不可换，误用会静默显示错状态；改状态代码前先确认是哪一套（详见 `CONTEXT.md` 与 `docs/adr/0002-two-taskstatus-types.md`）。
 - **测试环境被 conftest 强制隔离**：`tests/conftest.py` 有两个 autouse fixture，会把 `ALLOW_MOCK_ASSETS=true`、`RAG_ENABLED=true`、`AUTH_ENABLED=false`，并 monkeypatch 掉 `ProviderFactory.get_image_provider/get_video_provider`（返回 None）与 `BaseAgent._create_llm`（抛 ImportError）。目的是**杜绝测试发起真实外部调用**。所以：新增的 API 测试默认免鉴权；要验证真实路径需在用例内自行 patch 覆盖。
 - **`get_settings()` 是 `lru_cache` 单例**：改环境变量后必须 `get_settings.cache_clear()`，否则读不到新值。
 - **Postgres 连接串由 `POSTGRES_*` 分项拼出**（`settings.postgres_url` property），**没有** `DATABASE_URL` 字段。但 `docker-compose.yml` 里给 app 传了 `DATABASE_URL` 环境变量——它对应用代码无效，实际靠 compose 网络 + 分项默认值的组合生效（compose 未覆盖 POSTGRES_HOST，仍是 localhost，容器内连不上 DB）。Alembic 的 `env.py` 里"支持 DATABASE_URL 覆盖"的注释同样是过期信息，真实来源就是 `settings.postgres_url`。
 - **`src/knowledge/graph.py` 是占位实现**（docstring 明说），真实图谱在 `src/rag/graph_builder.py` / `graph_search.py` / `graph_memory.py`。
 - **前端知识库管理必须用 `/api/v1/knowledge` documents，不要调 `/api/v1/knowledge/graphs`**——后者已标 `deprecated=True`，是进程内内存占位。
-- 仓库根目录有 `README.md.bak`、`frontend/dump.rdb` 等遗留文件，不是活跃资产。
 
 ## Agent skills
 

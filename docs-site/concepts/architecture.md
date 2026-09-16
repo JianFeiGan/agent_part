@@ -13,7 +13,9 @@ Agent Part 采用分层架构，由前端管理后台、API 层、LangGraph 工�
 ┌──────────────────────────▼───────────────────────────────────────┐
 │                     FastAPI API 层 (40+ 端点)                     │
 │  认证: API Token (SHA256 + Scope)    租户隔离: tenant_id         │
-│  路由: products / tasks / knowledge / listing / ai / dashboard   │
+│  路由: products / tasks / knowledge / listing / assets / ai      │
+│        / dashboard / evaluation / graph-rag / memory-proposals   │
+│        / model-providers / health                                │
 └──────────────────────────┬───────────────────────────────────────┘
                            │
 ┌──────────────────────────▼───────────────────────────────────────┐
@@ -24,7 +26,8 @@ Agent Part 采用分层架构，由前端管理后台、API 层、LangGraph 工�
 │       → [ImageGen | VideoGen] → QualityReviewer → END             │
 │                                                                   │
 │  刊登工作流:                                                        │
-│  ImportProduct → [AssetOptimizer | Copywriter] → ComplianceCheck  │
+│  ImportProduct → [AssetOptimizer | Copywriter] → ComplianceCheck   │
+│       → PlatformPush → END                                         │
 │                                                                   │
 │  知识库 Agent 工作流:                                               │
 │  QueryAnalyzer → StrategyRouter → HybridRetriever → ResultFuser  │
@@ -32,8 +35,8 @@ Agent Part 采用分层架构，由前端管理后台、API 层、LangGraph 工�
 └───────┬──────────────┬──────────────┬────────────────────────────┘
         │              │              │
  ┌──────▼──────┐ ┌─────▼─────┐ ┌─────▼──────┐
- │  千问百炼    │ │  DashScope │ │  可灵 AI    │
- │ (OpenAI兼容) │ │  (万象图片) │ │  (视频生成)  │
+ │ 千问/SenseNova│ │  DashScope │ │  可灵 AI    │
+ │  (LLM 通道)  │ │  (万象图片) │ │  (视频生成)  │
  └──────┬──────┘ └─────┬─────┘ └─────┬──────┘
         │              │              │
  ┌──────▼──────────────▼──────────────▼────────┐
@@ -72,20 +75,21 @@ RAG 增强：当 `rag_enabled=true` 时，需求分析、创意策划、质量�
 
 ### 刊登工作流
 
-4 个 Agent 协同完成商品刊登：
+4 个 Agent + 推送服务协同完成商品刊登：
 
-1. **ImportProduct** — 商品导入与标准化
+1. **ImportProduct** — 商品导入与标准化（可复用视觉生成的 AI 图片）
 2. **AssetOptimizer** — 素材优化（裁剪/压缩/格式转换，适配各平台规格）
-3. **AICopywriting** — AI 文案生成（千问 LLM 润色 + 规则草稿降级）
+3. **AICopywriting** — AI 文案生成（规则草稿 → LLM 润色，LLM 失败时保留规则草稿）
 4. **ComplianceChecker** — 合规检查（禁词检测 + 平台规则校验）
+5. **PlatformPush**（ListingPushService）— 并行推送到未阻断平台，非永久错误自动重试一次
 
-素材优化和文案生成并行执行，完成后汇聚到合规检查。
+素材优化和文案生成并行执行，完成后汇聚到合规检查；任一平台合规 FAIL 时任务挂起人工审核（reviewing），不执行推送。
 
 支持的平台适配器：
 
-- **Amazon** — 标题/五点/描述/A+内容
-- **eBay** — 标题/Item Specifics/描述
-- **Shopify** — 标题/描述/标签/SEO
+- **Amazon** — 标题/五点(bullet_points)/描述/搜索词(search_terms)
+- **eBay** — 标题/要点 HTML 列表/描述/搜索词
+- **Shopify** — 标题/body_html(描述+Features)/搜索词
 
 ### 知识库 Agent 工作流
 
@@ -177,6 +181,7 @@ Query → GraphRAGState (状态流转)
 | `tasks:write` | 创建/管理任务 |
 | `assets:read` | 读取资产 |
 | `assets:write` | 上传/管理资产 |
+| `memory:write` | 记忆提炼提案审核 |
 | `*` | 通配符，拥有所有权限 |
 
 ### 多租户隔离
@@ -224,6 +229,7 @@ Query → GraphRAGState (状态流转)
 | 无可灵 AI Key 且 `ALLOW_MOCK_ASSETS=true` | 视频生成降级为 Mock 占位（`is_mock=True`）；默认 `false` 时任务明确失败 |
 | LLM 不可用 | SettingsFallbackLLMProvider 按配置兜底（SenseNova → DashScope）；文案场景调用失败回退规则草稿 |
 | Embedding | 由 `EMBEDDING_PROVIDER` 选择通道（`local` 默认 / `qwen`），无自动跨通道降级 |
+| Graph RAG | `GRAPH_RAG_ENABLED` 默认 `false`，未启用时图谱检索策略降级为向量检索 |
 | 无数据库 | RAG 功能禁用，Agent 使用基础版本 |
 
 > **生产环境注意**：`ALLOW_MOCK_ASSETS` 默认 `false`（fail-closed）。仅本地/CI 无 Key 体验时设为 `true`，此时占位资产会被明确标记 `is_mock=True`。

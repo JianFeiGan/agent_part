@@ -30,8 +30,8 @@
 
 「生成任务」与「刊登任务」的状态类型**在代码里都叫 `TaskStatus`**，但它们是**两套不同的状态机**，不可互换：
 
-- 生成任务：`src/types/task.ts` 的 `TaskStatus` **枚举**
-- 刊登任务：`src/types/listing.ts` 的 `TaskStatus` **联合类型**
+- 生成任务：`frontend/src/types/task.ts` 的 `TaskStatus` **枚举**
+- 刊登任务：`frontend/src/types/listing.ts` 的 `TaskStatus` **联合类型**
 
 两者**共享 `pending`、`completed`、`failed` 三个状态名**，但刊登还独有 `generating`、`reviewing`、`pushing`、`published`、`partial`。
 
