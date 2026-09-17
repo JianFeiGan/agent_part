@@ -123,6 +123,7 @@ import { ProductCategoryLabels } from '@/types/product'
 import type { Product, ProductQueryParams } from '@/types/product'
 import { getProducts, deleteProduct } from '@/api/products'
 import PageState from '@/components/PageState.vue'
+import { resolvePageKind } from '@/utils/pageState'
 
 /**
  * 商品列表页面
@@ -141,12 +142,13 @@ const productList = ref<Product[]>([])
 // 总数
 const total = ref(0)
 
-const listKind = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
-  if (loading.value && !productList.value.length) return 'loading'
-  if (loadFailed.value && !productList.value.length) return 'error'
-  if (!productList.value.length) return 'empty'
-  return 'ready'
-})
+const listKind = computed(() =>
+  resolvePageKind({
+    loading: loading.value,
+    failed: loadFailed.value,
+    hasData: productList.value.length > 0
+  })
+)
 
 // 查询参数
 const queryParams = reactive<ProductQueryParams>({

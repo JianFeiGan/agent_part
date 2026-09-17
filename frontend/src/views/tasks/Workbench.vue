@@ -153,6 +153,7 @@ import { cancelTask } from '@/api/tasks'
 import { useWorkbenchStore } from '@/stores/workbench'
 import { useTaskStatusCoordinator } from '@/composables/useTaskStatusCoordinator'
 import { downloadFile } from '@/utils/download'
+import { resolvePageKind } from '@/utils/pageState'
 import { getTaskStatusLabel, getTaskStatusTagType } from '@/utils/format'
 import { TaskStatus, isTerminalTaskStatus } from '@/types/task'
 import PageState from '@/components/PageState.vue'
@@ -197,11 +198,13 @@ const progressStatus = computed(() => {
 
 const stepLabel = computed(() => store.taskDetail?.current_step || '-')
 
-const pageKind = computed<'loading' | 'error' | 'ready'>(() => {
-  if (store.loading && !store.taskDetail) return 'loading'
-  if (loadError.value && !store.taskDetail) return 'error'
-  return 'ready'
-})
+const pageKind = computed(() =>
+  resolvePageKind({
+    loading: store.loading,
+    failed: loadError.value,
+    hasData: !!store.taskDetail
+  })
+)
 
 async function reload() {
   loadError.value = false
