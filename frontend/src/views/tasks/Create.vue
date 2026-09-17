@@ -49,9 +49,9 @@
 
           <el-form-item label="图片类型">
             <el-checkbox-group v-model="formData.image_types">
-              <el-checkbox label="main">主图</el-checkbox>
-              <el-checkbox label="scene">场景图</el-checkbox>
-              <el-checkbox label="selling_point">卖点图</el-checkbox>
+              <el-checkbox value="main">主图</el-checkbox>
+              <el-checkbox value="scene">场景图</el-checkbox>
+              <el-checkbox value="selling_point">卖点图</el-checkbox>
             </el-checkbox-group>
           </el-form-item>
 

@@ -94,9 +94,8 @@ function findButton(container: HTMLElement, text: string): HTMLButtonElement | u
 
 describe('任务工作台：概览优先', () => {
   beforeEach(() => {
+    // happy-dom 自带 window/localStorage，切勿覆盖（popperjs 依赖 window 上的 DOM 类）
     vi.stubGlobal('WebSocket', MockWebSocket)
-    vi.stubGlobal('window', { location: { protocol: 'http:', host: 'test.local' } })
-    vi.stubGlobal('localStorage', { getItem: () => null })
   })
 
   afterEach(() => {
@@ -163,9 +162,8 @@ describe('任务工作台：概览优先', () => {
 
 describe('任务工作台：资产结果与下载', () => {
   beforeEach(() => {
+    // happy-dom 自带 window/localStorage，切勿覆盖（popperjs 依赖 window 上的 DOM 类）
     vi.stubGlobal('WebSocket', MockWebSocket)
-    vi.stubGlobal('window', { location: { protocol: 'http:', host: 'test.local' } })
-    vi.stubGlobal('localStorage', { getItem: () => null })
   })
 
   afterEach(() => {
