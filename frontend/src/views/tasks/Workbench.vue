@@ -182,7 +182,8 @@ const isTerminal = computed(() => isTerminalTaskStatus(store.taskDetail?.status)
 
 const hasAssets = computed(() => {
   const d = store.taskDetail
-  return !!(d?.images?.length || d?.video?.url)
+  // 视频记录存在即视为有资产；URL 失效由视频区兜底分支展示
+  return !!(d?.images?.length || d?.video)
 })
 
 const imageUrls = computed(() =>

@@ -6,6 +6,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import Workbench from '@/views/tasks/Workbench.vue'
 import { getTaskById } from '@/api/tasks'
+import { downloadFile } from '@/utils/download'
 import { TaskStatus, TaskType } from '@/types/task'
 import type { TaskDetail } from '@/types/task'
 
@@ -20,6 +21,10 @@ vi.mock('@/api/tasks', () => ({
   cancelTask: vi.fn()
 }))
 
+vi.mock('@/utils/download', () => ({
+  downloadFile: vi.fn().mockResolvedValue(undefined)
+}))
+
 // 诊断区组件打桩：避免 G6 等重依赖进入测试环境
 vi.mock('@/components/workbench/AgentDAG.vue', () => ({
   default: { name: 'AgentDAG', template: '<div class="dag-stub">DAG</div>' }
@@ -29,6 +34,7 @@ vi.mock('@/components/workbench/AgentDetailPanel.vue', () => ({
 }))
 
 const getTaskByIdMock = vi.mocked(getTaskById)
+const downloadFileMock = vi.mocked(downloadFile)
 
 class MockWebSocket {
   onopen: (() => void) | null = null
@@ -152,5 +158,113 @@ describe('任务工作台：概览优先', () => {
     expect(alert!.textContent).toContain('图片生成服务返回 429：额度不足')
     // 概览中状态标签同步为失败
     expect(container.querySelector('.overview-grid')?.textContent).toContain('失败')
+  })
+})
+
+describe('任务工作台：资产结果与下载', () => {
+  beforeEach(() => {
+    vi.stubGlobal('WebSocket', MockWebSocket)
+    vi.stubGlobal('window', { location: { protocol: 'http:', host: 'test.local' } })
+    vi.stubGlobal('localStorage', { getItem: () => null })
+  })
+
+  afterEach(() => {
+    while (mounted.length) {
+      const { app, container } = mounted.pop()!
+      app.unmount()
+      container.remove()
+    }
+    document.body.innerHTML = ''
+    vi.unstubAllGlobals()
+    vi.resetAllMocks()
+  })
+
+  it('完成后展示图片资产，每张图可预览且有下载动作', async () => {
+    getTaskByIdMock.mockResolvedValue(
+      makeDetail({
+        status: TaskStatus.COMPLETED,
+        progress: 100,
+        images: [
+          { image_id: 'img1', image_type: 'main', url: 'http://cdn/x1.png', status: 'done' },
+          { image_id: 'img2', image_type: 'scene', url: 'http://cdn/x2.png', status: 'done' }
+        ]
+      })
+    )
+    const { container } = await mountWorkbench()
+
+    const tiles = container.querySelectorAll('.asset-tile')
+    expect(tiles).toHaveLength(2)
+    const imgs = container.querySelectorAll<HTMLImageElement>('.result-image img')
+    expect(imgs).toHaveLength(2)
+    expect(imgs[0].src).toBe('http://cdn/x1.png')
+
+    const downloadBtn = tiles[0].querySelector('button')!
+    expect(downloadBtn.textContent).toContain('下载')
+    downloadBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+    expect(downloadFileMock).toHaveBeenCalledWith('http://cdn/x1.png', 'img1.png')
+  })
+
+  it('完成后展示视频资产：可直接播放并提供下载', async () => {
+    getTaskByIdMock.mockResolvedValue(
+      makeDetail({
+        status: TaskStatus.COMPLETED,
+        progress: 100,
+        video: { video_id: 'v1', url: 'http://cdn/v.mp4', duration: 30, status: 'done' }
+      })
+    )
+    const { container } = await mountWorkbench()
+
+    const video = container.querySelector<HTMLVideoElement>('video.result-video')
+    expect(video).toBeTruthy()
+    expect(video!.src).toBe('http://cdn/v.mp4')
+    expect(video!.hasAttribute('controls')).toBe(true)
+
+    findButton(container, '下载视频')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    for (let i = 0; i < 10; i++) await Promise.resolve()
+    expect(downloadFileMock).toHaveBeenCalledWith('http://cdn/v.mp4', 'v1.mp4')
+  })
+
+  it('没有资产时显示明确空态', async () => {
+    getTaskByIdMock.mockResolvedValue(
+      makeDetail({ status: TaskStatus.COMPLETED, progress: 100, images: [], video: null })
+    )
+    const { container } = await mountWorkbench()
+    expect(container.querySelector('.asset-empty')?.textContent).toContain('暂无图片或视频资产')
+  })
+
+  it('图片 URL 不可用时兜底展示且禁用下载', async () => {
+    getTaskByIdMock.mockResolvedValue(
+      makeDetail({
+        status: TaskStatus.COMPLETED,
+        progress: 100,
+        images: [{ image_id: 'img1', image_type: 'main', url: '', status: 'failed' }]
+      })
+    )
+    const { container } = await mountWorkbench()
+
+    expect(container.querySelector('.asset-broken')?.textContent).toContain('图片地址不可用')
+    const btn = container.querySelector<HTMLButtonElement>('.asset-tile button')
+    expect(btn?.disabled).toBe(true)
+  })
+
+  it('视频 URL 不可用时兜底展示', async () => {
+    getTaskByIdMock.mockResolvedValue(
+      makeDetail({
+        status: TaskStatus.COMPLETED,
+        progress: 100,
+        video: { video_id: 'v1', url: '', duration: 0, status: 'failed' }
+      })
+    )
+    const { container } = await mountWorkbench()
+
+    expect(container.querySelector('.asset-broken')?.textContent).toContain('视频地址不可用')
+    expect(container.querySelector('video')).toBeNull()
+  })
+
+  it('任务未到终态时不展示结果区', async () => {
+    getTaskByIdMock.mockResolvedValue(makeDetail({ status: TaskStatus.RUNNING, progress: 30 }))
+    const { container } = await mountWorkbench()
+    expect(container.querySelector('.results-card')).toBeNull()
   })
 })
