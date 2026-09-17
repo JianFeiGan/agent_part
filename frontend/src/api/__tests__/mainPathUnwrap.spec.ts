@@ -14,6 +14,7 @@ vi.mock('@/api/index', () => {
 import request from '@/api/index'
 import { getProducts, getProductById } from '@/api/products'
 import { getTasks, getTaskById, createTask } from '@/api/tasks'
+import { listModelProviders } from '@/api/providers'
 
 function ok<T>(data: T) {
   return { data: { code: 200, message: 'ok', data } }
@@ -55,5 +56,14 @@ describe('main-path API unwrap', () => {
 
     expect(await getTasks({ page: 1 })).toEqual({ items: [], total: 0, page: 1, page_size: 10, pages: 0 })
     expect(await getProductById('p1')).toEqual({ product_id: 'p1' })
+  })
+
+  it('listModelProviders 返回厂商数组业务数据', async () => {
+    const providers = [{ id: 1, name: 'dashscope', provider_type: 'llm' }]
+    vi.mocked(request.get).mockResolvedValueOnce(ok(providers))
+
+    const result = await listModelProviders('llm')
+    expect(result).toEqual(providers)
+    expect(request.get).toHaveBeenCalledWith('/model-providers', { params: { provider_type: 'llm' } })
   })
 })

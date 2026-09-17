@@ -242,14 +242,14 @@ const loadProducts = async () => {
 // 加载模型厂商列表
 const loadProviders = async () => {
   try {
-    const [llmRes, imageRes, videoRes] = await Promise.all([
+    const [llmList, imageList, videoList] = await Promise.all([
       listModelProviders('llm'),
       listModelProviders('image'),
       listModelProviders('video'),
     ])
-    if (llmRes.data.data) llmProviders.value = llmRes.data.data
-    if (imageRes.data.data) imageProviders.value = imageRes.data.data
-    if (videoRes.data.data) videoProviders.value = videoRes.data.data
+    llmProviders.value = llmList
+    imageProviders.value = imageList
+    videoProviders.value = videoList
   } catch {
     // 厂商列表加载失败不影响创建任务
     console.warn('加载模型厂商列表失败，将使用默认厂商')
