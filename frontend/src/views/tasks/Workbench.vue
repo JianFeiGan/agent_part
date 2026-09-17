@@ -126,8 +126,8 @@
           </template>
         </el-card>
 
-        <!-- 二级诊断：默认折叠 -->
-        <el-card v-show="showDiagnostics" class="diagnostics-card" shadow="never">
+        <!-- 二级诊断：默认折叠（v-if 未展开不挂载，避免 G6 在隐藏容器初始化） -->
+        <el-card v-if="showDiagnostics" class="diagnostics-card" shadow="never">
           <template #header>
             <span>Agent 执行诊断</span>
           </template>
