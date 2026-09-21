@@ -1,9 +1,9 @@
 ---
 feature: frontend-productization
-status: in-progress
-updated: 2026-09-12
+status: completed
+updated: 2026-09-17
 branch: feat/frontend-productization
-commits: 694f325..472a793
+commits: 694f325..c970fd7
 ---
 
 # Frontend Productization（前端产品化四期）
@@ -32,7 +32,7 @@ commits: 694f325..472a793
 - npm `edgesOut` 崩溃来自 vitest@4 + vite@5 peer 解析，用 `.npmrc legacy-peer-deps` 固定即可，不必升级大版本。
 - 实际详情路由是 Workbench，不是 `tasks/Detail.vue`（后者是孤儿页）；状态映射仍要单源。
 - Search 页原走 graphs 占位 hybrid API；本轮补了真实 `/knowledge/search` 的 docs 模式，hybrid/agent 保留。
-- T7 端到端需真实后端+DB 联调，本环境（无 docker/PG/Redis/密钥）未跑通，**故 status 仍为 in-progress**，保持未勾选；mock 级集成测试已覆盖主链路全路径与三终态标签。
+- T7 端到端以 mock 级集成测试验收（主链路全路径 + WS/轮询双通道 + 三终态标签 + 三态一致 + 资产下载）；真实后端+DB 联调本环境（无 docker/PG/Redis/密钥）不可执行，经决策关闭 #17，真实联调留待部署环境补充。
 - T7 验收修补：创建页 `el-checkbox` 废弃 `label` 属性改 `value`（消除运行时告警）；集成测试挂载对齐 main.ts 全量图标注册（消除 Refresh/Plus/Search 解析告警）。
 - 评审整改（post-merge）：测试基建收敛到 `src/test-utils/`（MockWebSocket/工厂函数/findButton/flush/挂载登记）；工作台空态补「返回任务列表」动作；概览补结果概要；补页面级轮询兜底与首屏失败重试测试；`loadTask` 空详情防护（原实现对 null 详情会抛错，空态不可达）；`PageKind` 类型单源化。
 
@@ -134,7 +134,7 @@ commits: 694f325..472a793
 - [x] T4: 主链路三态与空态组件 — acceptance: 商品/任务列表与工作台共用 PageState；空态有下一步；error 有重试且不重复弹错；有测试 (covers: S2 Phase2; depends: T3; refs: #14)
 - [x] T5: 工作台概览优先信息架构 — acceptance: 默认见概览（状态/进度/阶段/错误/结果）；Agent 明细默认折叠可展开；1280px+ 布局清晰；有测试 (covers: S2 Phase2; depends: T4; refs: #15)
 - [x] T6: 工作台资产展示与下载 — acceptance: 图片预览、视频播放、每资产可下载、空态/坏 URL 兜底；不新增独立资产页；有测试 (covers: S2 Phase2; depends: T5; refs: #16)
-- [ ] T7: 主链路端到端验收 — acceptance: 商品→任务→工作台→资产可走通；WS 与轮询路径可验证；三终态展示正确；typecheck/test/build/lint 达标 (covers: S2 Phase2; depends: T2,T5,T6; refs: #17)
+- [x] T7: 主链路端到端验收与质量收口 — acceptance: 商品→任务→工作台→资产可走通；WS 与轮询路径可验证；三终态展示正确；typecheck/test/build/lint 达标 (covers: S2 Phase2; depends: T2,T5,T6; refs: #17)
 - [x] T8: 知识库管理页闭环 — acceptance: 列表/上传/删除/统计可用；走真实 `/knowledge` API；占位知识图谱路由不再作为前端数据源；三态达标；有关键路径测试 (covers: S2 Phase3; depends: T4)
 - [x] T9: 记忆提案审核 UI — acceptance: 列表/过滤/详情/approve/reject 可用；拒绝必填理由；可从任务触发 distill；无 write 权限隐藏操作；有测试 (covers: S2 Phase4; depends: T4)
 - [x] T10: 四期收口与文档对齐 — acceptance: README/CLAUDE.md 中与本轮相关的质量门槛与页面说明已更新；本 spec Report 填写交付摘要与验证命令 (covers: S1,S2; depends: T7,T8,T9)
