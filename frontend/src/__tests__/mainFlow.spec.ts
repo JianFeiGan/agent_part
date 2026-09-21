@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { createApp, nextTick } from 'vue'
+import { createApp } from 'vue'
 import type { App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
@@ -14,13 +14,14 @@ import TaskCreatePage from '@/views/tasks/Create.vue'
 import WorkbenchPage from '@/views/tasks/Workbench.vue'
 
 import { getProducts } from '@/api/products'
-import { getTasks, getTaskById, createTask } from '@/api/tasks'
+import { getTasks, getTaskById, getTaskStatus, createTask } from '@/api/tasks'
 import { listModelProviders } from '@/api/providers'
 import { downloadFile } from '@/utils/download'
-import { TaskStatus, TaskType } from '@/types/task'
-import { ProductCategory } from '@/types/product'
-import type { Product } from '@/types/product'
-import type { Task, TaskDetail, TaskCreateRequest } from '@/types/task'
+import { TaskStatus } from '@/types/task'
+import type { TaskCreateRequest } from '@/types/task'
+import { MockWebSocket } from '@/test-utils/mockWebSocket'
+import { makeDetail, makeStatus, makeTask, makeProduct } from '@/test-utils/fixtures'
+import { findButton, flushTasks } from '@/test-utils/dom'
 
 vi.mock('@/api/products', () => ({ getProducts: vi.fn(), deleteProduct: vi.fn() }))
 vi.mock('@/api/tasks', () => ({
@@ -44,98 +45,10 @@ vi.mock('@/components/workbench/AgentDetailPanel.vue', () => ({
 const getProductsMock = vi.mocked(getProducts)
 const getTasksMock = vi.mocked(getTasks)
 const getTaskByIdMock = vi.mocked(getTaskById)
+const getTaskStatusMock = vi.mocked(getTaskStatus)
 const createTaskMock = vi.mocked(createTask)
 const listModelProvidersMock = vi.mocked(listModelProviders)
 const downloadFileMock = vi.mocked(downloadFile)
-
-class MockWebSocket {
-  static instances: MockWebSocket[] = []
-  onopen: (() => void) | null = null
-  onmessage: ((event: { data: string }) => void) | null = null
-  onclose: (() => void) | null = null
-  onerror: (() => void) | null = null
-  closed = false
-  constructor(public url: string) {
-    MockWebSocket.instances.push(this)
-  }
-  close() {
-    if (this.closed) return
-    this.closed = true
-    this.onclose?.()
-  }
-  emitOpen() {
-    this.onopen?.()
-  }
-  emitMessage(data: unknown) {
-    this.onmessage?.({ data: JSON.stringify(data) })
-  }
-}
-
-const product: Product = {
-  product_id: 'p1',
-  name: '无线降噪耳机',
-  brand: 'ACME',
-  category: ProductCategory.DIGITAL,
-  subcategory: null,
-  description: '旗舰级主动降噪',
-  short_description: null,
-  selling_points: [],
-  specifications: [],
-  target_audience: [],
-  price_range: null,
-  existing_images: [],
-  existing_videos: [],
-  tags: ['数码']
-}
-
-function makeTask(overrides: Partial<Task> = {}): Task {
-  return {
-    task_id: 't1',
-    product_id: 'p1',
-    status: TaskStatus.RUNNING,
-    progress: 10,
-    current_step: 'orchestrator',
-    error_message: null,
-    created_at: '2026-09-17T00:00:00Z',
-    updated_at: '2026-09-17T00:00:00Z',
-    ...overrides
-  }
-}
-
-function makeDetail(overrides: Partial<TaskDetail> = {}): TaskDetail {
-  return {
-    task_id: 't1',
-    product_id: 'p1',
-    task_type: TaskType.IMAGE_ONLY,
-    status: TaskStatus.RUNNING,
-    progress: 45,
-    current_step: 'creative_planner',
-    completed_steps: [],
-    agent_logs: [],
-    images: [],
-    video: null,
-    quality_reports: [],
-    error_message: null,
-    created_at: '2026-09-17T00:00:00Z',
-    updated_at: '2026-09-17T00:00:00Z',
-    ...overrides
-  }
-}
-
-async function flush() {
-  // setTimeout(0) 宏任务让出可排空任意长度的微任务链（路由多级导航 promise），
-  // 再 nextTick 等渲染；纯 Promise.resolve 轮询追不上路由确认
-  for (let i = 0; i < 5; i++) {
-    await new Promise(r => setTimeout(r, 0))
-    await nextTick()
-  }
-}
-
-function findButton(container: HTMLElement, text: string): HTMLButtonElement | undefined {
-  return Array.from(container.querySelectorAll('button')).find(b =>
-    b.textContent?.includes(text)
-  )
-}
 
 let app: App | null = null
 let container: HTMLElement | null = null
@@ -166,7 +79,7 @@ async function mountAt(path: string): Promise<Router> {
   router.push(path)
   await router.isReady()
   app.mount(container)
-  await flush()
+  await flushTasks()
   return router
 }
 
@@ -200,7 +113,7 @@ describe('主链路端到端验收', () => {
 
   it('商品 → 任务创建（预选提交）→ 任务列表 → 工作台 → WS 终态 → 资产下载 完整走通', async () => {
     getProductsMock.mockResolvedValue({
-      items: [product],
+      items: [makeProduct()],
       total: 1,
       page: 1,
       page_size: 10,
@@ -215,7 +128,9 @@ describe('主链路端到端验收', () => {
     })
     createTaskMock.mockResolvedValue({ task_id: 't1' })
     getTaskByIdMock
-      .mockResolvedValueOnce(makeDetail({ status: TaskStatus.RUNNING, progress: 45 }))
+      .mockResolvedValueOnce(
+        makeDetail({ status: TaskStatus.RUNNING, progress: 45, current_step: 'creative_planner' })
+      )
       .mockResolvedValue(
         makeDetail({
           status: TaskStatus.COMPLETED,
@@ -229,13 +144,13 @@ describe('主链路端到端验收', () => {
     const router = await mountAt('/products')
     expect(container!.textContent).toContain('无线降噪耳机')
     findButton(container!, '生成任务')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    await flush()
+    await flushTasks()
 
     // 2. 任务创建页：商品已预选，直接提交
     expect(router.currentRoute.value.fullPath).toBe('/tasks/create?product_id=p1')
     expect(container!.textContent).toContain('无线降噪耳机')
     findButton(container!, '创建任务')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    await flush()
+    await flushTasks()
     expect(createTaskMock).toHaveBeenCalledTimes(1)
     const payload = createTaskMock.mock.calls[0][0] as TaskCreateRequest
     expect(payload.product_id).toBe('p1')
@@ -247,7 +162,7 @@ describe('主链路端到端验收', () => {
 
     // 4. 进入工作台：概览优先，WS 建立
     findButton(container!, '详情')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    await flush()
+    await flushTasks()
     expect(router.currentRoute.value.path).toBe('/tasks/t1')
     expect(container!.textContent).toContain('任务概览')
     expect(container!.textContent).toContain('creative_planner')
@@ -257,7 +172,7 @@ describe('主链路端到端验收', () => {
     const ws = MockWebSocket.instances[0]
     ws.emitOpen()
     ws.emitMessage({ status: 'completed', progress: 100, current_step: 'completed' })
-    await flush()
+    await flushTasks()
     expect(getTaskByIdMock).toHaveBeenCalledTimes(2)
 
     // 6. 终态展示结果区，资产可下载
@@ -265,7 +180,7 @@ describe('主链路端到端验收', () => {
     const downloadBtn = container!.querySelector<HTMLButtonElement>('.asset-tile button')
     expect(downloadBtn?.textContent).toContain('下载')
     downloadBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    await flush()
+    await flushTasks()
     expect(downloadFileMock).toHaveBeenCalledWith('http://cdn/x1.png', 'img1.png')
   })
 
@@ -296,7 +211,7 @@ describe('主链路端到端验收', () => {
   it('商品列表查询失败给出驻留错误与重试入口，重试后恢复', async () => {
     getProductsMock
       .mockRejectedValueOnce(new Error('network down'))
-      .mockResolvedValue({ items: [product], total: 1, page: 1, page_size: 10, pages: 1 })
+      .mockResolvedValue({ items: [makeProduct()], total: 1, page: 1, page_size: 10, pages: 1 })
     await mountAt('/products')
 
     // 失败：驻留错误 + 重试入口，无数据时不展示表格
@@ -307,8 +222,32 @@ describe('主链路端到端验收', () => {
 
     // 重试恢复
     retryBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    await flush()
+    await flushTasks()
     expect(getProductsMock).toHaveBeenCalledTimes(2)
     expect(container!.textContent).toContain('无线降噪耳机')
+  })
+
+  it('工作台 WS 断开后降级轮询兜底：轻量快照驱动进度并标注轮询通道', async () => {
+    getTaskByIdMock.mockResolvedValue(
+      makeDetail({ status: TaskStatus.RUNNING, progress: 45, current_step: 'creative_planner' })
+    )
+    getTaskStatusMock.mockResolvedValue(
+      makeStatus({ status: TaskStatus.RUNNING, progress: 80, current_step: 'image_generator' })
+    )
+    await mountAt('/tasks/t1')
+
+    // WS 建立后服务端断开 → 降级轮询
+    const ws = MockWebSocket.instances[0]
+    ws.emitOpen()
+    ws.close()
+    await flushTasks()
+
+    // 立即轮询一次轻量状态
+    expect(getTaskStatusMock).toHaveBeenCalledTimes(1)
+    // 快照驱动进度与当前阶段
+    expect(container!.textContent).toContain('80%')
+    expect(container!.textContent).toContain('image_generator')
+    // 通道标注为轮询兜底
+    expect(container!.textContent).toContain('轮询兜底')
   })
 })

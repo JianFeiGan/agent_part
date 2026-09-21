@@ -1,14 +1,13 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { createApp, h } from 'vue'
-import type { App } from 'vue'
 import ElementPlus from 'element-plus'
 import PageState from '@/components/PageState.vue'
-
-const mounted: Array<{ app: App; container: HTMLElement }> = []
+import type { PageKind } from '@/utils/pageState'
+import { trackMount, unmountAll } from '@/test-utils/dom'
 
 type PageStateMountProps = {
-  kind: 'loading' | 'empty' | 'error' | 'ready'
+  kind: PageKind
   emptyDescription?: string
   emptyActionText?: string
   errorTitle?: string
@@ -29,17 +28,12 @@ function mountPageState(props: PageStateMountProps, slotContent?: string) {
   })
   app.use(ElementPlus)
   app.mount(container)
-  const entry = { app, container }
-  mounted.push(entry)
-  return entry
+  trackMount(app, container)
+  return { app, container }
 }
 
 afterEach(() => {
-  while (mounted.length) {
-    const { app, container } = mounted.pop()!
-    app.unmount()
-    container.remove()
-  }
+  unmountAll()
 })
 
 describe('PageState 共享三态组件', () => {

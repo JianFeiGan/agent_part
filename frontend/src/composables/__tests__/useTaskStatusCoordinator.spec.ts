@@ -3,8 +3,10 @@ import { setActivePinia, createPinia } from 'pinia'
 import { createTaskStatusCoordinator } from '@/composables/useTaskStatusCoordinator'
 import { useWorkbenchStore } from '@/stores/workbench'
 import { getTaskById, getTaskStatus } from '@/api/tasks'
-import { TaskStatus, TaskType } from '@/types/task'
-import type { TaskDetail, TaskStatusResponse } from '@/types/task'
+import { TaskStatus } from '@/types/task'
+import { MockWebSocket } from '@/test-utils/mockWebSocket'
+import { makeDetail, makeStatus } from '@/test-utils/fixtures'
+import { flushMicrotasks } from '@/test-utils/dom'
 
 vi.mock('@/api/tasks', () => ({
   getTaskById: vi.fn(),
@@ -13,80 +15,6 @@ vi.mock('@/api/tasks', () => ({
 
 const getTaskByIdMock = vi.mocked(getTaskById)
 const getTaskStatusMock = vi.mocked(getTaskStatus)
-
-type WsHandler = (() => void) | null
-
-class MockWebSocket {
-  static instances: MockWebSocket[] = []
-
-  onopen: WsHandler = null
-  onmessage: ((event: { data: string }) => void) | null = null
-  onclose: WsHandler = null
-  onerror: WsHandler = null
-  closed = false
-
-  constructor(public url: string) {
-    MockWebSocket.instances.push(this)
-  }
-
-  close() {
-    if (this.closed) return
-    this.closed = true
-    this.onclose?.()
-  }
-
-  emitOpen() {
-    this.onopen?.()
-  }
-
-  emitMessage(data: unknown) {
-    this.onmessage?.({ data: JSON.stringify(data) })
-  }
-
-  /** 服务端/网络侧断开（非本端 close） */
-  emitServerClose() {
-    if (this.closed) return
-    this.closed = true
-    this.onclose?.()
-  }
-}
-
-function makeDetail(overrides: Partial<TaskDetail> = {}): TaskDetail {
-  return {
-    task_id: 't1',
-    product_id: 'p1',
-    task_type: TaskType.IMAGE_ONLY,
-    status: TaskStatus.RUNNING,
-    progress: 0,
-    current_step: 'orchestrator',
-    completed_steps: [],
-    agent_logs: [],
-    images: [],
-    video: null,
-    quality_reports: [],
-    error_message: null,
-    created_at: '2026-09-17T00:00:00Z',
-    updated_at: '2026-09-17T00:00:00Z',
-    ...overrides
-  }
-}
-
-function makeStatus(overrides: Partial<TaskStatusResponse> = {}): TaskStatusResponse {
-  return {
-    task_id: 't1',
-    status: TaskStatus.RUNNING,
-    progress: 0,
-    current_step: '',
-    created_at: '2026-09-17T00:00:00Z',
-    updated_at: '2026-09-17T00:00:00Z',
-    ...overrides
-  }
-}
-
-/** 仅冲刷微任务队列（fake timers 下 Promise 链不受影响） */
-async function flush() {
-  for (let i = 0; i < 20; i++) await Promise.resolve()
-}
 
 describe('useTaskStatusCoordinator 行为', () => {
   let store: ReturnType<typeof useWorkbenchStore>
@@ -109,18 +37,18 @@ describe('useTaskStatusCoordinator 行为', () => {
 
   it('WebSocket 正常时实时更新任务状态与 Agent 状态，页面可感知连接模式', async () => {
     getTaskByIdMock.mockResolvedValue(makeDetail({ status: TaskStatus.RUNNING, progress: 10 }))
-    const c = createTaskStatusCoordinator('t1')
-    expect(c.connectionMode.value).toBe('connecting')
-    expect(c.connectionLabel.value).toBe('连接中')
+    const coordinator = createTaskStatusCoordinator('t1')
+    expect(coordinator.connectionMode.value).toBe('connecting')
+    expect(coordinator.connectionLabel.value).toBe('连接中')
 
-    await c.start()
+    await coordinator.start()
     expect(MockWebSocket.instances).toHaveLength(1)
     const ws = MockWebSocket.instances[0]
     expect(ws.url).toBe('ws://test.local/api/v1/tasks/t1/ws')
 
     ws.emitOpen()
-    expect(c.connectionMode.value).toBe('websocket')
-    expect(c.connectionLabel.value).toBe('实时连接')
+    expect(coordinator.connectionMode.value).toBe('websocket')
+    expect(coordinator.connectionLabel.value).toBe('实时连接')
 
     ws.emitMessage({ type: 'progress_update', progress: 55, current_step: 'creative_planner' })
     expect(store.taskDetail?.progress).toBe(55)
@@ -135,17 +63,17 @@ describe('useTaskStatusCoordinator 行为', () => {
     getTaskByIdMock
       .mockResolvedValueOnce(makeDetail({ status: TaskStatus.RUNNING, progress: 10 }))
       .mockResolvedValue(makeDetail({ status: TaskStatus.COMPLETED, progress: 100 }))
-    const c = createTaskStatusCoordinator('t1')
-    await c.start()
+    const coordinator = createTaskStatusCoordinator('t1')
+    await coordinator.start()
     const ws = MockWebSocket.instances[0]
     ws.emitOpen()
 
     // legacy 轻量帧（无 type，仅状态字段）
     ws.emitMessage({ status: 'completed', progress: 100, current_step: 'done' })
-    await flush()
+    await flushMicrotasks()
 
-    expect(c.connectionMode.value).toBe('closed')
-    expect(c.connectionLabel.value).toBe('已断开')
+    expect(coordinator.connectionMode.value).toBe('closed')
+    expect(coordinator.connectionLabel.value).toBe('已断开')
     // 初始 1 次 + 终态补拉 1 次（onclose 与 onmessage 双路径不重复拉取）
     expect(getTaskByIdMock).toHaveBeenCalledTimes(2)
     expect(store.taskDetail?.status).toBe(TaskStatus.COMPLETED)
@@ -153,19 +81,19 @@ describe('useTaskStatusCoordinator 行为', () => {
 
   it('WS 断开且任务 running 时降级轮询：间隔 5s、轻量快照更新', async () => {
     getTaskByIdMock.mockResolvedValue(makeDetail({ status: TaskStatus.RUNNING, progress: 10 }))
-    const c = createTaskStatusCoordinator('t1')
-    await c.start()
+    const coordinator = createTaskStatusCoordinator('t1')
+    await coordinator.start()
     const ws = MockWebSocket.instances[0]
     ws.emitOpen()
 
     getTaskStatusMock.mockResolvedValue(
       makeStatus({ status: TaskStatus.RUNNING, progress: 30, current_step: 'image_generator' })
     )
-    ws.emitServerClose()
-    await flush()
+    ws.close()
+    await flushMicrotasks()
 
-    expect(c.connectionMode.value).toBe('polling')
-    expect(c.connectionLabel.value).toBe('轮询兜底')
+    expect(coordinator.connectionMode.value).toBe('polling')
+    expect(coordinator.connectionLabel.value).toBe('轮询兜底')
     // 降级后立即轮询一次
     expect(getTaskStatusMock).toHaveBeenCalledTimes(1)
     // 轻量快照驱动状态/进度
@@ -183,21 +111,21 @@ describe('useTaskStatusCoordinator 行为', () => {
     getTaskByIdMock
       .mockResolvedValueOnce(makeDetail({ status: TaskStatus.RUNNING }))
       .mockResolvedValue(makeDetail({ status: TaskStatus.COMPLETED, progress: 100 }))
-    const c = createTaskStatusCoordinator('t1')
-    await c.start()
+    const coordinator = createTaskStatusCoordinator('t1')
+    await coordinator.start()
     const ws = MockWebSocket.instances[0]
     ws.emitOpen()
 
     getTaskStatusMock.mockResolvedValueOnce(makeStatus({ status: TaskStatus.RUNNING, progress: 40 }))
-    ws.emitServerClose()
-    await flush()
+    ws.close()
+    await flushMicrotasks()
     expect(getTaskStatusMock).toHaveBeenCalledTimes(1)
 
     getTaskStatusMock.mockResolvedValueOnce(makeStatus({ status: TaskStatus.COMPLETED, progress: 100 }))
     await vi.advanceTimersByTimeAsync(5000)
-    await flush()
+    await flushMicrotasks()
 
-    expect(c.connectionMode.value).toBe('closed')
+    expect(coordinator.connectionMode.value).toBe('closed')
     expect(getTaskStatusMock).toHaveBeenCalledTimes(2)
     // 终态补拉完整详情
     expect(getTaskByIdMock).toHaveBeenCalledTimes(2)
@@ -205,21 +133,21 @@ describe('useTaskStatusCoordinator 行为', () => {
 
     // 轮询已停、重连已清：继续推进不产生新请求/新连接
     await vi.advanceTimersByTimeAsync(60_000)
-    await flush()
+    await flushMicrotasks()
     expect(getTaskStatusMock).toHaveBeenCalledTimes(2)
     expect(MockWebSocket.instances).toHaveLength(1)
   })
 
   it('非 running 任务断线后不启动轮询', async () => {
     getTaskByIdMock.mockResolvedValue(makeDetail({ status: TaskStatus.PENDING }))
-    const c = createTaskStatusCoordinator('t1')
-    await c.start()
+    const coordinator = createTaskStatusCoordinator('t1')
+    await coordinator.start()
     const ws = MockWebSocket.instances[0]
     ws.emitOpen()
-    ws.emitServerClose()
-    await flush()
+    ws.close()
+    await flushMicrotasks()
 
-    expect(c.connectionMode.value).toBe('closed')
+    expect(coordinator.connectionMode.value).toBe('closed')
     await vi.advanceTimersByTimeAsync(30_000)
     expect(getTaskStatusMock).not.toHaveBeenCalled()
   })
@@ -234,38 +162,38 @@ describe('useTaskStatusCoordinator 行为', () => {
     vi.stubGlobal('WebSocket', ThrowingWebSocket)
     getTaskStatusMock.mockResolvedValue(makeStatus({ status: TaskStatus.RUNNING, progress: 5 }))
 
-    const c = createTaskStatusCoordinator('t1')
-    await c.start()
-    await flush()
+    const coordinator = createTaskStatusCoordinator('t1')
+    await coordinator.start()
+    await flushMicrotasks()
 
-    expect(c.connectionMode.value).toBe('polling')
+    expect(coordinator.connectionMode.value).toBe('polling')
     expect(getTaskStatusMock).toHaveBeenCalledTimes(1)
   })
 
   it('首屏加载即为终态时不建立任何连接', async () => {
     getTaskByIdMock.mockResolvedValue(makeDetail({ status: TaskStatus.COMPLETED, progress: 100 }))
-    const c = createTaskStatusCoordinator('t1')
-    await c.start()
+    const coordinator = createTaskStatusCoordinator('t1')
+    await coordinator.start()
 
-    expect(c.connectionMode.value).toBe('closed')
+    expect(coordinator.connectionMode.value).toBe('closed')
     expect(MockWebSocket.instances).toHaveLength(0)
     expect(getTaskStatusMock).not.toHaveBeenCalled()
   })
 
   it('stop 后停止轮询且不再发起状态请求', async () => {
     getTaskByIdMock.mockResolvedValue(makeDetail({ status: TaskStatus.RUNNING }))
-    const c = createTaskStatusCoordinator('t1')
-    await c.start()
+    const coordinator = createTaskStatusCoordinator('t1')
+    await coordinator.start()
     const ws = MockWebSocket.instances[0]
     ws.emitOpen()
 
     getTaskStatusMock.mockResolvedValue(makeStatus({ status: TaskStatus.RUNNING, progress: 10 }))
-    ws.emitServerClose()
-    await flush()
+    ws.close()
+    await flushMicrotasks()
     expect(getTaskStatusMock).toHaveBeenCalledTimes(1)
 
-    c.stop()
-    expect(c.connectionMode.value).toBe('closed')
+    coordinator.stop()
+    expect(coordinator.connectionMode.value).toBe('closed')
     await vi.advanceTimersByTimeAsync(60_000)
     expect(getTaskStatusMock).toHaveBeenCalledTimes(1)
   })
@@ -273,8 +201,8 @@ describe('useTaskStatusCoordinator 行为', () => {
   it('首屏加载失败且无已有详情时回调 onFirstLoadError', async () => {
     getTaskByIdMock.mockRejectedValue(new Error('boom'))
     const onFirstLoadError = vi.fn()
-    const c = createTaskStatusCoordinator('t1', { onFirstLoadError })
-    await c.start()
+    const coordinator = createTaskStatusCoordinator('t1', { onFirstLoadError })
+    await coordinator.start()
 
     expect(onFirstLoadError).toHaveBeenCalledTimes(1)
   })

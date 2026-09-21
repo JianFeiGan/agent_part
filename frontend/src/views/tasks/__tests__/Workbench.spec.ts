@@ -1,18 +1,22 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createApp, nextTick } from 'vue'
-import type { App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus from 'element-plus'
 import Workbench from '@/views/tasks/Workbench.vue'
 import { getTaskById } from '@/api/tasks'
 import { downloadFile } from '@/utils/download'
-import { TaskStatus, TaskType } from '@/types/task'
+import { TaskStatus } from '@/types/task'
 import type { TaskDetail } from '@/types/task'
+import { MockWebSocket } from '@/test-utils/mockWebSocket'
+import { makeDetail } from '@/test-utils/fixtures'
+import { findButton, flushMicrotasks, trackMount, unmountAll } from '@/test-utils/dom'
+
+const { routerPushMock } = vi.hoisted(() => ({ routerPushMock: vi.fn() }))
 
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { id: 't1' } }),
-  useRouter: () => ({ push: vi.fn() })
+  useRouter: () => ({ push: routerPushMock })
 }))
 
 vi.mock('@/api/tasks', () => ({
@@ -36,39 +40,6 @@ vi.mock('@/components/workbench/AgentDetailPanel.vue', () => ({
 const getTaskByIdMock = vi.mocked(getTaskById)
 const downloadFileMock = vi.mocked(downloadFile)
 
-class MockWebSocket {
-  onopen: (() => void) | null = null
-  onmessage: ((event: { data: string }) => void) | null = null
-  onclose: (() => void) | null = null
-  onerror: (() => void) | null = null
-  constructor(public url: string) {}
-  close() {
-    this.onclose?.()
-  }
-}
-
-function makeDetail(overrides: Partial<TaskDetail> = {}): TaskDetail {
-  return {
-    task_id: 't1',
-    product_id: 'p1',
-    task_type: TaskType.IMAGE_ONLY,
-    status: TaskStatus.RUNNING,
-    progress: 0,
-    current_step: 'orchestrator',
-    completed_steps: [],
-    agent_logs: [],
-    images: [],
-    video: null,
-    quality_reports: [],
-    error_message: null,
-    created_at: '2026-09-17T00:00:00Z',
-    updated_at: '2026-09-17T00:00:00Z',
-    ...overrides
-  }
-}
-
-const mounted: Array<{ app: App; container: HTMLElement }> = []
-
 async function mountWorkbench() {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -79,36 +50,27 @@ async function mountWorkbench() {
   app.use(ElementPlus)
   app.mount(container)
   // 等首屏详情加载与 DOM 更新
-  for (let i = 0; i < 20; i++) await Promise.resolve()
+  await flushMicrotasks()
   await nextTick()
-  const entry = { app, container }
-  mounted.push(entry)
-  return entry
+  trackMount(app, container)
+  return { app, container }
 }
 
-function findButton(container: HTMLElement, text: string): HTMLButtonElement | undefined {
-  return Array.from(container.querySelectorAll('button')).find(b =>
-    b.textContent?.includes(text)
-  )
-}
+beforeEach(() => {
+  // happy-dom 自带 window/localStorage，切勿覆盖（popperjs 依赖 window 上的 DOM 类）
+  MockWebSocket.instances = []
+  vi.stubGlobal('WebSocket', MockWebSocket)
+})
+
+afterEach(() => {
+  unmountAll()
+  document.body.innerHTML = ''
+  vi.unstubAllGlobals()
+  vi.resetAllMocks()
+})
 
 describe('任务工作台：概览优先', () => {
-  beforeEach(() => {
-    // happy-dom 自带 window/localStorage，切勿覆盖（popperjs 依赖 window 上的 DOM 类）
-    vi.stubGlobal('WebSocket', MockWebSocket)
-  })
-
-  afterEach(() => {
-    while (mounted.length) {
-      const { app, container } = mounted.pop()!
-      app.unmount()
-      container.remove()
-    }
-    vi.unstubAllGlobals()
-    vi.resetAllMocks()
-  })
-
-  it('默认展示任务概览（状态/进度/当前阶段），Agent 诊断默认折叠且不挂载', async () => {
+  it('默认展示任务概览（状态/进度/当前阶段/结果概要），Agent 诊断默认折叠且不挂载', async () => {
     getTaskByIdMock.mockResolvedValue(
       makeDetail({ status: TaskStatus.RUNNING, progress: 45, current_step: 'creative_planner' })
     )
@@ -119,6 +81,8 @@ describe('任务工作台：概览优先', () => {
     expect(container.textContent).toContain('当前阶段')
     expect(container.textContent).toContain('creative_planner')
     expect(container.textContent).toContain('45%')
+    // 非终态时结果概要显示生成中
+    expect(container.textContent).toContain('生成中')
     // 诊断区默认折叠：入口可见，内容未挂载
     expect(findButton(container, '展开 Agent 诊断')).toBeTruthy()
     expect(container.querySelector('.dag-stub')).toBeNull()
@@ -158,25 +122,56 @@ describe('任务工作台：概览优先', () => {
     // 概览中状态标签同步为失败
     expect(container.querySelector('.overview-grid')?.textContent).toContain('失败')
   })
+
+  it('终态任务的概览展示结果概要', async () => {
+    getTaskByIdMock.mockResolvedValue(
+      makeDetail({
+        status: TaskStatus.COMPLETED,
+        progress: 100,
+        images: [
+          { image_id: 'img1', image_type: 'main', url: 'http://cdn/x1.png', status: 'done' },
+          { image_id: 'img2', image_type: 'scene', url: 'http://cdn/x2.png', status: 'done' }
+        ],
+        video: { video_id: 'v1', url: 'http://cdn/v.mp4', duration: 30, status: 'done' }
+      })
+    )
+    const { container } = await mountWorkbench()
+    expect(container.querySelector('.overview-grid')?.textContent).toContain('2 张图片 + 1 个视频')
+  })
+})
+
+describe('任务工作台：加载失败与空态', () => {
+  it('首屏加载失败展示驻留错误与重试入口，重试后恢复概览', async () => {
+    getTaskByIdMock
+      .mockRejectedValueOnce(new Error('boom'))
+      .mockResolvedValueOnce(makeDetail({ status: TaskStatus.RUNNING, progress: 45 }))
+    const { container } = await mountWorkbench()
+
+    expect(container.textContent).toContain('任务详情加载失败')
+    const retry = findButton(container, '重试')
+    expect(retry).toBeTruthy()
+
+    retry!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await flushMicrotasks()
+    await nextTick()
+    expect(getTaskByIdMock).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('任务概览')
+  })
+
+  it('任务详情为空时提供返回任务列表的下一步动作', async () => {
+    getTaskByIdMock.mockResolvedValue(null as unknown as TaskDetail)
+    const { container } = await mountWorkbench()
+
+    expect(container.textContent).toContain('任务详情为空')
+    const backBtn = findButton(container, '返回任务列表')
+    expect(backBtn).toBeTruthy()
+    backBtn!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await nextTick()
+    expect(routerPushMock).toHaveBeenCalledWith('/tasks')
+  })
 })
 
 describe('任务工作台：资产结果与下载', () => {
-  beforeEach(() => {
-    // happy-dom 自带 window/localStorage，切勿覆盖（popperjs 依赖 window 上的 DOM 类）
-    vi.stubGlobal('WebSocket', MockWebSocket)
-  })
-
-  afterEach(() => {
-    while (mounted.length) {
-      const { app, container } = mounted.pop()!
-      app.unmount()
-      container.remove()
-    }
-    document.body.innerHTML = ''
-    vi.unstubAllGlobals()
-    vi.resetAllMocks()
-  })
-
   it('完成后展示图片资产，每张图可预览且有下载动作', async () => {
     getTaskByIdMock.mockResolvedValue(
       makeDetail({
@@ -199,7 +194,7 @@ describe('任务工作台：资产结果与下载', () => {
     const downloadBtn = tiles[0].querySelector('button')!
     expect(downloadBtn.textContent).toContain('下载')
     downloadBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    for (let i = 0; i < 10; i++) await Promise.resolve()
+    await flushMicrotasks(10)
     expect(downloadFileMock).toHaveBeenCalledWith('http://cdn/x1.png', 'img1.png')
   })
 
@@ -219,7 +214,7 @@ describe('任务工作台：资产结果与下载', () => {
     expect(video!.hasAttribute('controls')).toBe(true)
 
     findButton(container, '下载视频')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    for (let i = 0; i < 10; i++) await Promise.resolve()
+    await flushMicrotasks(10)
     expect(downloadFileMock).toHaveBeenCalledWith('http://cdn/v.mp4', 'v1.mp4')
   })
 

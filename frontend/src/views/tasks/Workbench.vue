@@ -9,8 +9,10 @@
     <PageState
       :kind="pageKind"
       empty-description="任务详情为空"
+      empty-action-text="返回任务列表"
       error-title="任务详情加载失败"
       @retry="reload"
+      @empty-action="goBackToTasks"
     >
       <div class="workbench-main">
         <!-- 默认：任务概览（运营优先） -->
@@ -42,6 +44,10 @@
             <div class="overview-item">
               <span class="label">当前阶段</span>
               <span>{{ stepLabel }}</span>
+            </div>
+            <div class="overview-item">
+              <span class="label">结果</span>
+              <span>{{ resultSummary }}</span>
             </div>
             <div class="overview-item">
               <span class="label">实时通道</span>
@@ -147,7 +153,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { cancelTask } from '@/api/tasks'
 import { useWorkbenchStore } from '@/stores/workbench'
@@ -166,6 +172,7 @@ import AgentDetailPanel from '@/components/workbench/AgentDetailPanel.vue'
  */
 
 const route = useRoute()
+const router = useRouter()
 const store = useWorkbenchStore()
 const taskId = route.params.id as string
 
@@ -184,6 +191,18 @@ const hasAssets = computed(() => {
   const d = store.taskDetail
   // 视频记录存在即视为有资产；URL 失效由视频区兜底分支展示
   return !!(d?.images?.length || d?.video)
+})
+
+/** 概览结果概要：非终态显示生成中，终态汇总资产 */
+const resultSummary = computed(() => {
+  const d = store.taskDetail
+  if (!d) return '-'
+  if (!isTerminal.value) return '生成中'
+  const imageCount = d.images?.length ?? 0
+  const parts: string[] = []
+  if (imageCount) parts.push(`${imageCount} 张图片`)
+  if (d.video) parts.push('1 个视频')
+  return parts.length ? parts.join(' + ') : '暂无资产'
 })
 
 const imageUrls = computed(() =>
@@ -206,6 +225,10 @@ const pageKind = computed(() =>
     hasData: !!store.taskDetail
   })
 )
+
+function goBackToTasks() {
+  router.push('/tasks')
+}
 
 async function reload() {
   loadError.value = false

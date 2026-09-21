@@ -20,7 +20,7 @@ commits: 694f325..472a793
 **Verification**
 
 - `cd frontend && npm run typecheck` — PASS
-- `npm test` — PASS（72 tests / 12 files，含 `__tests__/mainFlow.spec.ts` mock 级主链路：商品→预选创建→列表→工作台→WS 终态→下载，及列表失败驻留重试）
+- `npm test` — PASS（76 tests / 12 files，含 `__tests__/mainFlow.spec.ts` mock 级主链路：商品→预选创建→列表→工作台→WS 终态→下载、WS 断线→页面级轮询兜底，及列表失败驻留重试）
 - `npm run lint` — 0 errors，5 个既有 warning
 - `npm run build` — PASS
 
@@ -34,6 +34,7 @@ commits: 694f325..472a793
 - Search 页原走 graphs 占位 hybrid API；本轮补了真实 `/knowledge/search` 的 docs 模式，hybrid/agent 保留。
 - T7 端到端需真实后端+DB 联调，本环境（无 docker/PG/Redis/密钥）未跑通，**故 status 仍为 in-progress**，保持未勾选；mock 级集成测试已覆盖主链路全路径与三终态标签。
 - T7 验收修补：创建页 `el-checkbox` 废弃 `label` 属性改 `value`（消除运行时告警）；集成测试挂载对齐 main.ts 全量图标注册（消除 Refresh/Plus/Search 解析告警）。
+- 评审整改（post-merge）：测试基建收敛到 `src/test-utils/`（MockWebSocket/工厂函数/findButton/flush/挂载登记）；工作台空态补「返回任务列表」动作；概览补结果概要；补页面级轮询兜底与首屏失败重试测试；`loadTask` 空详情防护（原实现对 null 详情会抛错，空态不可达）；`PageKind` 类型单源化。
 
 ## [S1] Problem
 

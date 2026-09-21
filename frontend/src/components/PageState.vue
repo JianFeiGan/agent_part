@@ -22,13 +22,15 @@
 </template>
 
 <script setup lang="ts">
+import type { PageKind } from '@/utils/pageState'
+
 /**
  * 主链路共享页面三态：loading / empty / error / ready。
  * error 只提供驻留信息与重试，全局弹错由 axios 拦截器负责。
  */
 withDefaults(
   defineProps<{
-    kind: 'loading' | 'empty' | 'error' | 'ready'
+    kind: PageKind
     emptyDescription?: string
     emptyActionText?: string
     errorTitle?: string
