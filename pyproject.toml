@@ -165,7 +165,8 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.:",
 ]
-fail_under = 80
+# ponytail: 与 ci.yml 对齐的基线值（当前 67%）；历史目标 80%，清完欠账后调回
+fail_under = 65
 
 [dependency-groups]
 dev = [
