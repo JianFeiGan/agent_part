@@ -153,6 +153,9 @@ class QueryRewriter:
             if mode == "multi_query":
                 return await self._multi_query_rewrite(query)
             elif mode == "hyde":
+                if not self.settings.hyde_enabled:
+                    logger.info("HyDE 未启用（hyde_enabled=False），回退到 single 改写")
+                    return await self._single_rewrite(query)
                 return await self._hyde_rewrite(query)
             else:
                 return await self._single_rewrite(query)

@@ -8,9 +8,9 @@ Description:
 2026-07-22
 """
 
+from src.knowledge.agent_workflow import KnowledgeAgentWorkflow
 from src.knowledge.graph import KnowledgeGraph
 from src.knowledge.ingestion import DocumentIngestionService
-from src.knowledge.agent_workflow import KnowledgeAgentWorkflow
 
 __all__ = [
     "KnowledgeGraph",

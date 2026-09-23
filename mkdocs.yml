@@ -1,6 +1,7 @@
 site_name: Agent Part
 site_description: 多Agent协作商品视觉生成系统
 site_url: https://jianfeigan.github.io/agent_part/
+docs_dir: docs-site
 repo_url: https://github.com/JianFeiGan/agent_part
 repo_name: JianFeiGan/agent_part
 

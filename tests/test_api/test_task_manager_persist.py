@@ -109,8 +109,8 @@ async def test_persist_images_called_after_workflow_success() -> None:
 async def test_persist_images_not_called_on_error() -> None:
     """测试工作流失败时不调用产物落库。"""
     from src.api.service.task_manager import TaskManager
+    from src.graph.state import AgentState, GenerationRequest
     from src.models.product import Product, ProductCategory
-    from src.graph.state import GenerationRequest, AgentState
 
     manager = TaskManager()
 

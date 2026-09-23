@@ -1,6 +1,6 @@
 """AI 文案生成器 LLM 集成测试。"""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 

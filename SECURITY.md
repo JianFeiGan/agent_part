@@ -17,13 +17,13 @@
 
 | 版本 | 支持状态 |
 |------|----------|
-| 0.2.x | ✅ 支持 |
+| 0.3.x | ✅ 支持 |
 
 ## 安全最佳实践
 
 ### API Key 管理
 
-- 所有 API Key（DashScope、千问百炼、可灵AI、OSS 等）均通过 `.env` 环境变量注入，不在代码中硬编码
+- API Key（DashScope、千问百炼、可灵AI、OSS 等）通过 `.env` 环境变量注入，不在代码中硬编码；模型厂商 API Key 也可在数据库 `model_providers` 表配置（EncryptedJSONB 加密存储，数据库配置优先），此时环境变量作为兜底
 - `.env` 文件已在 `.gitignore` 中排除，不会被提交到版本控制
 - 百炼平台 API Key 统一管理：`dashscope_api_key` 与 `qwen_api_key` 互相回退，避免重复配置
 - LangSmith 追踪 API Key 仅在 `langchain_tracing_v2=True` 且 Key 非空时启用
@@ -35,7 +35,7 @@
 - 写入时自动加密，格式为 `{"_encrypted": true, "v": 1, "ciphertext": "<Fernet token>"}`
 - 读取时自动解密，兼容旧明文数据（无 `_encrypted` 标记时原样返回）
 - 加密密钥通过 `CREDENTIALS_ENCRYPTION_KEY` 环境变量配置，未配置时 fail closed（抛出异常）
-- API 响应中凭证字段自动脱敏：所有值替换为 `"***"`，绝不返回明文凭证
+- API 响应中凭证字段自动脱敏：适配器凭证所有值替换为 `"***"`；模型厂商 API Key 保留首尾各 4 位、中间替换为 `"****"`，绝不返回完整明文凭证
 
 ### Token 认证
 

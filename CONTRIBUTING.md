@@ -50,8 +50,8 @@ cd agent_part
 # 2. 安装 Python 依赖
 uv sync
 
-# 3. 安装开发依赖
-uv sync --group dev
+# 3. 安装开发依赖（pytest/ruff/mypy 等在 pyproject.toml 的 dev extra 中）
+uv sync --extra dev
 
 # 4. 配置环境变量
 cp .env.example .env
@@ -175,6 +175,19 @@ p<序号><阶段标识>_<简要描述>.sql
 
 ### 执行迁移
 
+**Alembic 迁移**（推荐；配置见仓库根 `alembic.ini`，脚本在 `migrations/`）：
+
+```bash
+# 全新数据库：一次性建表（含 pgvector 扩展）
+uv run alembic upgrade head
+
+# 存量数据库（此前用 create_all 建过表）：补记基线版本后走增量迁移
+uv run alembic stamp head
+
+# 修改模型后生成迁移脚本
+uv run alembic revision -m "变更说明"
+```
+
 **Docker 环境**（首次启动自动执行 `init.sql`）：
 
 ```bash
@@ -194,7 +207,7 @@ psql -U postgres -d agent_part -f scripts/migrations/p1a_tenant_auth.sql
 psql -U postgres -d agent_part -f scripts/migrations/p1b_assets.sql
 ```
 
-**ORM 表结构**由 `src/db/models.py` 定义，应用启动时 SQLAlchemy 会自动创建新表。对于已有表的 Schema 变更（加字段、改索引等），需编写迁移脚本。
+**ORM 表结构**由 `src/db/models.py`、`src/db/listing_models.py`、`src/db/conversation_models.py` 共同定义；`DB_AUTO_CREATE=true`（默认）时应用启动会自动 `create_all` 建表，生产环境应设 `false` 并统一使用 Alembic 迁移。对于已有表的 Schema 变更（加字段、改索引等），需编写迁移脚本。
 
 ### 新增迁移步骤
 
@@ -229,7 +242,7 @@ src = ["src", "tests"]
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP", "ARG", "SIM"]
-ignore = ["E501", "B008", "B904", "ARG001"]
+ignore = ["E501", "B008", "B904", "ARG001", "ARG002", "UP042"]
 ```
 
 启用的规则集说明：
@@ -271,7 +284,7 @@ disallow_incomplete_defs = true
 check_untyped_defs = true
 ```
 
-以下第三方库因缺少类型存根已配置 `ignore_missing_imports`：`dashscope.*`、`langchain.*`、`langgraph.*`、`pydantic.*`、`redis.*`
+以下第三方库因缺少类型存根已配置 `ignore_missing_imports`：`langchain.*`、`langchain_openai.*`、`langgraph.*`、`pydantic.*`、`redis.*`
 
 ```bash
 # 类型检查
@@ -301,7 +314,7 @@ uv run pytest --cov=src --cov-report=html
 uv run pytest -m "not slow and not integration"
 
 # 运行指定测试文件
-uv run pytest tests/test_agent.py -v
+uv run pytest tests/test_agents/test_base.py -v
 ```
 
 ### 完整检查流程

@@ -12,8 +12,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
-
 from main import app
+
 from src.db import get_db
 
 # 统一的 RAG 日志统计 mock 数据

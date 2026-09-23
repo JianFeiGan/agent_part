@@ -117,3 +117,27 @@ class TestListingTask:
         task = ListingTask(product_id=1, target_platforms=[Platform.AMAZON])
         task.mark_generating()
         assert task.status == TaskStatus.GENERATING
+
+
+class TestListingTaskStatus:
+    """刊登任务状态机完整性。"""
+
+    def test_contains_eight_states(self) -> None:
+        """与前端 src/types/listing.ts 的 8 态联合类型对齐。"""
+        assert {s.value for s in TaskStatus} == {
+            "pending",
+            "generating",
+            "reviewing",
+            "pushing",
+            "completed",
+            "published",
+            "partial",
+            "failed",
+        }
+
+    def test_task_accepts_new_terminal_states(self) -> None:
+        task = ListingTask(product_id=1, target_platforms=[Platform.AMAZON])
+        task.status = TaskStatus.PUBLISHED
+        assert task.status.value == "published"
+        task.status = TaskStatus.PARTIAL
+        assert task.status.value == "partial"

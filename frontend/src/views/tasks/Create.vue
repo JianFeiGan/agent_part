@@ -49,9 +49,9 @@
 
           <el-form-item label="图片类型">
             <el-checkbox-group v-model="formData.image_types">
-              <el-checkbox label="main">主图</el-checkbox>
-              <el-checkbox label="scene">场景图</el-checkbox>
-              <el-checkbox label="selling_point">卖点图</el-checkbox>
+              <el-checkbox value="main">主图</el-checkbox>
+              <el-checkbox value="scene">场景图</el-checkbox>
+              <el-checkbox value="selling_point">卖点图</el-checkbox>
             </el-checkbox-group>
           </el-form-item>
 
@@ -171,6 +171,8 @@ import type { ModelProviderResponse } from '@/types/provider'
 import { getProducts } from '@/api/products'
 import { createTask } from '@/api/tasks'
 import { listModelProviders } from '@/api/providers'
+import { applyProductPrefill } from '@/composables/useTaskCreatePrefill'
+import { useSubmitGuard } from '@/composables/useSubmitGuard'
 
 /**
  * 创建任务页面
@@ -182,8 +184,8 @@ const route = useRoute()
 // 表单引用
 const formRef = ref<FormInstance>()
 
-// 提交状态
-const submitting = ref(false)
+// 提交状态（防重入）
+const { submitting, run: runSubmit } = useSubmitGuard()
 
 // 商品列表
 const productList = ref<Product[]>([])
@@ -227,11 +229,8 @@ const loadProducts = async () => {
     const page = await getProducts({ page: 1, page_size: 100 })
     productList.value = page.items
 
-    // 如果有预设的商品 ID
-    const preselectedProductId = route.query.product_id
-    if (preselectedProductId) {
-      formData.product_id = preselectedProductId as string
-    }
+    // URL 携带商品上下文时预选（仅当商品在已加载列表中）
+    applyProductPrefill(formData, productList.value, route.query)
   } catch (error) {
     console.error('加载商品列表失败:', error)
   } finally {
@@ -242,14 +241,14 @@ const loadProducts = async () => {
 // 加载模型厂商列表
 const loadProviders = async () => {
   try {
-    const [llmRes, imageRes, videoRes] = await Promise.all([
+    const [llmList, imageList, videoList] = await Promise.all([
       listModelProviders('llm'),
       listModelProviders('image'),
       listModelProviders('video'),
     ])
-    if (llmRes.data.data) llmProviders.value = llmRes.data.data
-    if (imageRes.data.data) imageProviders.value = imageRes.data.data
-    if (videoRes.data.data) videoProviders.value = videoRes.data.data
+    llmProviders.value = llmList
+    imageProviders.value = imageList
+    videoProviders.value = videoList
   } catch {
     // 厂商列表加载失败不影响创建任务
     console.warn('加载模型厂商列表失败，将使用默认厂商')
@@ -262,15 +261,19 @@ const handleSubmit = async () => {
 
   try {
     await formRef.value.validate()
-    submitting.value = true
-
-    await createTask(formData)
-    ElMessage.success('任务创建成功')
-    router.push('/tasks')
   } catch {
-    // 验证失败
-  } finally {
-    submitting.value = false
+    // 表单验证未通过，错误信息由 el-form 内联展示
+    return
+  }
+
+  try {
+    await runSubmit(async () => {
+      await createTask(formData)
+      ElMessage.success('任务创建成功')
+      router.push('/tasks')
+    })
+  } catch {
+    // 请求失败由全局拦截器统一提示；表单数据保留以便修改重试
   }
 }
 

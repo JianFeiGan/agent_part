@@ -46,7 +46,6 @@ class TestBaseRepository:
     @pytest.mark.asyncio
     async def test_create(self, repo: BaseRepository, mock_session: AsyncMock) -> None:
         """测试创建记录。"""
-        instance = ListingProductPO(sku="NEW-001", title="New Product")
         mock_session.flush = AsyncMock()
         mock_session.refresh = AsyncMock()
 

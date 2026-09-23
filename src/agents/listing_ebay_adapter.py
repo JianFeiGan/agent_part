@@ -529,7 +529,6 @@ class EbayAdapter(BasePlatformAdapter):
         try:
             root = ET.fromstring(xml_text)
 
-            ns = {"eBay": EBAY_XML_NS}
             bare_ns = "{" + EBAY_XML_NS + "}"
 
             # 提取 Ack — 优先使用 {namespace}Ack，再尝试无命名空间

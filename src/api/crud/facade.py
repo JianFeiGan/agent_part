@@ -134,7 +134,7 @@ class TenantCRUD(Generic[ModelT]):
         self, session: AsyncSession, auth: AuthContext | None, obj_id: int
     ) -> ModelT:
         """按主键严格加载（STRICT 谓词；写路径专用，共享行一律 404）。"""
-        stmt = select(self.spec.model).where(getattr(self.spec.model, "id") == obj_id)
+        stmt = select(self.spec.model).where(self.spec.model.id == obj_id)
         predicate = tenant_predicate(
             self.spec.model, self.spec.tenant_attr, self._tenant_id(auth), TenantMatch.STRICT
         )
@@ -173,7 +173,7 @@ class TenantCRUD(Generic[ModelT]):
             HTTPException: 403 scope 不足；404 不存在或租户不匹配。
         """
         require_scope(auth, *self._scopes(scopes, "read"))
-        stmt = select(self.spec.model).where(getattr(self.spec.model, "id") == obj_id)
+        stmt = select(self.spec.model).where(self.spec.model.id == obj_id)
         predicate = tenant_predicate(
             self.spec.model,
             self.spec.tenant_attr,

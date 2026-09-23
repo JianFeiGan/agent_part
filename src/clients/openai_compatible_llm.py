@@ -17,7 +17,6 @@ from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 
-from src.clients.protocols import LLMProviderProtocol
 from src.config.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)

@@ -17,7 +17,10 @@ from typing import TYPE_CHECKING
 from src.clients.dashscope_image_client import DashScopeImageClient
 from src.clients.kling_video_client import KLING_API_BASE, KlingVideoClient
 from src.clients.openai_compatible_image import OpenAICompatibleImageProvider
-from src.clients.openai_compatible_llm import OpenAICompatibleLLMProvider, SettingsFallbackLLMProvider
+from src.clients.openai_compatible_llm import (
+    OpenAICompatibleLLMProvider,
+    SettingsFallbackLLMProvider,
+)
 from src.clients.provider_result import (
     ImageGenerationResult,
     ProviderUnavailableError,

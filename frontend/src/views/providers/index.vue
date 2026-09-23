@@ -251,10 +251,8 @@ function providerTypeTag(type: ProviderType): string {
 async function loadProviders() {
   loading.value = true
   try {
-    const { data } = await listModelProviders(filterType.value || undefined)
-    if (data.data) {
-      providers.value = data.data.map(p => ({ ...p, _testing: false }))
-    }
+    const list = await listModelProviders(filterType.value || undefined)
+    providers.value = list.map(p => ({ ...p, _testing: false }))
   } catch {
     console.error('加载厂商列表失败')
   } finally {
@@ -369,8 +367,8 @@ async function handleTest(row: ProviderRow) {
   if (idx >= 0) providers.value[idx]._testing = true
 
   try {
-    const { data } = await testModelProvider(row.id)
-    testResult.value = data.data || null
+    const result = await testModelProvider(row.id)
+    testResult.value = result || null
     testResultVisible.value = true
   } catch {
     testResult.value = { success: false, message: '请求失败', latency_ms: null }

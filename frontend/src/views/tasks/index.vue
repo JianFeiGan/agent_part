@@ -148,6 +148,7 @@ import { formatTime, getTaskStatusLabel, getTaskStatusTagType } from '@/utils/fo
 import { TaskStatus, TaskTypeLabels, isRunningTaskStatus, isTerminalTaskStatus } from '@/types/task'
 import type { TaskType } from '@/types/task'
 import PageState from '@/components/PageState.vue'
+import { resolvePageKind } from '@/utils/pageState'
 
 /**
  * 任务列表页面
@@ -166,12 +167,13 @@ const taskList = ref<Task[]>([])
 // 总数
 const total = ref(0)
 
-const listKind = computed<'loading' | 'empty' | 'error' | 'ready'>(() => {
-  if (loading.value && !taskList.value.length) return 'loading'
-  if (loadFailed.value && !taskList.value.length) return 'error'
-  if (!taskList.value.length) return 'empty'
-  return 'ready'
-})
+const listKind = computed(() =>
+  resolvePageKind({
+    loading: loading.value,
+    failed: loadFailed.value,
+    hasData: taskList.value.length > 0
+  })
+)
 
 // 查询参数
 const queryParams = reactive<TaskQueryParams>({

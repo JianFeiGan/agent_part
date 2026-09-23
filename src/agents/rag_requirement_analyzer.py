@@ -13,14 +13,23 @@ Description:
 2026-04-05
 """
 
+import logging
 from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.base import (
+    CATEGORY_MEMORY_FALLBACK,
+    AgentResult,
+    AgentRole,
+    AgentRuntimeState,
+    BaseAgent,
+)
 from src.agents.llm_json import extract_json
 from src.graph.state import RequirementReport
+
+logger = logging.getLogger(__name__)
 
 
 class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
@@ -68,6 +77,7 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
                     "你是一个电商商品分析专家。"
                     "请结合提供的知识库信息，深入分析商品信息。\n\n"
                     "【知识库参考信息】\n{knowledge_context}\n\n"
+                    "【类目记忆】\n{category_memory_context}\n\n"
                     "请输出JSON格式的分析报告，包含以下字段：\n"
                     "- product_summary: 商品一句话摘要（20字以内）\n"
                     "- key_features: 关键特性列表（3-5个）\n"
@@ -136,11 +146,23 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
                     error="缺少商品信息",
                 )
 
-            # RAG检索相关知识
-            knowledge_context = await self._retrieve_knowledge(state)
+            # RAG检索相关知识（领域方法：类目知识+品牌规范+历史案例）
+            knowledge_context, rag_sources = await self._retrieve_knowledge(state)
+
+            # 检索类目记忆（Graph RAG / CategoryMemory）
+            category = (
+                product.category.value
+                if hasattr(product.category, "value")
+                else str(product.category)
+            )
+            category_memory = await self._retrieve_category_memory_context(
+                self._session, category
+            )
 
             # 执行分析
-            report = await self._analyze_product_with_rag(product, knowledge_context)
+            report = await self._analyze_product_with_rag(
+                product, knowledge_context, category_memory
+            )
 
             # 更新状态
             state.requirement_report = report
@@ -154,6 +176,7 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
                     "requirement_report": report.model_dump(),
                     "selling_points": report.selling_points,
                     "rag_context_used": bool(knowledge_context),
+                    "rag_sources": rag_sources,
                 },
             )
 
@@ -163,95 +186,68 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
                 error=f"需求分析失败: {e}",
             )
 
-    async def _retrieve_knowledge(self, state: AgentRuntimeState) -> str:
-        """检索相关知识。
+    async def _retrieve_knowledge(self, state: AgentRuntimeState) -> tuple[str, list[dict[str, Any]]]:
+        """检索相关知识（领域方法：类目知识+品牌规范+历史案例）。
 
         Args:
             state: 当前状态。
 
         Returns:
-            检索到的知识上下文。
+            (知识上下文, RAG 来源列表) 二元组；检索失败时返回空上下文降级。
         """
         if not self.has_rag() or not self._session:
-            return ""
+            return "", []
 
         product = state.product_info
         if not product:
-            return ""
+            return "", []
 
         from src.rag.retriever import KnowledgeRetriever
 
         if not isinstance(self._retriever, KnowledgeRetriever):
-            return ""
+            return "", []
 
-        context_parts: list[str] = []
-
-        # 检索品牌文档
-        if product.brand:
-            brand_results = await self._retriever.retrieve(
-                self._session,
-                query=f"{product.brand} 品牌调性 视觉规范",
-                doc_type="brand_guide",
-                top_k=3,
-            )
-            if brand_results.results:
-                context_parts.append(
-                    "【品牌规范】\n"
-                    + "\n".join([r.content[:500] for r in brand_results.results[:2]])
-                )
-
-        # 检索类目知识
         category = (
             product.category.value if hasattr(product.category, "value") else str(product.category)
         )
-        category_results = await self._retriever.retrieve(
-            self._session,
-            query=f"{category} 商品特点 卖点关键词",
-            doc_type="category_knowledge",
-            top_k=3,
-        )
-        if category_results.results:
-            context_parts.append(
-                "【类目知识】\n"
-                + "\n".join([r.content[:500] for r in category_results.results[:2]])
-            )
 
-        # 检索成功案例
-        case_results = await self._retriever.retrieve(
-            self._session,
-            query=f"{category} {product.name[:20]} 成功案例",
-            doc_type="case_study",
-            top_k=2,
-        )
-        if case_results.results:
-            context_parts.append(
-                "【成功案例参考】\n"
-                + "\n".join([r.content[:300] for r in case_results.results[:2]])
+        try:
+            result = await self._retriever.retrieve_for_product_analysis(
+                self._session,
+                product_name=product.name,
+                category=category,
+                brand=product.brand or None,
+                tenant_id=self._tenant_id,
             )
+        except Exception as e:
+            logger.warning("商品分析知识检索失败，按无知识降级: %s", e)
+            return "", []
 
-        # 记录RAG来源
-        state.rag_sources = [
+        rag_sources = [
             {
-                "query": r.query,
+                "query": result.query,
                 "chunk_id": r.chunk_id,
                 "doc_id": r.doc_id,
                 "similarity": r.similarity,
             }
-            for r in (brand_results.results + category_results.results + case_results.results)
+            for r in result.results
         ]
+        state.rag_sources = rag_sources
 
-        return "\n\n".join(context_parts) if context_parts else ""
+        return result.context, rag_sources
 
     async def _analyze_product_with_rag(
         self,
         product: Any,
         knowledge_context: str,
+        category_memory: str = "",
     ) -> RequirementReport:
         """使用RAG知识分析商品。
 
         Args:
             product: 商品信息。
             knowledge_context: 知识库上下文。
+            category_memory: 类目记忆上下文。
 
         Returns:
             需求分析报告。
@@ -268,6 +264,7 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
             prompt,
             {
                 "knowledge_context": knowledge_context or "暂无相关知识库内容",
+                "category_memory_context": category_memory or CATEGORY_MEMORY_FALLBACK,
                 "name": product.name,
                 "brand": product.brand or "未知品牌",
                 "category": product.category.value

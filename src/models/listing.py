@@ -35,6 +35,8 @@ class TaskStatus(StrEnum):
     REVIEWING = "reviewing"
     PUSHING = "pushing"
     COMPLETED = "completed"
+    PUBLISHED = "published"
+    PARTIAL = "partial"
     FAILED = "failed"
 
 

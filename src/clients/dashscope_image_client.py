@@ -23,7 +23,7 @@ from src.clients.provider_result import (
     ProviderUnavailableError,
     SingleImageResult,
 )
-from src.config.settings import Settings, get_settings
+from src.config.settings import Settings
 
 logger = logging.getLogger(__name__)
 

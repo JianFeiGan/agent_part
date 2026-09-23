@@ -82,23 +82,16 @@ export const useWorkbenchStore = defineStore('workbench', () => {
     loading.value = true
     try {
       taskDetail.value = await getTaskById(taskId)
-      // 构建 agentLogMap
+      // 详情可能为空（如任务不存在），空态交由页面层展示
+      const logs = taskDetail.value?.agent_logs ?? []
       const map = new Map<string, AgentLog>()
-      if (taskDetail.value?.agent_logs) {
-        for (const log of taskDetail.value.agent_logs) {
-          map.set(log.step, log)
-        }
+      for (const log of logs) {
+        map.set(log.step, log)
       }
       agentLogMap.value = map
       // 默认选中运行中或第一个节点
-      const runningLog = taskDetail.value.agent_logs?.find(l => l.status === 'running')
-      if (runningLog) {
-        selectedAgentId.value = runningLog.step
-      } else if (taskDetail.value.agent_logs?.length) {
-        selectedAgentId.value = taskDetail.value.agent_logs[0].step
-      } else {
-        selectedAgentId.value = 'orchestrator'
-      }
+      const runningLog = logs.find(l => l.status === 'running')
+      selectedAgentId.value = runningLog?.step ?? logs[0]?.step ?? 'orchestrator'
     } finally {
       loading.value = false
     }

@@ -49,7 +49,7 @@ Agent 工作流将自动执行 7 步流程：
 编排调度 → 需求分析 → 创意策划 → 视觉设计 → 图片生成 → 视频生成 → 质量审核
 ```
 
-- 图片由 DashScope 万象 API 生成（wanx-v1 / wan2.7-image-pro）
+- 图片由 DashScope 万象 / SenseNova 生成（wanx-v1 / sensenova-u1-fast，Provider 可配）
 - 视频由可灵 AI 生成（kling-v1）
 - 需求分析、创意策划、质量审核三个 Agent 自动注入 RAG 知识增强
 
@@ -88,7 +88,7 @@ curl -X POST http://localhost:8000/api/v1/knowledge/documents \
 | `case_study` | 成功案例 | 历史优秀创意方案参考 |
 | `compliance_rule` | 合规规则 | 广告法禁止词、平台审核标准 |
 
-知识库还支持 Graph RAG（知识图谱实体/关系检索）和类目记忆（累积经验），为 Agent 提供更深层的知识增强。
+知识库还支持 Graph RAG（知识图谱实体/关系检索，需设置 `GRAPH_RAG_ENABLED=true` 开启）和类目记忆（累积经验），为 Agent 提供更深层的知识增强。
 
 ## 6. 多平台刊登
 
@@ -99,7 +99,7 @@ curl -X POST http://localhost:8000/api/v1/knowledge/documents \
 ```
 
 - **素材优化**：裁剪/压缩/格式转换，适配各平台规格
-- **AI 文案生成**：千问 LLM 润色 + 规则草稿降级
+- **AI 文案生成**：LLM 润色（Provider 可配，SettingsFallbackLLMProvider 按 SenseNova → DashScope 兜底）+ 规则草稿降级
 - **合规检查**：禁词检测 + 平台规则校验
 - **适配器配置**：凭证加密存储（Fernet），支持多店铺
 

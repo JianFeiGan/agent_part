@@ -31,6 +31,14 @@ def _make_rag_result(context: str, sources: list[dict] | None = None) -> Retriev
     )
 
 
+def _make_settings(auto_ingest: bool = True, threshold: float = 0.7) -> MagicMock:
+    """构造 Settings 辅助函数（__new__ 绕过 __init__ 时手动注入）。"""
+    settings = MagicMock()
+    settings.image_rag_auto_ingest = auto_ingest
+    settings.image_rag_quality_threshold = threshold
+    return settings
+
+
 def _make_state(
     prompts: list[dict] | None = None,
     rag_enabled: bool = True,
@@ -128,6 +136,7 @@ class TestGenerateWithRAG:
         agent.base_agent = mock_base_agent
         agent._retriever = mock_retriever
         agent._session = mock_session
+        agent.settings = _make_settings()
 
         state = _make_state(brand="BrandX", category="digital")
 
@@ -159,6 +168,7 @@ class TestGenerateWithRAG:
         agent.base_agent = mock_base_agent
         agent._retriever = None
         agent._session = None
+        agent.settings = _make_settings()
 
         state = _make_state()
 
@@ -179,6 +189,7 @@ class TestIngestGenerationResult:
     async def test_ingest_high_quality_result(self) -> None:
         """测试高质量结果自动入库。"""
         agent = RAGEnhancedImageGenerator.__new__(RAGEnhancedImageGenerator)
+        agent.settings = _make_settings()
         mock_session = MagicMock()
         mock_session.flush = AsyncMock()
         mock_session.add = MagicMock()
@@ -232,6 +243,7 @@ class TestIngestGenerationResult:
     async def test_skip_ingest_low_quality(self) -> None:
         """测试低质量结果不入库。"""
         agent = RAGEnhancedImageGenerator.__new__(RAGEnhancedImageGenerator)
+        agent.settings = _make_settings()
         mock_session = MagicMock()
 
         result = await agent.ingest_generation_result(

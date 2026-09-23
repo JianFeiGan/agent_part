@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.db.vector_store import VectorStore, SearchResult
+from src.db.vector_store import SearchResult, VectorStore
 
 
 def _create_search_result(

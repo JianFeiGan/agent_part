@@ -15,7 +15,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.agents.listing_ebay_adapter import EbayAdapter
-from src.agents.listing_platform_adapter import PushResult
 from src.models.listing import (
     AssetPackage,
     CopywritingPackage,

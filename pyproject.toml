@@ -99,6 +99,8 @@ ignore = [
     "B008",   # do not perform function calls in argument defaults
     "B904",   # raise without from inside except
     "ARG001", # unused function argument (common in callbacks)
+    "ARG002", # unused method argument (interface/protocol 兼容参数，需保留签名)
+    "UP042",  # 保留 str+Enum 模式：StrEnum 会改变 str(member) 语义，迁移需全量回归
 ]
 
 [tool.ruff.lint.isort]

@@ -1,6 +1,5 @@
 """刊登数据库模型测试。"""
 
-import pytest
 
 from src.db.listing_models import (
     AdapterConfigPO,

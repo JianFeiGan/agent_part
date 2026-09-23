@@ -54,7 +54,7 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
 
 - 📦 **商品信息分析** - Agent 自动提取卖点、分析竞品、识别目标人群
 - ✍️ **AI 文案生成** - 多语言商品描述、平台风格适配、LLM 降级策略
-- 🖼️ **图片生成** - DashScope 万象 API（`wanx-v1` / `wan2.7-image-pro`）
+- 🖼️ **图片生成** - DashScope 万象 / SenseNova（`wanx-v1` / `sensenova-u1-fast` 等，Provider 可配）
 - 🎬 **视频生成** - 可灵 AI 分镜设计 + 视频生成
 - ✅ **合规检查** - 广告法禁词检测、平台规则验证
 - 🌐 **多平台刊登** - Amazon / eBay / Shopify 适配器，凭证加密存储
@@ -130,9 +130,9 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
 | 特性 | 描述 |
 |------|------|
 | 🔬 **Agent 可观测工作台** | DAG 流程图（AntV G6）+ 提示词轨迹 + WebSocket 实时协作 |
-| 🤖 **多 Agent 协作** | 7 个视觉生成 Agent + 4 个刊登 Agent + 3 个 RAG 增强 Agent + 3 个知识库 Agent |
+| 🤖 **多 Agent 协作** | 7 个视觉生成 Agent + 4 个刊登 Agent + 4 个 RAG 增强 Agent + 知识库五阶段问答管道 |
 | 🔄 **LangGraph 工作流** | 条件路由、并行执行、状态检查点、stream 模式实时回调、RAG 动态注入 |
-| 🖼️ **图片生成** | DashScope 万象（`wanx-v1` / `wan2.7-image-pro`），async_call + wait 模式 |
+| 🖼️ **图片生成** | DashScope 万象 / SenseNova（`wanx-v1` / `sensenova-u1-fast` 等），async_call + wait 模式 |
 | 🎬 **视频生成** | 可灵 AI（`kling-v1`），HS256 JWT 鉴权 + 异步任务轮询 |
 | 📚 **RAG 增强** | PGVector + BGE-large-zh / 千问 text-embedding-v3 双通道 Embedding |
 | 🕸️ **Graph RAG** | 知识图谱实体/边 + CategoryMemory + 混合检索（RRF 融合） |
@@ -141,8 +141,8 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
 | 🔄 **双 LLM 通道** | 百炼 OpenAI 兼容（ChatOpenAI）+ DashScope SDK（ChatTongyi） |
 | 📊 **会话追踪** | Token 统计、双币种（USD/CNY）费用预算、内容搜索 |
 | 🔐 **认证鉴权** | API Token（SHA256 + Scope 权限）+ 多租户隔离 |
-| 🛡️ **优雅降级** | 无 API Key 时自动 Mock，LLM 降级链（通义 -> Claude -> 规则） |
-| 🎨 **管理后台** | Vue 3 + Element Plus，15 个页面 |
+| 🛡️ **优雅降级** | 无 API Key 时可配置 Mock 降级（默认 fail-closed），LLM 兜底链（SenseNova → DashScope）+ 文案规则草稿降级 |
+| 🎨 **管理后台** | Vue 3 + Element Plus，17 个页面 |
 
 ---
 
@@ -150,7 +150,7 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                     Vue 3 管理后台 (15 页面)                  │
+│                     Vue 3 管理后台 (17 页面)                  │
 │  仪表盘 │ 商品管理 │ 任务管理 │ 知识库 │ 刊登工具 │ AI 会话    │
 │         │          │ 可观测工作台 │          │                │
 └──────────────────────────┬───────────────────────────────────┘
@@ -169,9 +169,12 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
 │                                                               │
 │  刊登工作流:                                                    │
 │  ImportProduct -> [AssetOptimizer | Copywriter] -> Compliance   │
+│       -> PlatformPush -> Finalize                                │
+│       （合规阻断挂起人工审核 / 失败自动重试一次 / 产物持久化）      │
 │                                                               │
 │  知识库 Agent 工作流:                                           │
-│  QueryAnalyzer -> StrategyRouter -> HybridRetriever -> Fuser      │
+│  QueryAnalyzer -> StrategyRouter -> Retriever -> ResultFuser    │
+│       -> AnswerGenerator                                        │
 └───────┬──────────────┬──────────────┬────────────────────────┘
         │              │              │
  ┌──────▼──────┐ ┌─────▼─────┐ ┌─────▼──────┐
@@ -184,8 +187,6 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
  │  15+ 表 (向量/图谱/记忆)  │  缓存   │  本地/OSS │
  └─────────────────────────────────────────────┘
 ```
-
-> 📊 更详细的类图与时序图见 [`docs/class-diagram.mermaid`](docs/class-diagram.mermaid) 与 [`docs/sequence-diagram.mermaid`](docs/sequence-diagram.mermaid)。
 
 > 🗺️ **交互式项目地图**：浏览器直接打开 [`docs/architecture-map.html`](docs/architecture-map.html)——12 个核心组件、3 条引导视图（视觉生成主路径 / 鉴权与租户 / RAG 与记忆），每个节点可点击跳转到对应源码（revision 锁定 `69cf4d8`）。规格源文件在 [`docs/architecture-map.json`](docs/architecture-map.json)。
 
@@ -255,10 +256,10 @@ npm run dev
 | `RAG_ENABLED` | `true` | 启用 RAG 知识检索 |
 | `RETRIEVAL_TOP_K` | `5` | 检索返回数量 |
 | `SIMILARITY_THRESHOLD` | `0.7` | 相似度阈值 |
-| `DATABASE_URL` | `postgresql+asyncpg://...` | PostgreSQL 连接 URL |
+| `POSTGRES_HOST` / `POSTGRES_PORT` / `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `localhost` / `5432` / `postgres` / - / `pvg` | PostgreSQL 连接分项（由 `Settings.postgres_url` 拼接；无 `DATABASE_URL` 配置项） |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis 连接 URL |
 | `STORAGE_TYPE` | `local` | 存储类型：`local` 或 `oss` |
-| `ALLOW_MOCK_ASSETS` | `true` | 无 API Key 时允许 Mock 降级 |
+| `ALLOW_MOCK_ASSETS` | `false` | 无 API Key 时允许 Mock 降级（默认 fail-closed，本地开发可设 `true`） |
 
 完整配置见 [`.env.example`](.env.example)。
 
@@ -277,13 +278,13 @@ agent_part/
 │   │   ├── image_generator.py    #   图片生成 Agent
 │   │   ├── video_generator.py    #   视频生成 Agent
 │   │   ├── quality_reviewer.py   #   质量审核 Agent
-│   │   ├── rag_*.py              #   RAG 增强 Agent (3个)
-│   │   └── listing_*.py          #   刊登 Agent (5个)
+│   │   ├── rag_*.py              #   RAG 增强 Agent (4个)
+│   │   └── listing_*.py          #   刊登相关模块 (14个: 4 Agent + 3 平台适配器 + 推送/重试/限流等)
 │   ├── graph/                    # LangGraph 状态图与工作流
 │   │   ├── workflow.py           #   视觉生成工作流
 │   │   └── listing_workflow.py   #   刊登工作流
 │   ├── api/                      # FastAPI 路由 + Schema + Service
-│   │   ├── router/               #   路由模块 (12个)
+│   │   ├── router/               #   路由模块 (15个)
 │   │   ├── schema/               #   请求/响应模型
 │   │   └── service/              #   业务服务
 │   ├── clients/                  # 外部服务客户端
@@ -292,14 +293,15 @@ agent_part/
 │   │   ├── qwen_llm_client.py         # 千问 LLM
 │   │   └── qwen_embedding_client.py   # 千问 Embedding
 │   ├── rag/                      # RAG 检索管道
-│   │   ├── retriever.py          #   知识检索器
+│   │   ├── retriever.py          #   知识检索器（含领域检索方法）
 │   │   ├── embeddings.py         #   双通道 Embedding
 │   │   ├── chunker.py            #   语义分块
-│   │   └── graph_memory.py       #   Graph RAG 记忆
-│   ├── knowledge/                # 知识图谱 + 混合检索
-│   │   ├── hybrid_retriever.py   #   RRF 融合检索
-│   │   ├── agent_workflow.py     #   知识库 Agent 工作流
-│   │   └── agents/               #   查询分析/策略路由/结果融合
+│   │   ├── hybrid_retriever.py   #   BGE-M3 三路混合检索 (RRF 融合)
+│   │   └── graph_*.py            #   Graph RAG 图谱构建/检索
+│   ├── knowledge/                # 知识库 Agent + 文档入库
+│   │   ├── agent_workflow.py     #   五阶段问答管道 (分析→路由→检索→融合→生成)
+│   │   ├── ingestion.py          #   文档入库
+│   │   └── graph.py              #   知识图谱数据结构
 │   ├── config/                   # 配置管理 (pydantic-settings)
 │   ├── db/                       # 数据库 (15+ 表)
 │   ├── auth/                     # API Token 认证 + 多租户
@@ -307,7 +309,7 @@ agent_part/
 │   └── storage/                  # 文件存储 (本地/OSS)
 ├── frontend/                     # Vue 3 前端
 │   └── src/
-│       ├── views/                # 页面组件 (15个)
+│       ├── views/                # 页面组件 (17个)
 │       ├── components/workbench/ #   Agent 可观测工作台组件
 │       ├── api/                  # API 调用层
 │       ├── types/                # TypeScript 类型
@@ -331,7 +333,7 @@ agent_part/
 | **工作流引擎** | LangChain, LangGraph |
 | **后端框架** | FastAPI, Pydantic v2, SQLAlchemy 2.0 (async) |
 | **语言模型** | 千问百炼 (OpenAI 兼容 + DashScope SDK) |
-| **图片生成** | DashScope 万象 (`wanx-v1`, `wan2.7-image-pro`) |
+| **图片生成** | DashScope 万象 (`wanx-v1`) / SenseNova (`sensenova-u1-fast`) |
 | **视频生成** | 可灵 AI (`kling-v1`) |
 | **向量检索** | PGVector, BGE-large-zh, 千问 text-embedding-v3 |
 | **图谱检索** | Graph RAG (实体/关系/社区/摘要) |
@@ -369,7 +371,7 @@ uv run mypy src/
 
 - [x] **v0.1.0** - LangGraph 7-Agent 视觉生成工作流 + RAG 知识库 + 合规检查 + Vue 3 管理后台
 - [x] **v0.2.0** - 千问百炼对接 + AI 会话追踪 + Agent 可观测工作台（DAG + 提示词轨迹）
-- [ ] **v0.3.0** - 高级 RAG（HyDE / 多查询重写）+ GraphRAG 增强 + 生产级刊登 + 图片 RAG
+- [x] **v0.3.0** - 高级 RAG（HyDE / 多查询重写）+ GraphRAG 增强 + 生产级刊登 + 图片 RAG
 - [ ] **v0.4.0** - Agent 自适应重试与自愈 + 工作流可视化编辑器
 - [ ] **v1.0.0** - 多租户 SaaS 化 + 插件式 Agent 市场 + 全面生产就绪
 
@@ -456,9 +458,9 @@ uv run mypy src/
 | Feature | Description |
 |---------|-------------|
 | 🔬 **Observable Workbench** | DAG flowchart (AntV G6) + prompt traces + real-time WebSocket collaboration |
-| 🤖 **Multi-Agent** | 7 visual + 4 listing + 3 RAG + 3 knowledge agents |
+| 🤖 **Multi-Agent** | 7 visual + 4 listing + 4 RAG agents + 5-stage knowledge QA pipeline |
 | 🔄 **LangGraph Workflows** | Conditional routing, parallel execution, state checkpoints, stream-mode callbacks |
-| 🖼️ **Image Gen** | DashScope Wanx (`wanx-v1` / `wan2.7-image-pro`), async_call + wait |
+| 🖼️ **Image Gen** | DashScope Wanx / SenseNova (`wanx-v1` / `sensenova-u1-fast`), async_call + wait |
 | 🎬 **Video Gen** | Kling AI (`kling-v1`), JWT auth + async task polling |
 | 📚 **RAG** | PGVector + BGE-large-zh / Qwen text-embedding-v3 |
 | 🕸️ **Graph RAG** | Knowledge graph entities/edges + CategoryMemory + RRF fusion |
@@ -467,14 +469,14 @@ uv run mypy src/
 | 🔄 **Dual LLM** | Bailian OpenAI-compatible (ChatOpenAI) + DashScope SDK (ChatTongyi) |
 | 📊 **Tracking** | Token stats, dual-currency (USD/CNY) budgeting, content search |
 | 🔐 **Auth** | API Token (SHA256 + Scope) + Multi-tenant isolation |
-| 🛡️ **Graceful Degradation** | Auto-mock without API keys, LLM fallback chain |
-| 🎨 **Dashboard** | Vue 3 + Element Plus, 15 pages |
+| 🛡️ **Graceful Degradation** | Configurable mock fallback without API keys (fail-closed by default), LLM fallback chain |
+| 🎨 **Dashboard** | Vue 3 + Element Plus, 17 pages |
 
 ## 🏗️ Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                     Vue 3 Dashboard (15 pages)                │
+│                     Vue 3 Dashboard (17 pages)                  │
 │  Dashboard │ Products │ Tasks │ Knowledge │ Listing │ AI Chat │
 │         │          │ Observable Workbench │          │        │
 └──────────────────────────┬───────────────────────────────────┘
@@ -491,10 +493,11 @@ uv run mypy src/
 │        -> VisualDesigner -> [ImageGen | VideoGen] -> Reviewer     │
 │                                                               │
 │  Listing: ImportProduct -> [AssetOptimizer | Copywriter]       │
-│         -> Compliance                                            │
+│         -> Compliance -> PlatformPush -> Finalize               │
+│         (blocked = human review / auto retry once / persisted)   │
 │                                                               │
-│  Knowledge: QueryAnalyzer -> StrategyRouter -> HybridRetriever  │
-│           -> Fuser                                               │
+│  Knowledge: QueryAnalyzer -> StrategyRouter -> Retriever        │
+│           -> ResultFuser -> AnswerGenerator                      │
 └───────┬──────────────┬──────────────┬────────────────────────┘
         │              │              │
  ┌──────▼──────┐ ┌─────▼─────┐ ┌─────▼──────┐
@@ -537,7 +540,7 @@ docker compose up -d
 | **Workflow** | LangChain, LangGraph |
 | **Backend** | FastAPI, Pydantic v2, SQLAlchemy 2.0 (async) |
 | **LLM** | Qwen/Bailian (OpenAI-compatible + DashScope SDK) |
-| **Image** | DashScope Wanx (`wanx-v1`, `wan2.7-image-pro`) |
+| **Image** | DashScope Wanx (`wanx-v1`) / SenseNova (`sensenova-u1-fast`) |
 | **Video** | Kling AI (`kling-v1`) |
 | **Vector** | PGVector, BGE-large-zh, Qwen text-embedding-v3 |
 | **Graph** | Graph RAG (entities/relations/communities/summaries) |
@@ -562,7 +565,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 - [x] **v0.1.0** - LangGraph 7-Agent visual workflow + RAG + compliance + Vue 3 dashboard
 - [x] **v0.2.0** - Qwen/Bailian integration + AI conversation tracking + observable workbench
-- [ ] **v0.3.0** - Advanced RAG (HyDE / multi-query) + GraphRAG + production listing + image RAG
+- [x] **v0.3.0** - Advanced RAG (HyDE / multi-query) + GraphRAG + production listing + image RAG
 - [ ] **v1.0.0** - Multi-tenant SaaS + plugin Agent marketplace + full production readiness
 
 ## 🤝 Contributing

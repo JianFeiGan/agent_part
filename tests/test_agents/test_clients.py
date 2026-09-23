@@ -12,7 +12,7 @@ Provider 客户端单元测试（离线）。
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import httpx
 import jwt

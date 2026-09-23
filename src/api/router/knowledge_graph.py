@@ -155,7 +155,7 @@ async def add_document(
     graph["document_count"] += 1
     graph["updated_at"] = datetime.utcnow()
 
-    return ApiResponse.success(result, message="文档添加成功")
+    return ApiResponse.success(result, message=result.get("message", "文档已接收"))
 
 
 @router.post("/search/hybrid", response_model=ApiResponse[SearchResponse], deprecated=True)
@@ -168,7 +168,7 @@ async def hybrid_search(
 
     Deprecated: 兼容保留。检索请走 /api/v1/knowledge/search 或 src/rag/*。
     """
-    workflow = KnowledgeAgentWorkflow()
+    workflow = KnowledgeAgentWorkflow(session=session, tenant_id=auth.tenant_id)
     state = await workflow.run(request.query)
 
     results = [
@@ -203,7 +203,7 @@ async def agent_query(
     """
     session_id = request.session_id or f"session_{uuid.uuid4().hex[:8]}"
 
-    workflow = KnowledgeAgentWorkflow()
+    workflow = KnowledgeAgentWorkflow(session=session, tenant_id=auth.tenant_id)
     state = await workflow.run(request.query)
 
     return ApiResponse.success(

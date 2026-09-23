@@ -110,6 +110,10 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
             # Step 2: 调用基础图片生成 Agent
             result = await self.base_agent.execute(state)
 
+            # Step 2.5: 自动入库生成结果（受 image_rag_auto_ingest 配置控制）
+            if result.success and self.settings.image_rag_auto_ingest and self._session:
+                await self._auto_ingest_images(state)
+
             # Step 3: 附加 RAG 信息到结果
             if result.success and rag_sources:
                 result.data["rag_sources"] = rag_sources
@@ -257,6 +261,48 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
             return state_tenant
         return "system"
 
+    async def _auto_ingest_images(self, state: AgentRuntimeState) -> None:
+        """自动将生成图片入库知识库（best-effort）。
+
+        在 base_agent 生成成功后调用：逐图匹配原始/增强 Prompt 并入库，
+        单张失败仅记日志，不影响其他图片与主流程。
+
+        Args:
+            state: 当前状态（需已填充 generated_images）。
+        """
+        images = state.generated_images or []
+        if not images or not self._session:
+            return
+
+        # 增强 prompt -> 原始 prompt 映射（execute 中已写入 original_prompt）
+        prompt_map = {
+            p.get("prompt"): p.get("original_prompt", p.get("prompt", ""))
+            for p in (state.generation_prompts or [])
+        }
+
+        category = self._get_category(state)
+        brand = self._get_brand(state)
+        tenant_id = self._resolve_tenant_id(state)
+        quality_score = state.quality_score
+
+        for image in images:
+            if not image.url:
+                continue
+            enhanced_prompt = image.prompt or ""
+            try:
+                await self.ingest_generation_result(
+                    self._session,
+                    prompt=prompt_map.get(enhanced_prompt, enhanced_prompt),
+                    enhanced_prompt=enhanced_prompt,
+                    image_url=image.url,
+                    category=category,
+                    brand=brand,
+                    quality_score=quality_score,
+                    tenant_id=tenant_id,
+                )
+            except Exception as e:
+                logger.warning(f"Auto-ingest image failed ({image.image_id}): {e}")
+
     async def ingest_generation_result(
         self,
         session: AsyncSession,
@@ -286,9 +332,10 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
         Returns:
             入库文档 ID，失败返回 None。
         """
-        # 仅入库高质量结果（评分 >= 0.7 或无评分）
-        if quality_score is not None and quality_score < 0.7:
-            logger.info(f"Skipping ingestion: quality score {quality_score} < 0.7")
+        # 仅入库高质量结果（评分达到 image_rag_quality_threshold 或无评分）
+        threshold = self.settings.image_rag_quality_threshold
+        if quality_score is not None and quality_score < threshold:
+            logger.info(f"Skipping ingestion: quality score {quality_score} < {threshold}")
             return None
 
         try:

@@ -15,13 +15,13 @@ export function shouldPollForStatus(status: string | null | undefined): boolean 
 }
 
 /**
- * 任务实时状态协调器。
+ * 任务实时状态协调核心（与 Vue 生命周期解耦，便于测试与复用）。
  *
  * - WebSocket 优先实时更新
  * - WS 断开/不可用且任务仍 running 时，每 5s 轮询轻量状态
- * - 进入终态后停止轮询并补拉完整详情
+ * - 进入终态后停止轮询/重连并补拉完整详情
  */
-export function useTaskStatusCoordinator(
+export function createTaskStatusCoordinator(
   taskId: string,
   options?: { onFirstLoadError?: () => void }
 ) {
@@ -85,6 +85,8 @@ export function useTaskStatusCoordinator(
       store.applyStatusSnapshot(status)
       if (isTerminalTaskStatus(status.status)) {
         stopPolling()
+        // 终态后不再尝试 WS 重连
+        clearReconnect()
         connectionMode.value = 'closed'
         await fetchTerminalDetailOnce()
       }
@@ -193,22 +195,41 @@ export function useTaskStatusCoordinator(
     connectionMode.value = 'closed'
   }
 
-  onMounted(async () => {
+  /** 启动协调：先拉完整详情，终态直接关闭，否则建立 WebSocket */
+  async function start() {
     await fetchFullDetail()
     if (isTerminalTaskStatus(store.taskDetail?.status)) {
       connectionMode.value = 'closed'
       return
     }
     connectWs()
-  })
-
-  onUnmounted(() => {
-    stop()
-  })
+  }
 
   return {
     connectionMode,
     connectionLabel,
+    start,
     stop
   }
+}
+
+/**
+ * 任务实时状态协调器（组件内使用，自动绑定挂载/卸载生命周期）。
+ * 页面只消费返回的连接状态，不直接协调 WS/轮询/终态刷新。
+ */
+export function useTaskStatusCoordinator(
+  taskId: string,
+  options?: { onFirstLoadError?: () => void }
+) {
+  const coordinator = createTaskStatusCoordinator(taskId, options)
+
+  onMounted(() => {
+    void coordinator.start()
+  })
+
+  onUnmounted(() => {
+    coordinator.stop()
+  })
+
+  return coordinator
 }
