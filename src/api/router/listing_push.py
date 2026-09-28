@@ -190,7 +190,9 @@ async def push_listing(
                         description=product.description or "",
                     )
 
-                push_result = adapter.push_listing(product, asset_package, copywriting, task_obj)
+                push_result = await adapter.push_listing(
+                    product, asset_package, copywriting, task_obj
+                )
 
                 results.append(
                     PushResultResponse(

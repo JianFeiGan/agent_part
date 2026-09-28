@@ -99,9 +99,7 @@ class TestListingPushAPI:
 
         mock_adapter = MagicMock()
         mock_adapter.push_listing = AsyncMock(
-            return_value=PushResult(
-                success=True, platform=Platform.AMAZON, listing_id="B08XYZ"
-            )
+            return_value=PushResult(success=True, platform=Platform.AMAZON, listing_id="B08XYZ")
         )
 
         with (
@@ -123,6 +121,89 @@ class TestListingPushAPI:
             assert data["data"]["task_id"] == 1
             assert len(data["data"]["results"]) == 1
             assert data["data"]["results"][0]["success"] is True
+
+    def test_push_listing_results_readable_and_persisted(self, client: TestClient) -> None:
+        """推送结果的成功标志、刊登编号、链接、错误可读，并写入任务结果记录。
+
+        复现缺陷：adapter.push_listing 为异步调用，未 await 时读到的是协程，
+        成功结果丢失、失败原因被吞。修复前本用例失败。
+        """
+        mock_task_po = _make_task_po(id=1, target_platforms=["amazon", "ebay"])
+        mock_product = ListingProduct(sku="PUSH-001", title="Push Test Product")
+        mock_task_obj = ListingTask(
+            id=1, product_id=1, target_platforms=[Platform.AMAZON, Platform.EBAY]
+        )
+
+        cm, mock_session = _mock_get_db()
+        scalars_mock = MagicMock()
+        scalars_mock.all.return_value = []
+        exec_result = MagicMock()
+        exec_result.scalars.return_value = scalars_mock
+        exec_result.scalar_one_or_none.return_value = None
+        mock_session.execute.return_value = exec_result
+        mock_session.add = MagicMock()
+
+        ok_adapter = MagicMock()
+        ok_adapter.push_listing = AsyncMock(
+            return_value=PushResult(
+                success=True,
+                platform=Platform.AMAZON,
+                listing_id="B08XYZ",
+                url="https://amazon.com/dp/B08XYZ",
+            )
+        )
+        fail_adapter = MagicMock()
+        fail_adapter.push_listing = AsyncMock(
+            return_value=PushResult(
+                success=False,
+                platform=Platform.EBAY,
+                error="eBay token expired",
+            )
+        )
+        adapters = {Platform.AMAZON: ok_adapter, Platform.EBAY: fail_adapter}
+
+        with (
+            patch(
+                "src.api.router.listing_push._load_domain_objects", new_callable=AsyncMock
+            ) as mock_load,
+            patch("src.api.router.listing_push.get_db_session", return_value=cm),
+            patch("src.api.router.listing_push.registry") as mock_registry,
+            patch("src.api.router.listing_push._config_manager") as mock_mgr,
+        ):
+            mock_load.return_value = (mock_task_po, mock_product, mock_task_obj)
+            mock_registry.get.side_effect = lambda platform, **_: adapters[platform]
+            mock_mgr.get_config = AsyncMock(return_value=None)
+
+            push_resp = client.post("/api/v1/listing/tasks/1/push")
+
+        assert push_resp.status_code == 200
+        payload = push_resp.json()["data"]
+        assert payload["status"] == "partial"
+        by_platform = {r["platform"]: r for r in payload["results"]}
+
+        ok = by_platform["amazon"]
+        assert ok["success"] is True
+        assert ok["listing_id"] == "B08XYZ"
+        assert ok["url"] == "https://amazon.com/dp/B08XYZ"
+        assert ok["error"] is None
+
+        failed = by_platform["ebay"]
+        assert failed["success"] is False
+        assert failed["error"] == "eBay token expired"
+
+        saved = {
+            po.platform: po
+            for po in (c.args[0] for c in mock_session.add.call_args_list)
+            if isinstance(po, TaskResultPO)
+        }
+        assert saved["amazon"].success is True
+        assert saved["amazon"].result_data == {
+            "listing_id": "B08XYZ",
+            "url": "https://amazon.com/dp/B08XYZ",
+            "error": None,
+        }
+        assert saved["ebay"].success is False
+        assert saved["ebay"].result_data["error"] == "eBay token expired"
 
     def test_push_task_not_found(self, client: TestClient) -> None:
         """测试推送不存在的任务。"""
@@ -264,6 +345,57 @@ class TestResumePushAPI:
         assert resp.json()["code"] == 200
         called = mock_workflow_cls.return_value.resume_push.call_args
         assert called.kwargs["platforms"] == [Platform.EBAY]
+
+    def test_resume_push_exposes_result_fields(self, client: TestClient) -> None:
+        """恢复推送后可读到各平台成功标志、刊登编号、链接与错误信息。"""
+        mock_task_po = _make_task_po(
+            id=1,
+            status="reviewing",
+            tenant_id="dev",
+            target_platforms=["amazon", "ebay"],
+        )
+        cm, mock_session = _mock_get_db()
+        mock_session.get = AsyncMock(return_value=mock_task_po)
+
+        outcome = {
+            "push_results": {
+                "amazon": PushResult(
+                    success=True,
+                    platform=Platform.AMAZON,
+                    listing_id="B08XYZ",
+                    url="https://amazon.com/dp/B08XYZ",
+                ),
+                "ebay": PushResult(
+                    success=False,
+                    platform=Platform.EBAY,
+                    error="eBay token expired",
+                ),
+            },
+            "final_status": "partial",
+        }
+
+        with (
+            patch("src.api.router.listing_push.get_db_session", return_value=cm),
+            patch(
+                "src.api.router.listing_push.load_blocked_platforms",
+                new_callable=AsyncMock,
+                return_value=set(),
+            ),
+            patch("src.api.router.listing_push.ListingWorkflow") as mock_workflow_cls,
+        ):
+            mock_workflow_cls.return_value.resume_push = AsyncMock(return_value=outcome)
+
+            resp = client.post(
+                "/api/v1/listing/tasks/1/resume-push", json={"platforms": ["amazon", "ebay"]}
+            )
+
+        assert resp.json()["code"] == 200
+        by_platform = {r["platform"]: r for r in resp.json()["data"]["results"]}
+        assert by_platform["amazon"]["success"] is True
+        assert by_platform["amazon"]["listing_id"] == "B08XYZ"
+        assert by_platform["amazon"]["url"] == "https://amazon.com/dp/B08XYZ"
+        assert by_platform["ebay"]["success"] is False
+        assert by_platform["ebay"]["error"] == "eBay token expired"
 
     def test_resume_push_no_eligible_platform(self, client: TestClient) -> None:
         """所申请平台均不在目标平台内时返回 400。"""
