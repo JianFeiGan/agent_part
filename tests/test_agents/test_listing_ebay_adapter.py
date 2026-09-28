@@ -102,7 +102,7 @@ def task() -> ListingTask:
 class TestEbayAdapterAuthenticate:
     """EbayAdapter 认证测试。"""
 
-    def test_authenticate_returns_token(self, adapter: EbayAdapter) -> None:
+    async def test_authenticate_returns_token(self, adapter: EbayAdapter) -> None:
         """测试认证成功返回访问令牌。"""
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -114,7 +114,7 @@ class TestEbayAdapterAuthenticate:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            token = adapter.authenticate()
+            token = await adapter.authenticate()
 
         assert token == "test_access_token_123"
         assert adapter._auth_token == "test_access_token_123"
@@ -122,7 +122,7 @@ class TestEbayAdapterAuthenticate:
         call_args = mock_post.call_args
         assert call_args.kwargs["data"]["grant_type"] == "refresh_token"
 
-    def test_authenticate_failure_raises(self, adapter: EbayAdapter) -> None:
+    async def test_authenticate_failure_raises(self, adapter: EbayAdapter) -> None:
         """测试认证失败抛出 RuntimeError。"""
         mock_response = MagicMock()
         mock_response.status_code = 401
@@ -131,26 +131,26 @@ class TestEbayAdapterAuthenticate:
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
             with pytest.raises(RuntimeError, match="authentication failed"):
-                adapter.authenticate()
+                await adapter.authenticate()
 
 
 class TestEbayAdapterTransformCopywriting:
     """EbayAdapter 文案转换测试。"""
 
-    def test_transform_copywriting_truncates_title(
+    async def test_transform_copywriting_truncates_title(
         self, adapter: EbayAdapter, copywriting: CopywritingPackage
     ) -> None:
         """测试标题截断到 80 字符。"""
-        result = adapter.transform_copywriting(copywriting)
+        result = await adapter.transform_copywriting(copywriting)
 
         assert len(result["title"]) <= 80
         assert result["title"] == copywriting.title[:80]
 
-    def test_transform_copywriting_wraps_bullets_in_html(
+    async def test_transform_copywriting_wraps_bullets_in_html(
         self, adapter: EbayAdapter, copywriting: CopywritingPackage
     ) -> None:
         """测试 bullet points 包装为 HTML 列表。"""
-        result = adapter.transform_copywriting(copywriting)
+        result = await adapter.transform_copywriting(copywriting)
 
         assert "<ul>" in result["bullet_points_html"]
         assert "<li>" in result["bullet_points_html"]
@@ -158,7 +158,7 @@ class TestEbayAdapterTransformCopywriting:
         for bp in copywriting.bullet_points:
             assert f"<li>{bp}</li>" in result["bullet_points_html"]
 
-    def test_transform_copywriting_empty_bullets(self, adapter: EbayAdapter) -> None:
+    async def test_transform_copywriting_empty_bullets(self, adapter: EbayAdapter) -> None:
         """测试空 bullet points 返回空字符串。"""
         copy = CopywritingPackage(
             listing_task_id=1,
@@ -167,10 +167,12 @@ class TestEbayAdapterTransformCopywriting:
             bullet_points=[],
             description="Test description",
         )
-        result = adapter.transform_copywriting(copy)
+        result = await adapter.transform_copywriting(copy)
         assert result["bullet_points_html"] == ""
 
-    def test_transform_copywriting_title_shorter_than_limit(self, adapter: EbayAdapter) -> None:
+    async def test_transform_copywriting_title_shorter_than_limit(
+        self, adapter: EbayAdapter
+    ) -> None:
         """测试短标题不被截断。"""
         copy = CopywritingPackage(
             listing_task_id=1,
@@ -178,49 +180,49 @@ class TestEbayAdapterTransformCopywriting:
             title="Short Title",
             description="Desc",
         )
-        result = adapter.transform_copywriting(copy)
+        result = await adapter.transform_copywriting(copy)
         assert result["title"] == "Short Title"
 
 
 class TestEbayAdapterTransformAssets:
     """EbayAdapter 素材转换测试。"""
 
-    def test_transform_assets_format(
+    async def test_transform_assets_format(
         self,
         adapter: EbayAdapter,
         product: ListingProduct,
         asset_package: AssetPackage,
     ) -> None:
         """测试素材返回 "pictures" 键。"""
-        result = adapter.transform_assets(product, asset_package)
+        result = await adapter.transform_assets(product, asset_package)
 
         assert "pictures" in result
         assert isinstance(result["pictures"], list)
 
-    def test_transform_assets_includes_main_image(
+    async def test_transform_assets_includes_main_image(
         self,
         adapter: EbayAdapter,
         product: ListingProduct,
         asset_package: AssetPackage,
     ) -> None:
         """测试素材包含主图。"""
-        result = adapter.transform_assets(product, asset_package)
+        result = await adapter.transform_assets(product, asset_package)
 
         assert asset_package.main_image in result["pictures"]
 
-    def test_transform_assets_includes_variant_images(
+    async def test_transform_assets_includes_variant_images(
         self,
         adapter: EbayAdapter,
         product: ListingProduct,
         asset_package: AssetPackage,
     ) -> None:
         """测试素材包含变体图。"""
-        result = adapter.transform_assets(product, asset_package)
+        result = await adapter.transform_assets(product, asset_package)
 
         for variant in asset_package.variant_images:
             assert variant in result["pictures"]
 
-    def test_transform_assets_limits_to_12(
+    async def test_transform_assets_limits_to_12(
         self, adapter: EbayAdapter, product: ListingProduct
     ) -> None:
         """测试素材最多返回 12 张图片。"""
@@ -230,7 +232,7 @@ class TestEbayAdapterTransformAssets:
             main_image="https://cdn.example.com/main.jpg",
             variant_images=[f"https://cdn.example.com/v{i}.jpg" for i in range(20)],
         )
-        result = adapter.transform_assets(product, many_variants)
+        result = await adapter.transform_assets(product, many_variants)
         assert len(result["pictures"]) == 12
 
 
@@ -261,7 +263,7 @@ class TestEbayAdapterPushListing:
   </Errors>
 </AddItemResponse>"""
 
-    def test_push_listing_success(
+    async def test_push_listing_success(
         self,
         adapter: EbayAdapter,
         product: ListingProduct,
@@ -278,14 +280,14 @@ class TestEbayAdapterPushListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.push_listing(product, asset_package, copywriting, task)
+            result = await adapter.push_listing(product, asset_package, copywriting, task)
 
         assert result.success is True
         assert result.platform == Platform.EBAY
         assert result.listing_id == "123456789"
         assert result.url == "https://www.ebay.com/itm/123456789"
 
-    def test_push_listing_failure(
+    async def test_push_listing_failure(
         self,
         adapter: EbayAdapter,
         product: ListingProduct,
@@ -302,13 +304,13 @@ class TestEbayAdapterPushListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.push_listing(product, asset_package, copywriting, task)
+            result = await adapter.push_listing(product, asset_package, copywriting, task)
 
         assert result.success is False
         assert result.platform == Platform.EBAY
         assert "Invalid category" in result.error
 
-    def test_push_listing_triggers_auth_if_needed(
+    async def test_push_listing_triggers_auth_if_needed(
         self,
         adapter: EbayAdapter,
         product: ListingProduct,
@@ -329,7 +331,7 @@ class TestEbayAdapterPushListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.side_effect = [mock_token_response, mock_api_response]
-            result = adapter.push_listing(product, asset_package, copywriting, task)
+            result = await adapter.push_listing(product, asset_package, copywriting, task)
 
         assert mock_post.call_count == 2
         assert result.success is True
@@ -346,7 +348,7 @@ class TestEbayAdapterUpdateListing:
   <ItemID>987654321</ItemID>
 </ReviseItemResponse>"""
 
-    def test_update_listing(
+    async def test_update_listing(
         self,
         adapter: EbayAdapter,
         product: ListingProduct,
@@ -362,13 +364,13 @@ class TestEbayAdapterUpdateListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.update_listing("987654321", product, asset_package, copywriting)
+            result = await adapter.update_listing("987654321", product, asset_package, copywriting)
 
         assert result.success is True
         assert result.platform == Platform.EBAY
         assert result.listing_id == "987654321"
 
-    def test_update_listing_failure(
+    async def test_update_listing_failure(
         self,
         adapter: EbayAdapter,
         product: ListingProduct,
@@ -392,7 +394,9 @@ class TestEbayAdapterUpdateListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.update_listing("nonexistent", product, asset_package, copywriting)
+            result = await adapter.update_listing(
+                "nonexistent", product, asset_package, copywriting
+            )
 
         assert result.success is False
         assert "Item not found" in result.error
@@ -409,7 +413,7 @@ class TestEbayAdapterDeleteListing:
   <EndTime>2026-04-25T12:00:00.000Z</EndTime>
 </EndItemResponse>"""
 
-    def test_delete_listing(
+    async def test_delete_listing(
         self,
         adapter: EbayAdapter,
     ) -> None:
@@ -422,13 +426,13 @@ class TestEbayAdapterDeleteListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.delete_listing("123456789")
+            result = await adapter.delete_listing("123456789")
 
         assert result.success is True
         assert result.platform == Platform.EBAY
         assert result.listing_id == "123456789"
 
-    def test_delete_listing_failure(
+    async def test_delete_listing_failure(
         self,
         adapter: EbayAdapter,
     ) -> None:
@@ -449,7 +453,7 @@ class TestEbayAdapterDeleteListing:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            result = adapter.delete_listing("already_ended_id")
+            result = await adapter.delete_listing("already_ended_id")
 
         assert result.success is False
         assert "Item already ended" in result.error
@@ -458,7 +462,7 @@ class TestEbayAdapterDeleteListing:
 class TestEbayAdapterXmlPayload:
     """EbayAdapter XML 载荷结构测试。"""
 
-    def test_xml_payload_structure(
+    async def test_xml_payload_structure(
         self,
         adapter: EbayAdapter,
         product: ListingProduct,
@@ -479,7 +483,7 @@ class TestEbayAdapterXmlPayload:
 
         with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
             mock_post.return_value = mock_response
-            adapter.push_listing(product, asset_package, copywriting, task)
+            await adapter.push_listing(product, asset_package, copywriting, task)
 
         call_headers = mock_post.call_args.kwargs["headers"]
         assert "xml" in call_headers["Content-Type"]

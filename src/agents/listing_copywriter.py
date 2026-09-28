@@ -139,12 +139,12 @@ class AICopywritingAgent:
             chain = prompt | self.llm
             response = await chain.ainvoke({"draft": draft})
             enhanced = response.content if hasattr(response, "content") else str(response)
-            return enhanced.strip()
+            return str(enhanced).strip()
         except Exception:
             logger.warning("LLM enhancement failed, using rule-based draft")
             return draft
 
-    def execute_sync(self, state: ListingState) -> dict:
+    def execute_sync(self, state: ListingState) -> dict[str, Any]:
         """同步执行文案生成（规则模式，LLM 降级兜底）。"""
         product = state.product
         if not product:
@@ -217,7 +217,7 @@ class AICopywritingAgent:
 
         return package
 
-    async def execute(self, state: ListingState) -> dict:
+    async def execute(self, state: ListingState) -> dict[str, Any]:
         """异步执行文案生成（工作流节点接口）。
 
         流程: 规则生成草稿 → 尝试 LLM 润色 → LLM 失败则使用规则草稿

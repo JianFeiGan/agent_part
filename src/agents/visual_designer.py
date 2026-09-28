@@ -16,8 +16,9 @@ from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, BaseAgent
 from src.agents.llm_json import extract_json, extract_json_list
+from src.graph.state import AgentState
 from src.models.creative import ImagePrompt, ImageType
 from src.models.storyboard import (
     Scene,
@@ -28,7 +29,7 @@ from src.models.storyboard import (
 )
 
 
-class VisualDesignerAgent(BaseAgent[AgentRuntimeState]):
+class VisualDesignerAgent(BaseAgent[AgentState]):
     """视觉设计Agent。
 
     将创意方案转化为具体的视觉输出规格。
@@ -112,7 +113,7 @@ class VisualDesignerAgent(BaseAgent[AgentRuntimeState]):
         )
         self.register_prompt("storyboard", storyboard_prompt)
 
-    async def execute(self, state: AgentRuntimeState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行视觉设计。
 
         Args:
@@ -172,7 +173,7 @@ class VisualDesignerAgent(BaseAgent[AgentRuntimeState]):
         self,
         product: Any,
         creative_plan: Any,
-        state: AgentRuntimeState,
+        state: AgentState,
     ) -> list[ImagePrompt]:
         """生成图片提示词。
 
@@ -314,7 +315,7 @@ class VisualDesignerAgent(BaseAgent[AgentRuntimeState]):
         self,
         product: Any,
         creative_plan: Any,
-        state: AgentRuntimeState,
+        state: AgentState,
     ) -> Storyboard:
         """生成分镜脚本。
 

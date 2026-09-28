@@ -16,12 +16,12 @@ from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, BaseAgent
 from src.agents.llm_json import extract_json
-from src.graph.state import GenerationRequest
+from src.graph.state import AgentState, GenerationRequest
 
 
-class OrchestratorAgent(BaseAgent[AgentRuntimeState]):
+class OrchestratorAgent(BaseAgent[AgentState]):
     """编排调度Agent。
 
     作为系统的"大脑"，负责整体流程的编排和协调。
@@ -64,7 +64,7 @@ class OrchestratorAgent(BaseAgent[AgentRuntimeState]):
         )
         self.register_prompt("task_decomposition", task_decomposition_prompt)
 
-    async def execute(self, state: AgentRuntimeState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行编排任务。
 
         Args:
@@ -101,7 +101,7 @@ class OrchestratorAgent(BaseAgent[AgentRuntimeState]):
                 error=f"编排执行失败: {e}",
             )
 
-    async def _analyze_task(self, state: AgentRuntimeState) -> dict[str, Any]:
+    async def _analyze_task(self, state: AgentState) -> dict[str, Any]:
         """分析任务需求。
 
         Args:
@@ -111,6 +111,8 @@ class OrchestratorAgent(BaseAgent[AgentRuntimeState]):
             任务规划字典。
         """
         product = state.product_info
+        if product is None:
+            raise ValueError("缺少商品信息")
         request = state.generation_request or GenerationRequest()
 
         # 构建输入

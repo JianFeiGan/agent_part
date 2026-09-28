@@ -19,8 +19,9 @@ from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, BaseAgent
 from src.agents.llm_json import extract_json
+from src.graph.state import AgentState
 from src.models.assets import (
     AssetCollection,
     AssetStatus,
@@ -34,7 +35,7 @@ from src.models.assets import (
 logger = logging.getLogger(__name__)
 
 
-class QualityReviewerAgent(BaseAgent[AgentRuntimeState]):
+class QualityReviewerAgent(BaseAgent[AgentState]):
     """质量审核Agent。
 
     对生成的内容进行全面质量检测。
@@ -106,7 +107,7 @@ class QualityReviewerAgent(BaseAgent[AgentRuntimeState]):
         )
         self.register_prompt("compliance", compliance_prompt)
 
-    async def execute(self, state: AgentRuntimeState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行质量审核。
 
         Args:
@@ -195,7 +196,7 @@ class QualityReviewerAgent(BaseAgent[AgentRuntimeState]):
         self,
         image: GeneratedImage,
         product: Any,
-        state: AgentRuntimeState,
+        state: AgentState,
     ) -> QualityReport:
         """审核图片。
 
@@ -271,7 +272,7 @@ class QualityReviewerAgent(BaseAgent[AgentRuntimeState]):
         self,
         video: GeneratedVideo,
         product: Any,
-        state: AgentRuntimeState,
+        state: AgentState,
     ) -> QualityReport:
         """审核视频。
 
@@ -394,7 +395,7 @@ class QualityReviewerAgent(BaseAgent[AgentRuntimeState]):
 
     def _create_final_results(
         self,
-        state: AgentRuntimeState,
+        state: AgentState,
         reports: list[QualityReport],
         overall_score: float,
     ) -> dict[str, Any]:

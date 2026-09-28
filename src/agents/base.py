@@ -21,6 +21,9 @@ from tenacity import AsyncRetrying, stop_after_attempt, wait_exponential
 
 from src.config.settings import Settings, get_settings
 
+if TYPE_CHECKING:
+    from src.graph.state import AgentState
+
 logger = logging.getLogger(__name__)
 
 # 类目记忆为空时的统一占位文案
@@ -29,11 +32,8 @@ CATEGORY_MEMORY_FALLBACK = "（无相关类目记忆）"
 # 类目记忆注入 prompt 的最大字符数（超出截断）
 CATEGORY_MEMORY_MAX_CHARS = 4000
 
-if TYPE_CHECKING:
-    pass
-
-# 状态类型变量
-StateT = TypeVar("StateT", bound="AgentRuntimeState")
+# 状态类型变量：工作流状态为 AgentState（src.graph.state）
+StateT = TypeVar("StateT", bound="AgentState")
 
 
 class AgentRole(str, Enum):
@@ -382,6 +382,8 @@ class BaseAgent(ABC, Generic[StateT]):
             self._last_trace["cost_cny"] = round(cost_cny, 4)
 
             return response.content if hasattr(response, "content") else str(response)
+
+        raise RuntimeError("unreachable")  # __aexit__ 恒不抑制异常，with 块内必已 return
 
     def __repr__(self) -> str:
         """返回Agent描述。

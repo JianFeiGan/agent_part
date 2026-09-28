@@ -17,8 +17,9 @@ from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, BaseAgent
 from src.agents.llm_json import extract_json
+from src.graph.state import AgentState
 from src.models.creative import (
     ColorInfo,
     ColorPalette,
@@ -69,7 +70,7 @@ PRESET_PALETTES: dict[str, dict[str, Any]] = {
 }
 
 
-class CreativePlannerAgent(BaseAgent[AgentRuntimeState]):
+class CreativePlannerAgent(BaseAgent[AgentState]):
     """创意策划Agent。
 
     根据需求分析结果，设计创意方案。
@@ -138,7 +139,7 @@ class CreativePlannerAgent(BaseAgent[AgentRuntimeState]):
         )
         self.register_prompt("color", color_prompt)
 
-    async def execute(self, state: AgentRuntimeState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行创意策划。
 
         Args:
@@ -183,7 +184,7 @@ class CreativePlannerAgent(BaseAgent[AgentRuntimeState]):
         self,
         product: Any,
         report: Any,
-        state: AgentRuntimeState,
+        state: AgentState,
     ) -> CreativePlan:
         """生成创意方案。
 

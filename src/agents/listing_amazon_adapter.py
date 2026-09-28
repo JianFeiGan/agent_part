@@ -16,7 +16,7 @@ import hmac
 import logging
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, NoReturn
 from urllib.parse import urlparse
 
 import httpx
@@ -713,7 +713,7 @@ class AmazonAdapter(BasePlatformAdapter):
         self,
         response: httpx.Response,
         operation: str,
-    ) -> None:
+    ) -> NoReturn:
         """处理错误响应，区分可重试和不可重试错误。
 
         Args:
@@ -752,6 +752,7 @@ class AmazonAdapter(BasePlatformAdapter):
             解析后的字典，失败时返回空字典。
         """
         try:
-            return response.json()
+            data = response.json()
         except Exception:
             return {}
+        return data if isinstance(data, dict) else {}

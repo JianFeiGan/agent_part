@@ -21,9 +21,10 @@ from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, BaseAgent
 from src.clients.protocols import VideoProviderProtocol
 from src.clients.provider_result import ProviderUnavailableError
+from src.graph.state import AgentState
 from src.models.assets import AssetStatus, GeneratedVideo, VideoFormat
 from src.models.storyboard import Scene
 from src.storage.base import StorageBackend
@@ -38,7 +39,7 @@ _EMPTY_MP4_BASE64 = (
 )
 
 
-class VideoGeneratorAgent(BaseAgent[AgentRuntimeState]):
+class VideoGeneratorAgent(BaseAgent[AgentState]):
     """视频生成Agent。
 
     通过 ProviderFactory 动态获取视频生成 Provider，
@@ -117,7 +118,7 @@ class VideoGeneratorAgent(BaseAgent[AgentRuntimeState]):
         )
         self.register_prompt("composition", composition_prompt)
 
-    async def execute(self, state: AgentRuntimeState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行视频生成。
 
         Args:
@@ -157,7 +158,7 @@ class VideoGeneratorAgent(BaseAgent[AgentRuntimeState]):
     async def _generate_video(
         self,
         storyboard: Any,
-        state: AgentRuntimeState,
+        state: AgentState,
     ) -> GeneratedVideo:
         """生成视频。
 
@@ -273,14 +274,14 @@ class VideoGeneratorAgent(BaseAgent[AgentRuntimeState]):
         except Exception:
             return scene.visual_prompt
 
-    def _resolve_tenant_id(self, state: AgentRuntimeState) -> str:
+    def _resolve_tenant_id(self, state: AgentState) -> str:
         """从 state 中解析 tenant_id。
 
-        优先读 AgentRuntimeState.tenant_id（由 create_initial_state 显式注入），
+        优先读 AgentState.tenant_id（由 create_initial_state 显式注入），
         兼容旧路径：generation_request / product_info 上的 tenant_id。
 
         Args:
-            state: 当前 AgentRuntimeState。
+            state: 当前 AgentState。
 
         Returns:
             tenant_id 字符串。
@@ -326,7 +327,7 @@ class VideoGeneratorAgent(BaseAgent[AgentRuntimeState]):
         scene_prompts: list[dict[str, Any]],
         width: int,
         height: int,
-        state: AgentRuntimeState | None = None,
+        state: AgentState | None = None,
     ) -> GeneratedVideo:
         """调用视频生成API。
 
@@ -341,7 +342,7 @@ class VideoGeneratorAgent(BaseAgent[AgentRuntimeState]):
             scene_prompts: 场景提示词列表。
             width: 宽度。
             height: 高度。
-            state: 当前 AgentRuntimeState（用于获取 tenant_id 和 provider_id）。
+            state: 当前 AgentState（用于获取 tenant_id 和 provider_id）。
 
         Returns:
             生成的视频。

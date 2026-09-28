@@ -17,12 +17,12 @@ from typing import Any
 
 from langchain_core.prompts import ChatPromptTemplate
 
-from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, BaseAgent
 from src.agents.llm_json import extract_json
-from src.graph.state import RequirementReport
+from src.graph.state import AgentState, RequirementReport
 
 
-class RequirementAnalyzerAgent(BaseAgent[AgentRuntimeState]):
+class RequirementAnalyzerAgent(BaseAgent[AgentState]):
     """需求分析Agent。
 
     深入分析商品信息，生成结构化的需求分析报告。
@@ -93,7 +93,7 @@ class RequirementAnalyzerAgent(BaseAgent[AgentRuntimeState]):
         )
         self.register_prompt("selling_point", selling_point_prompt)
 
-    async def execute(self, state: AgentRuntimeState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行需求分析。
 
         Args:

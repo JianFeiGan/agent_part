@@ -23,16 +23,15 @@ from src.agents.base import (
     CATEGORY_MEMORY_FALLBACK,
     AgentResult,
     AgentRole,
-    AgentRuntimeState,
     BaseAgent,
 )
 from src.agents.llm_json import extract_json
-from src.graph.state import RequirementReport
+from src.graph.state import AgentState, RequirementReport
 
 logger = logging.getLogger(__name__)
 
 
-class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
+class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentState]):
     """RAG增强的需求分析Agent。
 
     通过知识库检索增强商品分析能力：
@@ -129,7 +128,7 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
         )
         self.register_prompt("rag_selling_point", selling_point_prompt)
 
-    async def execute(self, state: AgentRuntimeState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行RAG增强的需求分析。
 
         Args:
@@ -184,9 +183,7 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
                 error=f"需求分析失败: {e}",
             )
 
-    async def _retrieve_knowledge(
-        self, state: AgentRuntimeState
-    ) -> tuple[str, list[dict[str, Any]]]:
+    async def _retrieve_knowledge(self, state: AgentState) -> tuple[str, list[dict[str, Any]]]:
         """检索相关知识（领域方法：类目知识+品牌规范+历史案例）。
 
         Args:

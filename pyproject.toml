@@ -67,6 +67,7 @@ dev = [
 
     # 类型存根
     "types-aiofiles>=23.0.0",
+    "types-requests>=2.31.0",
 ]
 
 [build-system]

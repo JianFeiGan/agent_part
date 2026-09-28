@@ -40,7 +40,7 @@ class ImportProductAgent:
         """
         self._settings = settings
 
-    def execute_manual(self, product_data: dict[str, Any]) -> dict:
+    def execute_manual(self, product_data: dict[str, Any]) -> dict[str, Any]:
         """手动录入商品。
 
         Args:
@@ -84,7 +84,7 @@ class ImportProductAgent:
         logger.info(f"商品导入成功: sku={sku}, title={title}")
         return {"success": True, "product": product, "error": None}
 
-    async def execute(self, state: Any) -> dict:
+    async def execute(self, state: Any) -> dict[str, Any]:
         """工作流节点执行方法（兼容性接口）。
 
         Args:

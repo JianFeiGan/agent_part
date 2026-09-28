@@ -22,10 +22,10 @@ from src.agents.base import (
     CATEGORY_MEMORY_FALLBACK,
     AgentResult,
     AgentRole,
-    AgentRuntimeState,
     BaseAgent,
 )
 from src.agents.llm_json import extract_json
+from src.graph.state import AgentState
 from src.models.creative import (
     ColorInfo,
     ColorPalette,
@@ -78,7 +78,7 @@ PRESET_PALETTES: dict[str, dict[str, Any]] = {
 }
 
 
-class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
+class RAGEnhancedCreativePlanner(BaseAgent[AgentState]):
     """RAG增强的创意策划Agent。
 
     通过知识库检索增强创意策划能力：
@@ -170,7 +170,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
         )
         self.register_prompt("rag_color", color_prompt)
 
-    async def execute(self, state: AgentRuntimeState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行RAG增强的创意策划。
 
         Args:
@@ -238,7 +238,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
             )
 
     async def _retrieve_creative_knowledge(
-        self, state: "AgentRuntimeState"
+        self, state: "AgentState"
     ) -> tuple[str, str, str, list[dict[str, Any]]]:
         """检索创意相关知识（领域方法：品牌规范+类目风格+成功案例）。
 
@@ -315,7 +315,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
         self,
         product: Any,
         report: Any,
-        state: "AgentRuntimeState",
+        state: "AgentState",
         brand_guidelines: str,
         category_styles: str,
         case_inspirations: str,

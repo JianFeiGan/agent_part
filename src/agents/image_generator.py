@@ -22,9 +22,10 @@ from typing import Any
 from langchain_core.prompts import ChatPromptTemplate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, BaseAgent
 from src.clients.protocols import ImageProviderProtocol
 from src.clients.provider_result import ProviderUnavailableError
+from src.graph.state import AgentState
 from src.models.assets import AssetStatus, GeneratedImage, ImageFormat
 from src.models.creative import ImageType
 from src.storage.base import StorageBackend
@@ -40,7 +41,7 @@ _EMPTY_PNG_BASE64 = (
 )
 
 
-class ImageGeneratorAgent(BaseAgent[AgentRuntimeState]):
+class ImageGeneratorAgent(BaseAgent[AgentState]):
     """图片生成Agent。
 
     通过 ProviderFactory 动态获取图片生成 Provider，
@@ -98,7 +99,7 @@ class ImageGeneratorAgent(BaseAgent[AgentRuntimeState]):
         )
         self.register_prompt("optimize", optimize_prompt)
 
-    async def execute(self, state: AgentRuntimeState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行图片生成。
 
         Args:
@@ -146,7 +147,7 @@ class ImageGeneratorAgent(BaseAgent[AgentRuntimeState]):
     async def _generate_images(
         self,
         prompt_data: dict[str, Any],
-        _state: AgentRuntimeState,
+        _state: AgentState,
     ) -> list[GeneratedImage]:
         """生成图片。
 
@@ -271,14 +272,14 @@ class ImageGeneratorAgent(BaseAgent[AgentRuntimeState]):
 
         return ", ".join(parts)
 
-    def _resolve_tenant_id(self, state: AgentRuntimeState) -> str:
+    def _resolve_tenant_id(self, state: AgentState) -> str:
         """从 state 中解析 tenant_id。
 
-        优先读 AgentRuntimeState.tenant_id（由 create_initial_state 显式注入），
+        优先读 AgentState.tenant_id（由 create_initial_state 显式注入），
         兼容旧路径：generation_request / product_info 上的 tenant_id。
 
         Args:
-            state: 当前 AgentRuntimeState。
+            state: 当前 AgentState。
 
         Returns:
             tenant_id 字符串。
@@ -326,7 +327,7 @@ class ImageGeneratorAgent(BaseAgent[AgentRuntimeState]):
         width: int,
         height: int,
         image_type: str,
-        state: AgentRuntimeState | None = None,
+        state: AgentState | None = None,
     ) -> list[GeneratedImage]:
         """调用图片生成API。
 
@@ -341,7 +342,7 @@ class ImageGeneratorAgent(BaseAgent[AgentRuntimeState]):
             width: 宽度。
             height: 高度。
             image_type: 图片类型。
-            state: 当前 AgentRuntimeState（用于获取 tenant_id 和 provider_id）。
+            state: 当前 AgentState（用于获取 tenant_id 和 provider_id）。
 
         Returns:
             生成的图片列表。

@@ -15,14 +15,15 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.agents.base import AgentResult, AgentRole, AgentRuntimeState, BaseAgent
+from src.agents.base import AgentResult, AgentRole, BaseAgent
 from src.agents.image_generator import ImageGeneratorAgent
+from src.graph.state import AgentState
 from src.rag.retriever import KnowledgeRetriever, RetrievalResult
 
 logger = logging.getLogger(__name__)
 
 
-class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
+class RAGEnhancedImageGenerator(BaseAgent[AgentState]):
     """RAG 增强图片生成 Agent。
 
     在 ImageGeneratorAgent 基础上增加：
@@ -63,7 +64,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
         """
         self._session = session
 
-    async def execute(self, state: AgentRuntimeState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行 RAG 增强的图片生成。
 
         在调用基础图片生成前，先检索品牌视觉规范和风格模板，
@@ -128,7 +129,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
                 error=f"RAG 增强图片生成失败: {e}",
             )
 
-    async def _retrieve_image_knowledge(self, state: AgentRuntimeState) -> RetrievalResult:
+    async def _retrieve_image_knowledge(self, state: AgentState) -> RetrievalResult:
         """检索图片生成相关知识。
 
         Args:
@@ -150,12 +151,22 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
         style_preference = self._get_style_preference(state)
         tenant_id = self._resolve_tenant_id(state)
 
-        return await self._retriever.retrieve_for_image_generation(
+        result = await self._retriever.retrieve_for_image_generation(
             self._session,
             category=category,
             brand=brand,
             style_preference=style_preference,
             tenant_id=tenant_id,
+        )
+        return (
+            result
+            if isinstance(result, RetrievalResult)
+            else RetrievalResult(
+                query="图片生成: 无",
+                results=[],
+                context="",
+                sources=[],
+            )
         )
 
     def _build_enhanced_prompt(
@@ -199,7 +210,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
 
         return "\n".join(enhanced_parts)
 
-    def _get_category(self, state: AgentRuntimeState) -> str:
+    def _get_category(self, state: AgentState) -> str:
         """从状态中获取商品类目。
 
         Args:
@@ -213,7 +224,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
             return cat.value if hasattr(cat, "value") else str(cat)
         return "general"
 
-    def _get_brand(self, state: AgentRuntimeState) -> str | None:
+    def _get_brand(self, state: AgentState) -> str | None:
         """从状态中获取品牌名称。
 
         Args:
@@ -226,7 +237,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
             return state.product_info.brand
         return None
 
-    def _get_style_preference(self, state: AgentRuntimeState) -> str | None:
+    def _get_style_preference(self, state: AgentState) -> str | None:
         """从状态中获取风格偏好。
 
         Args:
@@ -239,7 +250,7 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
             return state.generation_request.style_preference
         return None
 
-    def _resolve_tenant_id(self, state: AgentRuntimeState) -> str:
+    def _resolve_tenant_id(self, state: AgentState) -> str:
         """从状态中解析 tenant_id。
 
         Args:
@@ -250,18 +261,18 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentRuntimeState]):
         """
         if state.generation_request is not None:
             req_tenant = getattr(state.generation_request, "tenant_id", None)
-            if req_tenant:
+            if isinstance(req_tenant, str) and req_tenant:
                 return req_tenant
         if state.product_info is not None:
             prod_tenant = getattr(state.product_info, "tenant_id", None)
-            if prod_tenant:
+            if isinstance(prod_tenant, str) and prod_tenant:
                 return prod_tenant
         state_tenant = getattr(state, "tenant_id", None)
-        if state_tenant:
+        if isinstance(state_tenant, str) and state_tenant:
             return state_tenant
         return "system"
 
-    async def _auto_ingest_images(self, state: AgentRuntimeState) -> None:
+    async def _auto_ingest_images(self, state: AgentState) -> None:
         """自动将生成图片入库知识库（best-effort）。
 
         在 base_agent 生成成功后调用：逐图匹配原始/增强 Prompt 并入库，

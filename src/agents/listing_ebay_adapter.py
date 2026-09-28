@@ -49,7 +49,7 @@ class EbayAdapter(BasePlatformAdapter):
         _auth_token: OAuth2 访问令牌。
     """
 
-    def authenticate(self) -> str:
+    async def authenticate(self) -> str:
         """执行 eBay OAuth2 认证，获取访问令牌。
 
         使用 refresh_token 方式交换访问令牌。
@@ -82,11 +82,12 @@ class EbayAdapter(BasePlatformAdapter):
             raise RuntimeError(error_msg)
 
         token_data = response.json()
-        self._auth_token = token_data["access_token"]
+        access_token = str(token_data["access_token"])
+        self._auth_token = access_token
         logger.info("eBay OAuth2 authentication successful")
-        return self._auth_token
+        return access_token
 
-    def transform_assets(
+    async def transform_assets(
         self,
         product: ListingProduct,
         asset_package: AssetPackage,
@@ -113,7 +114,7 @@ class EbayAdapter(BasePlatformAdapter):
 
         return {"pictures": pictures}
 
-    def transform_copywriting(
+    async def transform_copywriting(
         self,
         copywriting: CopywritingPackage,
     ) -> dict[str, Any]:
@@ -143,7 +144,7 @@ class EbayAdapter(BasePlatformAdapter):
             "search_terms": copywriting.search_terms,
         }
 
-    def push_listing(
+    async def push_listing(
         self,
         product: ListingProduct,
         asset_package: AssetPackage,
@@ -163,10 +164,10 @@ class EbayAdapter(BasePlatformAdapter):
         """
         try:
             if not self._auth_token:
-                self.authenticate()
+                await self.authenticate()
 
-            assets = self.transform_assets(product, asset_package)
-            copy = self.transform_copywriting(copywriting)
+            assets = await self.transform_assets(product, asset_package)
+            copy = await self.transform_copywriting(copywriting)
 
             xml_body = self._build_add_item_xml(product, assets, copy, task)
 
@@ -209,7 +210,7 @@ class EbayAdapter(BasePlatformAdapter):
                 error=error_msg,
             )
 
-    def update_listing(
+    async def update_listing(
         self,
         listing_id: str,
         product: ListingProduct,
@@ -229,10 +230,10 @@ class EbayAdapter(BasePlatformAdapter):
         """
         try:
             if not self._auth_token:
-                self.authenticate()
+                await self.authenticate()
 
-            assets = self.transform_assets(product, asset_package)
-            copy = self.transform_copywriting(copywriting)
+            assets = await self.transform_assets(product, asset_package)
+            copy = await self.transform_copywriting(copywriting)
 
             xml_body = self._build_revise_item_xml(product, assets, copy, listing_id)
 
@@ -274,7 +275,7 @@ class EbayAdapter(BasePlatformAdapter):
                 error=error_msg,
             )
 
-    def delete_listing(self, listing_id: str) -> PushResult:
+    async def delete_listing(self, listing_id: str) -> PushResult:
         """删除 eBay 已有刊登。
 
         Args:
@@ -285,7 +286,7 @@ class EbayAdapter(BasePlatformAdapter):
         """
         try:
             if not self._auth_token:
-                self.authenticate()
+                await self.authenticate()
 
             xml_body = self._build_end_item_xml(listing_id)
 
@@ -535,7 +536,11 @@ class EbayAdapter(BasePlatformAdapter):
             ack_elem = root.find(f".//{bare_ns}Ack")
             if ack_elem is None:
                 ack_elem = root.find(".//Ack")
-            ack = ack_elem.text.strip() if ack_elem is not None else "Unknown"
+            ack = (
+                ack_elem.text.strip()
+                if ack_elem is not None and ack_elem.text is not None
+                else "Unknown"
+            )
 
             # 提取 ItemID
             item_id_elem = root.find(f".//{bare_ns}ItemID")

@@ -9,12 +9,17 @@ Description:
 2026-07-14
 """
 
+from collections.abc import Callable
+from typing import Any, TypeVar
+
 from tenacity import (
     retry,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
 )
+
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 class RetryablePushError(Exception):
@@ -39,7 +44,7 @@ def create_push_retry_decorator(
     max_retries: int = 3,
     base_delay: float = 1.0,
     max_delay: float = 60.0,
-) -> retry:  # type: ignore[misc]
+) -> Callable[[F], F]:
     """创建推送重试装饰器。
 
     仅对 RetryablePushError 进行重试，PermanentPushError 直接抛出。

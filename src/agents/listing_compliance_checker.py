@@ -45,7 +45,7 @@ class ComplianceCheckerAgent:
         """
         self._settings = settings
 
-    def execute_sync(self, state: ListingState) -> dict:
+    def execute_sync(self, state: ListingState) -> dict[str, Any]:
         """同步执行合规检查。
 
         Args:
@@ -206,7 +206,7 @@ class ComplianceCheckerAgent:
                     ),
                 )
 
-    async def execute(self, state: ListingState) -> dict:
+    async def execute(self, state: ListingState) -> dict[str, Any]:
         """异步执行（工作流节点接口）。
 
         Args:

@@ -44,7 +44,7 @@ class AssetOptimizerAgent:
         """
         self._settings = settings
 
-    def execute_sync(self, state: ListingState) -> dict:
+    def execute_sync(self, state: ListingState) -> dict[str, Any]:
         """同步执行素材优化。
 
         Args:
@@ -86,7 +86,7 @@ class AssetOptimizerAgent:
 
         return {"asset_packages": asset_packages}
 
-    async def execute(self, state: ListingState) -> dict:
+    async def execute(self, state: ListingState) -> dict[str, Any]:
         """异步执行（工作流节点接口）。
 
         Args:

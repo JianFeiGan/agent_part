@@ -23,10 +23,10 @@ from src.agents.base import (
     CATEGORY_MEMORY_FALLBACK,
     AgentResult,
     AgentRole,
-    AgentRuntimeState,
     BaseAgent,
 )
 from src.agents.llm_json import extract_json
+from src.graph.state import AgentState
 from src.models.assets import (
     AssetCollection,
     AssetStatus,
@@ -40,7 +40,7 @@ from src.models.assets import (
 logger = logging.getLogger(__name__)
 
 
-class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
+class RAGEnhancedQualityReviewer(BaseAgent[AgentState]):
     """RAG增强的质量审核Agent。
 
     通过知识库检索增强审核能力：
@@ -137,7 +137,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
         )
         self.register_prompt("rag_compliance", compliance_prompt)
 
-    async def execute(self, state: AgentRuntimeState) -> AgentResult:
+    async def execute(self, state: AgentState) -> AgentResult:
         """执行RAG增强的质量审核。
 
         Args:
@@ -237,7 +237,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
                 error=f"质量审核失败: {e}",
             )
 
-    async def _load_compliance_rules(self, state: AgentRuntimeState) -> None:
+    async def _load_compliance_rules(self, state: AgentState) -> None:
         """从知识库加载合规规则（领域方法：retrieve_compliance_rules）。
 
         Args:
@@ -288,7 +288,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
         self,
         image: GeneratedImage,
         product: Any,
-        state: AgentRuntimeState,
+        state: AgentState,
         category_memory: str = "",
     ) -> QualityReport:
         """使用RAG规则审核图片。
@@ -374,7 +374,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
         self,
         video: GeneratedVideo,
         product: Any,
-        state: AgentRuntimeState,
+        state: AgentState,
         category_memory: str = "",
     ) -> QualityReport:
         """使用RAG规则审核视频。
@@ -569,7 +569,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
 
     def _create_final_results(
         self,
-        state: AgentRuntimeState,
+        state: AgentState,
         reports: list[QualityReport],
         overall_score: float,
     ) -> dict[str, Any]:

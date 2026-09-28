@@ -40,7 +40,7 @@ class AdapterConfigManager:
     """
 
     _instance: "AdapterConfigManager | None" = None
-    _cache: dict[tuple[str, Platform, str], tuple[dict, float]]
+    _cache: dict[tuple[str, Platform, str], tuple[dict[str, Any], float]]
 
     def __new__(cls) -> "AdapterConfigManager":
         if cls._instance is None:

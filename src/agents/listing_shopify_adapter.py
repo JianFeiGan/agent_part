@@ -495,6 +495,10 @@ class ShopifyAdapter(BasePlatformAdapter):
                 )
 
             result = response.json()
+            if not isinstance(result, dict):
+                raise PermanentPushError(
+                    f"Shopify GraphQL response is not a JSON object: {response.text[:200]}"
+                )
 
             # 检查 GraphQL 层面的限流
             extensions = result.get("extensions", {})
