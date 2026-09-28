@@ -10,6 +10,7 @@ Description:
 """
 
 from typing import Any
+
 from sqlalchemy.types import TypeEngine
 
 class Vector(TypeEngine[Any]):

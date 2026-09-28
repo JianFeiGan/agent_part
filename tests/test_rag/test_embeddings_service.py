@@ -18,6 +18,7 @@ from src.rag.embeddings import EmbeddingService
 # 夹具
 # --------------------------------------------------------------------------- #
 
+
 def _service(**kwargs: Any) -> EmbeddingService:
     """构造注入假 settings 的 EmbeddingService。"""
     defaults: dict[str, Any] = {
@@ -31,6 +32,7 @@ def _service(**kwargs: Any) -> EmbeddingService:
     service.settings = SimpleNamespace(**defaults)
     return service
 
+
 def _with_model(service: EmbeddingService, vectors: Any) -> MagicMock:
     """注入假本地模型。"""
     model = MagicMock()
@@ -40,11 +42,13 @@ def _with_model(service: EmbeddingService, vectors: Any) -> MagicMock:
     service._initialized = True  # noqa: SLF001
     return model
 
+
 class _Vec(list[float]):
     """带 tolist() 的向量替身（模拟 numpy 数组）。"""
 
     def tolist(self) -> list[float]:
         return list(self)
+
 
 class TestQwenProviderPaths:
     """embedding_provider=qwen 路径。"""
@@ -104,6 +108,7 @@ class TestQwenProviderPaths:
             qwen_mod.QwenEmbeddingClient = original  # type: ignore[misc]
 
         fake_cls.assert_called_once()
+
 
 class TestLocalProviderPaths:
     """embedding_provider=local 路径。"""
@@ -176,11 +181,15 @@ class TestLocalProviderPaths:
         """重复调用只加载一次模型。"""
         service = _service()
         fake_cls = MagicMock()
-        fake_cls.return_value = MagicMock(get_sentence_embedding_dimension=MagicMock(return_value=4))
+        fake_cls.return_value = MagicMock(
+            get_sentence_embedding_dimension=MagicMock(return_value=4)
+        )
 
         # 绕过 from-import，直接在 _ensure_model_loaded 内的 import 处注入
         monkeypatch.setitem(
-            __import__("sys").modules, "sentence_transformers", MagicMock(SentenceTransformer=fake_cls)
+            __import__("sys").modules,
+            "sentence_transformers",
+            MagicMock(SentenceTransformer=fake_cls),
         )
         service._ensure_model_loaded()  # noqa: SLF001
         service._ensure_model_loaded()  # noqa: SLF001

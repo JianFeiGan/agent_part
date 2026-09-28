@@ -9,7 +9,7 @@ Description:
 2026-09-28
 """
 
-from typing import Iterator
+from collections.abc import Iterator
 
 class ModularityVertexPartition:
     def __init__(self, *args: object, **kwargs: object) -> None: ...
@@ -17,4 +17,6 @@ class ModularityVertexPartition:
 class Partition:
     def __iter__(self) -> Iterator[list[int]]: ...
 
-def find_partition(graph: object, partition_type: object, *args: object, **kwargs: object) -> Partition: ...
+def find_partition(
+    graph: object, partition_type: object, *args: object, **kwargs: object
+) -> Partition: ...
