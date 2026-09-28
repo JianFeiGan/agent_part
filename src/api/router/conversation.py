@@ -8,7 +8,7 @@ import logging
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 
 from src.api.schema.common import ApiResponse
 from src.api.schema.conversation import (
@@ -392,6 +392,7 @@ async def search_conversations(
         # 根据搜索字段构建条件
         from sqlalchemy import or_
 
+        condition: ColumnElement[bool]
         if request.search_field == "input":
             condition = AIConversationLog.input_content.ilike(keyword, escape="\\")
         elif request.search_field == "output":

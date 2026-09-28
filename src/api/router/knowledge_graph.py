@@ -62,7 +62,7 @@ async def create_graph(
     graph_id = f"kg_{uuid.uuid4().hex[:8]}"
     tenant_id = auth.tenant_id
 
-    graph_data = {
+    graph_data: dict[str, Any] = {
         "id": graph_id,
         "name": request.name,
         "tenant_id": tenant_id,

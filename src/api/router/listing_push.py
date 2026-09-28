@@ -34,7 +34,7 @@ from src.db.postgres import get_db_session
 from src.db.repository import BaseRepository
 from src.graph.listing_persistence import load_blocked_platforms
 from src.graph.listing_workflow import ListingWorkflow
-from src.models.listing import Platform, TaskStatus
+from src.models.listing import ListingProduct, ListingTask, Platform, TaskStatus
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,9 @@ registry.register(Platform.SHOPIFY, ShopifyAdapter)
 _config_manager = AdapterConfigManager()
 
 
-async def _load_domain_objects(task_id: int, *, tenant_id: str):
+async def _load_domain_objects(
+    task_id: int, *, tenant_id: str
+) -> tuple[ListingTaskPO, ListingProduct, ListingTask] | None:
     """从数据库加载任务、商品、文案包（tenant 过滤）。
 
     Args:
@@ -59,7 +61,7 @@ async def _load_domain_objects(task_id: int, *, tenant_id: str):
     Returns:
         (task_po, product, task_obj) 或 None（未找到）。
     """
-    from src.models.listing import ImageRef, ListingProduct, ListingTask
+    from src.models.listing import ImageRef
 
     async with get_db_session() as session:
         task_repo = BaseRepository(ListingTaskPO, session)

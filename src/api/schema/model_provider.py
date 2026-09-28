@@ -8,6 +8,7 @@ Description:
 """
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -35,10 +36,10 @@ class ModelProviderCreateRequest(BaseModel):
     provider_type: str = Field(..., pattern=r"^(llm|image|video)$", description="厂商类型")
     base_url: str = Field(..., min_length=1, max_length=500, description="API 基址")
     api_key: str = Field(default="", description="API Key")
-    extra_credentials: dict = Field(default_factory=dict, description="额外凭证")
+    extra_credentials: dict[str, Any] = Field(default_factory=dict, description="额外凭证")
     default_model: str = Field(..., min_length=1, max_length=100, description="默认模型 ID")
     supported_models: list[str] = Field(default_factory=list, description="支持的模型列表")
-    model_config_extra: dict = Field(default_factory=dict, description="模型额外配置")
+    model_config_extra: dict[str, Any] = Field(default_factory=dict, description="模型额外配置")
     protocol: str = Field(
         default="openai_compatible",
         pattern=r"^(openai_compatible|custom_rest)$",
@@ -86,10 +87,10 @@ class ModelProviderUpdateRequest(BaseModel):
     display_name: str | None = Field(default=None, description="显示名称")
     base_url: str | None = Field(default=None, description="API 基址")
     api_key: str | None = Field(default=None, description="API Key（空字符串表示不更新）")
-    extra_credentials: dict | None = Field(default=None, description="额外凭证")
+    extra_credentials: dict[str, Any] | None = Field(default=None, description="额外凭证")
     default_model: str | None = Field(default=None, description="默认模型 ID")
     supported_models: list[str] | None = Field(default=None, description="支持的模型列表")
-    model_config_extra: dict | None = Field(default=None, description="模型额外配置")
+    model_config_extra: dict[str, Any] | None = Field(default=None, description="模型额外配置")
     protocol: str | None = Field(default=None, description="协议类型")
     is_active: bool | None = Field(default=None, description="是否启用")
 

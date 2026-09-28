@@ -16,8 +16,9 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.deps import AuthDep
 from src.api.schema.common import ApiResponse
+from src.auth.api_key import require_auth
+from src.auth.context import AuthContext
 from src.db import get_db
 from src.db.models import RAGUsageLog
 from src.rag.logger import get_rag_logger
@@ -74,7 +75,7 @@ class EvaluationReportResponse(BaseModel):
 async def get_hit_rate(
     days: int = Query(default=7, ge=1, le=90, description="统计天数"),
     session: AsyncSession = Depends(get_db),
-    auth: AuthDep = None,
+    auth: AuthContext | None = Depends(require_auth),
 ) -> ApiResponse[HitRateResponse]:
     """获取 RAG 命中率统计。
 
@@ -130,7 +131,7 @@ async def get_hit_rate(
 async def compare_rag_vs_non_rag(
     request: ComparisonRequest,
     session: AsyncSession = Depends(get_db),
-    auth: AuthDep = None,
+    auth: AuthContext | None = Depends(require_auth),
 ) -> ApiResponse[ComparisonResponse]:
     """对比 RAG 与非 RAG 的生成质量。
 
@@ -184,20 +185,23 @@ async def compare_rag_vs_non_rag(
     )
     non_rag_row = non_rag_result.first()
 
+    # 用 _mapping 取标签列，避开 tuple.count 方法在类型上的遮蔽
     rag_stats = {
-        "task_count": rag_row.count if rag_row else 0,
-        "avg_quality_score": float(rag_row.avg_score) if rag_row and rag_row.avg_score else 0.0,
+        "task_count": int(rag_row._mapping["count"]) if rag_row else 0,
+        "avg_quality_score": float(rag_row._mapping["avg_score"])
+        if rag_row and rag_row._mapping["avg_score"]
+        else 0.0,
     }
 
     non_rag_stats = {
-        "task_count": non_rag_row.count if non_rag_row else 0,
-        "avg_quality_score": float(non_rag_row.avg_score)
-        if non_rag_row and non_rag_row.avg_score
+        "task_count": int(non_rag_row._mapping["count"]) if non_rag_row else 0,
+        "avg_quality_score": float(non_rag_row._mapping["avg_score"])
+        if non_rag_row and non_rag_row._mapping["avg_score"]
         else 0.0,
     }
 
     # 计算改进百分比
-    improvement = {}
+    improvement: dict[str, float] = {}
     if non_rag_stats["avg_quality_score"] > 0:
         improvement["quality_score"] = round(
             (rag_stats["avg_quality_score"] - non_rag_stats["avg_quality_score"])
@@ -222,7 +226,7 @@ async def compare_rag_vs_non_rag(
 async def get_evaluation_report(
     days: int = Query(default=30, ge=1, le=90, description="统计天数"),
     session: AsyncSession = Depends(get_db),
-    auth: AuthDep = None,
+    auth: AuthContext | None = Depends(require_auth),
 ) -> ApiResponse[EvaluationReportResponse]:
     """生成 RAG 效果评估报告。
 
@@ -291,7 +295,7 @@ async def get_evaluation_report(
 @router.get("/optimize-suggestions", response_model=ApiResponse[list[str]])
 async def get_optimize_suggestions(
     session: AsyncSession = Depends(get_db),
-    auth: AuthDep = None,
+    auth: AuthContext | None = Depends(require_auth),
 ) -> ApiResponse[list[str]]:
     """获取检索参数优化建议。
 

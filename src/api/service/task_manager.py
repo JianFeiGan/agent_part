@@ -14,6 +14,8 @@ import logging
 from typing import Any
 from uuid import uuid4
 
+from langchain_core.runnables import RunnableConfig
+
 from src.api.schema.task import TaskStatus, TaskType
 from src.api.service.asset_persister import AssetPersister
 from src.api.service.redis_client import RedisClient, get_redis
@@ -257,7 +259,7 @@ class TaskManager:
                 image_provider_id=image_provider_id,
                 video_provider_id=video_provider_id,
             )
-            config = {"configurable": {"thread_id": task_id}}
+            config: RunnableConfig = {"configurable": {"thread_id": task_id}}
 
             latest_values: Any = None
             async for latest_values in workflow.app.astream(
@@ -332,10 +334,10 @@ class TaskManager:
                 redis, task_id, TaskStatus.FAILED, "error", tenant_id=tenant_id
             )
             # 记录错误
-            state = await redis.get_task_state(task_id, tenant_id=tenant_id)
-            if state:
-                state.error = str(e)
-                await redis.save_task_state(task_id, state, tenant_id=tenant_id)
+            failed_state = await redis.get_task_state(task_id, tenant_id=tenant_id)
+            if failed_state:
+                failed_state.error = str(e)
+                await redis.save_task_state(task_id, failed_state, tenant_id=tenant_id)
 
         finally:
             # 清理运行中的任务引用

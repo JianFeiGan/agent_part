@@ -6,7 +6,7 @@ AI 会话记录服务。
 
 import logging
 import time
-from typing import Any
+from typing import Any, TypedDict
 
 from src.db.conversation_models import AIConversationLog
 from src.db.postgres import get_db_session
@@ -14,10 +14,25 @@ from src.db.repository import BaseRepository
 
 logger = logging.getLogger(__name__)
 
+
+class _ModelPrice(TypedDict):
+    """单模型定价条目。
+
+    Attributes:
+        input: 输入 token 单价（每千 token，美元）。
+        output: 输出 token 单价（每千 token，美元）。
+        currency: 计价货币代码。
+    """
+
+    input: float
+    output: float
+    currency: str
+
+
 # ==================== 模型定价表（每千 token，美元） ====================
 # 参考：https://help.aliyun.com/zh/model-studio/getting-started/models
 
-MODEL_PRICING: dict[str, dict[str, float]] = {
+MODEL_PRICING: dict[str, _ModelPrice] = {
     # 千问系列
     "qwen-plus": {"input": 0.0008, "output": 0.002, "currency": "usd"},
     "qwen-turbo": {"input": 0.0003, "output": 0.0006, "currency": "usd"},
@@ -34,7 +49,7 @@ MODEL_PRICING: dict[str, dict[str, float]] = {
 USD_CNY_RATE = 7.2
 
 # 默认定价（模型不在定价表中时使用）
-DEFAULT_PRICING: dict[str, float] = {"input": 0.001, "output": 0.002, "currency": "usd"}
+DEFAULT_PRICING: _ModelPrice = {"input": 0.001, "output": 0.002, "currency": "usd"}
 
 
 def _calculate_cost(

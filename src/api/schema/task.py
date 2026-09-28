@@ -10,6 +10,7 @@ Description:
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -168,7 +169,7 @@ class TaskDetailResponse(BaseModel):
     progress: float = Field(default=0.0, ge=0, le=100, description="完成进度(%)")
     current_step: str = Field(..., description="当前步骤")
     completed_steps: list[str] = Field(default_factory=list, description="已完成步骤列表")
-    agent_logs: list[dict] = Field(default_factory=list, description="Agent执行日志")
+    agent_logs: list[dict[str, Any]] = Field(default_factory=list, description="Agent执行日志")
 
     # 生成结果
     images: list[ImageResponse] = Field(default_factory=list, description="生成的图片列表")

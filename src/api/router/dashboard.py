@@ -8,6 +8,8 @@ Description:
 2026-06-12
 """
 
+from typing import Any
+
 from fastapi import APIRouter
 
 from src.api.deps import AuthDep, RedisDep
@@ -17,7 +19,7 @@ from src.api.schema.dashboard import DashboardStatsResponse, RecentTaskItem
 router = APIRouter()
 
 
-def _extract_task_type(task: dict) -> str | None:
+def _extract_task_type(task: dict[str, Any]) -> str | None:
     """从任务字典中提取 task_type。
 
     任务元数据中 request 字段存储了序列化的 GenerationRequest，

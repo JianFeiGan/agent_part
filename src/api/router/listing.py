@@ -45,7 +45,13 @@ from src.graph.listing_persistence import (
     save_compliance_reports,
     update_task_status,
 )
-from src.models.listing import ComplianceReport, ComplianceStatus, ListingProduct, Platform
+from src.models.listing import (
+    ComplianceIssue,
+    ComplianceReport,
+    ComplianceStatus,
+    ListingProduct,
+    Platform,
+)
 from src.models.listing_converter import product_to_listing
 
 logger = logging.getLogger(__name__)
@@ -381,7 +387,7 @@ def _report_to_response(report: ComplianceReport) -> ComplianceReportResponse:
         API 响应格式。
     """
 
-    def _issue_to_dict(issue) -> ComplianceIssueResponse:
+    def _issue_to_dict(issue: ComplianceIssue) -> ComplianceIssueResponse:
         return ComplianceIssueResponse(
             severity=issue.severity,
             rule=issue.rule,

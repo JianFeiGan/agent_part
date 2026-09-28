@@ -241,7 +241,8 @@ async def upload_document(
 
     # 检查文件格式
     allowed_extensions = {".md", ".txt", ".json", ".pdf", ".docx"}
-    file_ext = "." + file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else ""
+    filename = file.filename or ""
+    file_ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
 
     if file_ext not in allowed_extensions:
         raise HTTPException(
@@ -382,12 +383,12 @@ async def list_documents(
     )
 
 
-@router.delete("/documents/{doc_id}", response_model=Result[dict])
+@router.delete("/documents/{doc_id}", response_model=Result[dict[str, Any]])
 async def delete_document(
     doc_id: int,
     auth: AuthDep,
     session: AsyncSession = Depends(get_db),
-) -> Result[dict]:
+) -> Result[dict[str, Any]]:
     """删除知识文档。
 
     同时删除关联的分块和向量。

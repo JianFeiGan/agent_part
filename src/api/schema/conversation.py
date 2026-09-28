@@ -3,7 +3,7 @@ AI 会话记录 API Schema。
 """
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -68,7 +68,7 @@ class ConversationDetailResponse(ConversationLogResponse):
     input_content: str | None
     output_content: str | None
     error_message: str | None
-    extra_data: dict | None = None
+    extra_data: dict[str, Any] | None = None
 
 
 class ConversationListResponse(BaseModel):

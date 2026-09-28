@@ -8,6 +8,7 @@ Description:
 2026-03-25
 """
 
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -250,7 +251,7 @@ async def delete_product(
 
 @router.post(
     "/{product_id}/images",
-    response_model=ApiResponse[dict],
+    response_model=ApiResponse[dict[str, Any]],
     summary="上传商品图片",
 )
 async def upload_product_image(
@@ -259,7 +260,7 @@ async def upload_product_image(
     auth: AuthDep,
     settings: SettingsDep,
     file: UploadFile = File(...),
-) -> ApiResponse[dict]:
+) -> ApiResponse[dict[str, Any]]:
     """上传商品图片。
 
     接受 multipart 图片文件，校验 MIME 类型和文件大小，

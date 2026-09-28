@@ -11,6 +11,7 @@ Description:
 import asyncio
 import contextlib
 import json
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 
@@ -44,7 +45,7 @@ TaskManagerDep = Depends(get_task_manager_dep)
 
 @router.post(
     "",
-    response_model=ApiResponse[dict],
+    response_model=ApiResponse[dict[str, Any]],
     status_code=status.HTTP_201_CREATED,
     summary="创建生成任务",
 )
@@ -53,7 +54,7 @@ async def create_task(
     redis: RedisDep,
     auth: AuthDep,
     task_manager: TaskManager = TaskManagerDep,
-) -> ApiResponse[dict]:
+) -> ApiResponse[dict[str, Any]]:
     """创建生成任务（异步）。
 
     Args:
@@ -92,7 +93,7 @@ async def create_task(
 
 @router.get(
     "",
-    response_model=ApiResponse[PageResponse[dict]],
+    response_model=ApiResponse[PageResponse[dict[str, Any]]],
     summary="获取任务列表",
 )
 async def list_tasks(
@@ -100,7 +101,7 @@ async def list_tasks(
     auth: AuthDep,
     task_manager: TaskManager = TaskManagerDep,
     query: TaskListQuery = Depends(),
-) -> ApiResponse[PageResponse[dict]]:
+) -> ApiResponse[PageResponse[dict[str, Any]]]:
     """获取任务列表（分页）。
 
     Args:
@@ -213,7 +214,7 @@ async def get_task_status(
 
 @router.post(
     "/{task_id}/cancel",
-    response_model=ApiResponse[dict],
+    response_model=ApiResponse[dict[str, Any]],
     summary="取消任务",
 )
 async def cancel_task(
@@ -221,7 +222,7 @@ async def cancel_task(
     redis: RedisDep,
     auth: AuthDep,
     task_manager: TaskManager = TaskManagerDep,
-) -> ApiResponse[dict]:
+) -> ApiResponse[dict[str, Any]]:
     """取消任务。
 
     Args:
@@ -251,14 +252,14 @@ async def cancel_task(
 
 @router.delete(
     "/{task_id}",
-    response_model=ApiResponse[dict],
+    response_model=ApiResponse[dict[str, Any]],
     summary="删除任务",
 )
 async def delete_task(
     task_id: str,
     redis: RedisDep,
     auth: AuthDep,
-) -> ApiResponse[dict]:
+) -> ApiResponse[dict[str, Any]]:
     """删除任务。
 
     Args:

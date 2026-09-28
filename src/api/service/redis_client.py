@@ -9,8 +9,9 @@ Description:
 """
 
 import json
+from collections.abc import Awaitable
 from datetime import datetime
-from typing import Any
+from typing import Any, cast
 
 import redis.asyncio as redis
 
@@ -192,7 +193,7 @@ class RedisClient:
         client = await self._ensure_connected()
         product_key = self._tenant_key(tenant_id, "product", product_id)
 
-        data = await client.hget(product_key, "data")
+        data = await cast(Awaitable[str | None], client.hget(product_key, "data"))
         if not data:
             return None
 
@@ -267,14 +268,17 @@ class RedisClient:
         product_key = self._tenant_key(tenant_id, "product", product_id)
 
         # 检查商品是否存在
-        exists = await client.exists(product_key)
+        exists = await cast(Awaitable[int], client.exists(product_key))
         if not exists:
             return False
 
         # 更新商品数据
         product_data = product.model_dump(mode="json")
-        await client.hset(
-            product_key, mapping={"data": json.dumps(product_data, ensure_ascii=False)}
+        await cast(
+            Awaitable[int],
+            client.hset(
+                product_key, mapping={"data": json.dumps(product_data, ensure_ascii=False)}
+            ),
         )
 
         return True
@@ -302,7 +306,7 @@ class RedisClient:
             pipe.zrem(list_key, product_id)
             results = await pipe.execute()
 
-        return results[0] > 0
+        return bool(results[0] > 0)
 
     # ==================== 任务相关操作 ====================
 
@@ -359,12 +363,13 @@ class RedisClient:
         client = await self._ensure_connected()
         task_key = self._tenant_key(tenant_id, "task", task_id)
 
-        data = await client.hget(task_key, "metadata")
+        data = await cast(Awaitable[str | None], client.hget(task_key, "metadata"))
         if not data:
             return None
 
         try:
-            return json.loads(data)
+            parsed: dict[str, Any] = json.loads(data)
+            return parsed
         except json.JSONDecodeError:
             return None
 
@@ -449,7 +454,10 @@ class RedisClient:
         metadata["current_step"] = current_step
         metadata["updated_at"] = datetime.now().isoformat()
 
-        await client.hset(task_key, "metadata", json.dumps(metadata, ensure_ascii=False))
+        await cast(
+            Awaitable[int],
+            client.hset(task_key, "metadata", json.dumps(metadata, ensure_ascii=False)),
+        )
 
     async def list_tasks(
         self, *, tenant_id: str, page: int = 1, page_size: int = 10, status: str | None = None
@@ -517,7 +525,7 @@ class RedisClient:
             pipe.zrem(list_key, task_id)
             results = await pipe.execute()
 
-        return results[0] > 0
+        return bool(results[0] > 0)
 
 
 # 全局单例

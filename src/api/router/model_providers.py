@@ -14,6 +14,7 @@ Description:
 
 import logging
 import time
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, status
 
@@ -30,12 +31,15 @@ from src.api.schema.model_provider import (
 from src.clients.provider_result import get_api_key_value
 from src.db.model_provider_repository import ModelProviderRepository
 
+if TYPE_CHECKING:
+    from src.db.models import ModelProviderPO
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
-def _mask_api_key(api_key_field: dict | str | None) -> str:
+def _mask_api_key(api_key_field: dict[str, Any] | str | None) -> str:
     """脱敏 API Key，仅保留前 4 位和后 4 位。
 
     Args:
@@ -47,7 +51,7 @@ def _mask_api_key(api_key_field: dict | str | None) -> str:
     return mask_secret(get_api_key_value(api_key_field), keep=4, token="****")
 
 
-def _po_to_response(po: object) -> ModelProviderResponse:
+def _po_to_response(po: "ModelProviderPO") -> ModelProviderResponse:
     """将 ORM 对象转换为脱敏响应。
 
     Args:
