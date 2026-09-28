@@ -95,10 +95,10 @@ async def get_hit_rate(
     tenant_id = auth.tenant_id if auth else "dev"
 
     # 获取使用统计
-    stats = await logger.get_usage_stats(session, start_date, end_date)
+    stats = await logger.get_usage_stats(session, tenant_id, start_date, end_date)
 
     # 获取分块命中率
-    chunk_stats = await logger.get_chunk_hit_rate(session)
+    chunk_stats = await logger.get_chunk_hit_rate(session, tenant_id)
 
     # 获取唯一文档数
     result = await session.execute(
@@ -243,9 +243,11 @@ async def get_evaluation_report(
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=days)
 
+    tenant_id = auth.tenant_id if auth else "dev"
+
     # 获取各类统计数据
-    usage_stats = await logger.get_usage_stats(session, start_date, end_date)
-    chunk_stats = await logger.get_chunk_hit_rate(session)
+    usage_stats = await logger.get_usage_stats(session, tenant_id, start_date, end_date)
+    chunk_stats = await logger.get_chunk_hit_rate(session, tenant_id)
 
     # 获取按 Agent 分类的统计
     agent_stats = usage_stats.get("by_agent", [])
@@ -307,13 +309,14 @@ async def get_optimize_suggestions(
         优化建议列表。
     """
     logger = get_rag_logger()
+    tenant_id = auth.tenant_id if auth else "dev"
 
     # 获取最近 7 天的统计
     end_date = datetime.utcnow()
     start_date = end_date - timedelta(days=7)
 
-    usage_stats = await logger.get_usage_stats(session, start_date, end_date)
-    chunk_stats = await logger.get_chunk_hit_rate(session)
+    usage_stats = await logger.get_usage_stats(session, tenant_id, start_date, end_date)
+    chunk_stats = await logger.get_chunk_hit_rate(session, tenant_id)
 
     suggestions = []
 

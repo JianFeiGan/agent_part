@@ -226,11 +226,12 @@ class DocumentProcessor:
         """
         data = json.loads(path.read_text(encoding="utf-8"))
 
-        # 提取标题
-        title = data.get("title", data.get("name", path.stem))
+        # 提取标题（仅 dict 有 title/name 可取；数组/标量直接 .get 会 AttributeError）
+        title = path.stem
 
         # 将 JSON 转换为文本
         if isinstance(data, dict):
+            title = str(data.get("title") or data.get("name") or path.stem)
             # 尝试提取主要内容字段
             main_fields = ["content", "text", "body", "description"]
             for field in main_fields:

@@ -41,6 +41,7 @@ class RAGLogger:
     async def log_retrieval(
         self,
         session: AsyncSession,
+        tenant_id: str,
         task_id: str | None = None,
         agent_name: str | None = None,
         query: str | None = None,
@@ -52,6 +53,7 @@ class RAGLogger:
 
         Args:
             session: 数据库会话。
+            tenant_id: 租户 ID（该列非空且无默认值，必须显式传入）。
             task_id: 任务 ID。
             agent_name: Agent 名称。
             query: 检索查询。
@@ -63,6 +65,7 @@ class RAGLogger:
             创建的日志记录。
         """
         log = RAGUsageLog(
+            tenant_id=tenant_id,
             task_id=task_id,
             agent_name=agent_name,
             query=query,
@@ -78,12 +81,14 @@ class RAGLogger:
     async def get_logs_by_task(
         self,
         session: AsyncSession,
+        tenant_id: str,
         task_id: str,
     ) -> list[RAGUsageLog]:
         """获取任务的所有 RAG 日志。
 
         Args:
             session: 数据库会话。
+            tenant_id: 租户 ID（所有查询都按租户过滤）。
             task_id: 任务 ID。
 
         Returns:
@@ -91,7 +96,7 @@ class RAGLogger:
         """
         result = await session.execute(
             select(RAGUsageLog)
-            .where(RAGUsageLog.task_id == task_id)
+            .where(RAGUsageLog.tenant_id == tenant_id, RAGUsageLog.task_id == task_id)
             .order_by(RAGUsageLog.created_at)
         )
         return list(result.scalars().all())
@@ -99,6 +104,7 @@ class RAGLogger:
     async def get_logs_by_agent(
         self,
         session: AsyncSession,
+        tenant_id: str,
         agent_name: str,
         limit: int = 100,
     ) -> list[RAGUsageLog]:
@@ -106,6 +112,7 @@ class RAGLogger:
 
         Args:
             session: 数据库会话。
+            tenant_id: 租户 ID（所有查询都按租户过滤）。
             agent_name: Agent 名称。
             limit: 返回数量限制。
 
@@ -114,7 +121,7 @@ class RAGLogger:
         """
         result = await session.execute(
             select(RAGUsageLog)
-            .where(RAGUsageLog.agent_name == agent_name)
+            .where(RAGUsageLog.tenant_id == tenant_id, RAGUsageLog.agent_name == agent_name)
             .order_by(RAGUsageLog.created_at.desc())
             .limit(limit)
         )
@@ -123,6 +130,7 @@ class RAGLogger:
     async def get_usage_stats(
         self,
         session: AsyncSession,
+        tenant_id: str,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ) -> dict[str, Any]:
@@ -130,6 +138,7 @@ class RAGLogger:
 
         Args:
             session: 数据库会话。
+            tenant_id: 租户 ID（所有查询都按租户过滤）。
             start_date: 开始日期。
             end_date: 结束日期。
 
@@ -137,7 +146,7 @@ class RAGLogger:
             统计数据。
         """
         # 构建基础查询
-        base_query = select(RAGUsageLog)
+        base_query = select(RAGUsageLog).where(RAGUsageLog.tenant_id == tenant_id)
 
         if start_date:
             base_query = base_query.where(RAGUsageLog.created_at >= start_date)
@@ -150,19 +159,32 @@ class RAGLogger:
         )
         total_retrievals = total_result.scalar() or 0
 
-        # 按 Agent 统计
-        agent_stats_result = await session.execute(
+        # 按 Agent 统计（与 base_query 同源过滤，避免漏掉租户与日期条件）
+        agent_stmt = (
             select(
                 RAGUsageLog.agent_name,
                 func.count().label("count"),
             )
+            .where(RAGUsageLog.tenant_id == tenant_id)
             .group_by(RAGUsageLog.agent_name)
             .order_by(func.count().desc())
         )
+        if start_date:
+            agent_stmt = agent_stmt.where(RAGUsageLog.created_at >= start_date)
+        if end_date:
+            agent_stmt = agent_stmt.where(RAGUsageLog.created_at <= end_date)
+        agent_stats_result = await session.execute(agent_stmt)
         agent_stats = [{"agent": row.agent_name, "count": row.count} for row in agent_stats_result]
 
-        # 平均相似度
-        avg_score_result = await session.execute(select(func.avg(RAGUsageLog.similarity_scores[1])))
+        # 平均相似度（同上，与 base_query 同源过滤）
+        avg_stmt = select(func.avg(RAGUsageLog.similarity_scores[1])).where(
+            RAGUsageLog.tenant_id == tenant_id
+        )
+        if start_date:
+            avg_stmt = avg_stmt.where(RAGUsageLog.created_at >= start_date)
+        if end_date:
+            avg_stmt = avg_stmt.where(RAGUsageLog.created_at <= end_date)
+        avg_score_result = await session.execute(avg_stmt)
         avg_score = avg_score_result.scalar()
 
         return {
@@ -178,19 +200,23 @@ class RAGLogger:
     async def get_chunk_hit_rate(
         self,
         session: AsyncSession,
+        tenant_id: str,
         doc_id: int | None = None,
     ) -> dict[str, Any]:
         """获取分块命中率统计。
 
         Args:
             session: 数据库会话。
+            tenant_id: 租户 ID（所有查询都按租户过滤）。
             doc_id: 文档 ID（可选，不指定则统计所有）。
 
         Returns:
             命中率统计。
         """
         # 获取所有检索日志
-        result = await session.execute(select(RAGUsageLog.retrieved_chunk_ids))
+        result = await session.execute(
+            select(RAGUsageLog.retrieved_chunk_ids).where(RAGUsageLog.tenant_id == tenant_id)
+        )
         all_chunk_ids = []
         for row in result:
             if row[0]:
