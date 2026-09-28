@@ -32,14 +32,7 @@ _CONTRACT_PATH = Path(__file__).resolve().parents[2] / ".env.example"
 # 新增未建模键一律显式豁免，不允许默默跳过。
 # 注：LANGCHAIN_* 追踪键除被 langsmith 直接读取外也建模为
 # langchain_tracing_v2 等字段，按普通契约键校验，不在此豁免。
-ENV_EXEMPTIONS: dict[str, str] = {
-    "DASHSCOPE_API_BASE": (
-        "DashScope 原生协议基址的部署说明位：当前实现端点硬编码于 "
-        "src/clients/dashscope_image_client.py，Settings 未建模该键，"
-        "dashscope SDK 亦未安装。已知契约漂移，保留待裁决（从契约移除 "
-        "或补 Settings 字段），豁免保证不被静默跳过。"
-    ),
-}
+ENV_EXEMPTIONS: dict[str, str] = {}
 
 # 部署必填范畴：不配置/配错会导致拒绝服务、鉴权旁路或依赖不可达的字段。
 # 新增此类字段时必须同步 .env.example 与本清单。
