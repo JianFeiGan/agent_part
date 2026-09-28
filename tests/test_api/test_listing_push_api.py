@@ -98,8 +98,10 @@ class TestListingPushAPI:
         mock_session.add = MagicMock()
 
         mock_adapter = MagicMock()
-        mock_adapter.push_listing.return_value = PushResult(
-            success=True, platform=Platform.AMAZON, listing_id="B08XYZ"
+        mock_adapter.push_listing = AsyncMock(
+            return_value=PushResult(
+                success=True, platform=Platform.AMAZON, listing_id="B08XYZ"
+            )
         )
 
         with (
