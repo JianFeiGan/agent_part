@@ -15,7 +15,6 @@ from typing import Any
 from uuid import uuid4
 
 from src.api.schema.task import TaskStatus, TaskType
-from src.api.service import redis_client
 from src.api.service.asset_persister import AssetPersister
 from src.api.service.redis_client import RedisClient, get_redis
 from src.db.postgres import get_db_session
@@ -538,7 +537,8 @@ class TaskManager:
             tenant_id: 租户 ID。
         """
         try:
-            await redis_client.publish_task_event(task_id, event, tenant_id=tenant_id)
+            redis = await get_redis()
+            await redis.publish_task_event(task_id, event, tenant_id=tenant_id)
         except Exception as exc:
             logger.warning("任务 %s 事件广播失败: %s", task_id, exc)
 

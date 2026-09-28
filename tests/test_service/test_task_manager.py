@@ -7,13 +7,15 @@
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
+import json
+import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from src.api.schema.task import TaskStatus
+from src.api.service.redis_client import RedisClient
 from src.api.service.task_manager import TaskManager, get_task_manager
 from src.graph.state import AgentLog, AgentState, GenerationRequest
 from src.models.assets import AssetStatus, GeneratedImage, GeneratedVideo, ImageFormat
@@ -78,6 +80,7 @@ def _redis(metadata: dict[str, Any] | None = None) -> AsyncMock:
     redis.save_task_state = AsyncMock()
     redis.update_task_progress = AsyncMock()
     redis.create_task = AsyncMock()
+    redis.publish_task_event = AsyncMock()
     redis.get_product = AsyncMock(return_value=_product())
     redis.list_tasks = AsyncMock(return_value=([], 0))
     redis.delete_task = AsyncMock(return_value=True)
@@ -110,6 +113,54 @@ class _SessionCtx:
 
     async def __aexit__(self, *exc: Any) -> None:
         return None
+
+
+class _PubSubBus:
+    """进程内 Redis pub/sub 传输替身（publish / pubsub 接口对齐 redis.Redis）。"""
+
+    def __init__(self) -> None:
+        self._subscribers: dict[str, list[asyncio.Queue[str]]] = {}
+
+    async def publish(self, channel: str, message: str) -> int:
+        queues = self._subscribers.get(channel, [])
+        for queue in queues:
+            queue.put_nowait(message)
+        return len(queues)
+
+    def pubsub(self, **_kwargs: Any) -> _PubSubHandle:
+        return _PubSubHandle(self)
+
+
+class _PubSubHandle:
+    """订阅端替身，接口对齐 WebSocket 端点使用的 pubsub 读写方法。"""
+
+    def __init__(self, bus: _PubSubBus) -> None:
+        self._bus = bus
+        self._queue: asyncio.Queue[str] = asyncio.Queue()
+        self._channel: str | None = None
+
+    async def subscribe(self, *channels: str) -> None:
+        for channel in channels:
+            self._channel = channel
+            self._bus._subscribers.setdefault(channel, []).append(self._queue)
+
+    async def get_message(
+        self,
+        ignore_subscribe_messages: bool = True,
+        timeout: float | None = None,
+    ) -> dict[str, Any] | None:
+        try:
+            data = await asyncio.wait_for(self._queue.get(), timeout=timeout)
+        except TimeoutError:
+            return None
+        return {"type": "message", "channel": self._channel, "data": data}
+
+    async def close(self) -> None:
+        if self._channel is None:
+            return
+        queues = self._bus._subscribers.get(self._channel, [])
+        if self._queue in queues:
+            queues.remove(self._queue)
 
 
 def _patch_workflow(monkeypatch: pytest.MonkeyPatch, states: list[Any]) -> _FakeWorkflowApp:
@@ -370,10 +421,10 @@ class TestExecuteWorkflow:
             "task_abc", TaskStatus.COMPLETED.value, 100, "completed", tenant_id="tenant-1"
         )
 
-    async def test_progress_callback_broadcasts_agent_logs(
+    async def test_progress_callback_publishes_agent_logs(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """agent_logs 非空时广播状态变化与日志更新事件。"""
+        """agent_logs 非空时事件真正发布到 Redis pub/sub，携带任务与租户。"""
         redis = _redis()
         _patch_env(monkeypatch, redis=redis)
 
@@ -392,13 +443,6 @@ class TestExecuteWorkflow:
         _patch_workflow(monkeypatch, [state.model_dump()])
 
         manager = TaskManager()
-        events: list[dict[str, Any]] = []
-
-        async def _capture(task_id: str, event: dict[str, Any], *, tenant_id: str) -> None:
-            events.append(event)
-
-        monkeypatch.setattr(manager, "_broadcast_event", _capture)
-
         await manager._execute_workflow(
             task_id="task_abc",
             product=_product(),
@@ -406,23 +450,80 @@ class TestExecuteWorkflow:
             tenant_id="tenant-1",
         )
 
-        kinds = {e["type"] for e in events}
+        calls = redis.publish_task_event.await_args_list
+        assert calls, "任务事件未发布到 Redis"
+        kinds = {call.args[1]["type"] for call in calls}
         assert "progress_update" in kinds
         assert "agent_status_change" in kinds
         assert "agent_log_update" in kinds
+        for call in calls:
+            assert call.args[0] == "task_abc"
+            assert call.kwargs["tenant_id"] == "tenant-1"
 
 
 class TestBroadcastEvent:
-    """_broadcast_event 容错。"""
+    """任务事件广播的降级与连通性。"""
 
-    async def test_publish_failure_is_swallowed(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Redis pub/sub 失败只告警，不向上抛。"""
-        monkeypatch.setattr(
-            "src.api.service.task_manager.redis_client",
-            SimpleNamespace(publish_task_event=AsyncMock(side_effect=RuntimeError("redis down"))),
+    async def test_publish_failure_warns_and_does_not_block(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """Redis 不可用时记 warning 并继续，任务仍写入终态。"""
+        redis = _redis()
+        redis.publish_task_event = AsyncMock(side_effect=RuntimeError("redis down"))
+        _patch_env(monkeypatch, redis=redis)
+
+        final = AgentState(
+            product_info=_product(),
+            generation_request=_request(),
         )
+        _patch_workflow(monkeypatch, [final.model_dump()])
+
         manager = TaskManager()
-        await manager._broadcast_event("t1", {"type": "x"}, tenant_id="tenant-1")
+        with caplog.at_level(logging.WARNING, logger="src.api.service.task_manager"):
+            await manager._execute_workflow(
+                task_id="task_abc",
+                product=_product(),
+                request=_request(),
+                tenant_id="tenant-1",
+            )
+
+        redis.publish_task_event.assert_awaited()
+        assert any("事件广播失败" in record.getMessage() for record in caplog.records)
+        redis.update_task_progress.assert_any_await(
+            "task_abc", TaskStatus.COMPLETED.value, 100, "completed", tenant_id="tenant-1"
+        )
+
+    async def test_published_event_reaches_subscriber(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """广播出的事件能被同频道订阅端收到（多进程部署依赖的频道桥）。"""
+        bus = _PubSubBus()
+        publisher = RedisClient()
+        publisher._client = bus
+        subscriber = RedisClient()
+        subscriber._client = bus
+        monkeypatch.setattr(
+            "src.api.service.task_manager.get_redis",
+            AsyncMock(return_value=publisher),
+        )
+
+        pubsub = await subscriber.subscribe_task_events("task_1", tenant_id="tenant-1")
+
+        manager = TaskManager()
+        await manager._broadcast_event(
+            "task_1",
+            {"type": "progress_update", "progress": 42},
+            tenant_id="tenant-1",
+        )
+
+        message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0)
+        await pubsub.close()
+
+        assert message is not None
+        assert message["type"] == "message"
+        assert json.loads(message["data"]) == {"type": "progress_update", "progress": 42}
 
 
 class TestQueries:
