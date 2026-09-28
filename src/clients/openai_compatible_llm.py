@@ -110,8 +110,7 @@ class SettingsFallbackLLMProvider:
     def is_available(self) -> bool:
         """是否已配置任何 LLM API Key。"""
         return bool(
-            self._settings.dashscope_api_key
-            or getattr(self._settings, "sensenova_api_key", "")
+            self._settings.dashscope_api_key or getattr(self._settings, "sensenova_api_key", "")
         )
 
     def create_chat_model(self) -> BaseChatModel:

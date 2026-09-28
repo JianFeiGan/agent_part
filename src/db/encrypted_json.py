@@ -61,7 +61,9 @@ class EncryptedJSONB(TypeDecorator):
         return raw.encode() if isinstance(raw, str) else raw
 
     def process_bind_param(
-        self, value: dict | None, dialect: Dialect  # noqa: ARG002
+        self,
+        value: dict | None,
+        dialect: Dialect,  # noqa: ARG002
     ) -> dict | None:
         """写入数据库前加密。
 
@@ -87,7 +89,9 @@ class EncryptedJSONB(TypeDecorator):
             raise ValueError("Failed to encrypt credentials") from None
 
     def process_result_value(
-        self, value: dict | None, dialect: Dialect  # noqa: ARG002
+        self,
+        value: dict | None,
+        dialect: Dialect,  # noqa: ARG002
     ) -> dict | None:
         """从数据库读取后解密。
 

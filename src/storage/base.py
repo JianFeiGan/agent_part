@@ -11,7 +11,9 @@ class StorageBackend(Protocol):
     定义统一的存储操作接口，支持本地文件系统和对象存储。
     """
 
-    async def save(self, data: bytes, key: str, content_type: str = "application/octet-stream") -> str:
+    async def save(
+        self, data: bytes, key: str, content_type: str = "application/octet-stream"
+    ) -> str:
         """保存数据并返回可访问 URL。
 
         Args:

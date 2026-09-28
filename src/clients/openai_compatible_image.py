@@ -128,9 +128,7 @@ class OpenAICompatibleImageProvider:
                 )
                 resp.raise_for_status()
             except httpx.HTTPError as exc:
-                raise ProviderUnavailableError(
-                    f"OpenAI 兼容图片生成调用失败: {exc}"
-                ) from exc
+                raise ProviderUnavailableError(f"OpenAI 兼容图片生成调用失败: {exc}") from exc
 
             data = resp.json()
             images_data = data.get("data", [])
@@ -140,9 +138,7 @@ class OpenAICompatibleImageProvider:
             images: list[SingleImageResult] = []
             for item in images_data:
                 img_bytes, url = await self._extract_image(client, item)
-                images.append(
-                    SingleImageResult(data=img_bytes, url=url, seed=seed)
-                )
+                images.append(SingleImageResult(data=img_bytes, url=url, seed=seed))
 
             return ImageGenerationResult(images=images)
         finally:
@@ -184,9 +180,7 @@ class OpenAICompatibleImageProvider:
                 img_resp = await client.get(url, timeout=60.0)
                 img_resp.raise_for_status()
             except httpx.HTTPError as exc:
-                raise ProviderUnavailableError(
-                    f"下载图片失败: {exc}"
-                ) from exc
+                raise ProviderUnavailableError(f"下载图片失败: {exc}") from exc
             return img_resp.content, url
 
         b64 = item.get("b64_json", "")

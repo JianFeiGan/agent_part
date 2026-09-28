@@ -102,11 +102,7 @@ async def seed_model_providers(session: AsyncSession, tenant_id: str) -> None:
         tenant_id: 租户 ID。
     """
     # 检查是否已有配置
-    stmt = (
-        select(ModelProviderPO)
-        .where(ModelProviderPO.tenant_id == tenant_id)
-        .limit(1)
-    )
+    stmt = select(ModelProviderPO).where(ModelProviderPO.tenant_id == tenant_id).limit(1)
     result = await session.execute(stmt)
     if result.scalar_one_or_none() is not None:
         return

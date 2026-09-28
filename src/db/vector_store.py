@@ -97,7 +97,9 @@ class VectorStore:
             created_chunks.append(db_chunk)
 
         await session.flush()
-        logger.info(f"Added {len(created_chunks)} vectors for doc_id={doc_id}, tenant_id={tenant_id}")
+        logger.info(
+            f"Added {len(created_chunks)} vectors for doc_id={doc_id}, tenant_id={tenant_id}"
+        )
         return created_chunks
 
     async def search(
@@ -184,9 +186,7 @@ class VectorStore:
         )
         return results
 
-    async def delete_by_doc_id(
-        self, session: AsyncSession, doc_id: int, *, tenant_id: str
-    ) -> int:
+    async def delete_by_doc_id(self, session: AsyncSession, doc_id: int, *, tenant_id: str) -> int:
         """删除指定文档的所有向量。
 
         Args:
@@ -213,9 +213,7 @@ class VectorStore:
         logger.info(f"Deleted {count} vectors for doc_id={doc_id}, tenant_id={tenant_id}")
         return count
 
-    async def get_stats(
-        self, session: AsyncSession, *, tenant_id: str
-    ) -> dict[str, Any]:
+    async def get_stats(self, session: AsyncSession, *, tenant_id: str) -> dict[str, Any]:
         """获取向量存储统计信息。
 
         Args:

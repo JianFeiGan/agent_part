@@ -163,9 +163,7 @@ class RAGEnhancedQualityReviewer(BaseAgent[AgentRuntimeState]):
                 if hasattr(product.category, "value")
                 else str(product.category)
             )
-            category_memory = await self._retrieve_category_memory_context(
-                self._session, category
-            )
+            category_memory = await self._retrieve_category_memory_context(self._session, category)
 
             quality_reports: list[QualityReport] = []
             all_issues: list[dict[str, Any]] = []

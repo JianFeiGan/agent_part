@@ -36,9 +36,7 @@ def _img_settings(api_key: str = "sk-test") -> SimpleNamespace:
 
 
 def _vid_settings(access: str = "ak", secret: str = "sk") -> SimpleNamespace:
-    return SimpleNamespace(
-        kling_access_key=access, kling_secret_key=secret, video_model="kling-v1"
-    )
+    return SimpleNamespace(kling_access_key=access, kling_secret_key=secret, video_model="kling-v1")
 
 
 class _FakeResponse:
@@ -103,11 +101,13 @@ class TestDashScopeImageClient:
         """测试同步模式：DashScope 直接返回图片结果。"""
         fake = FakeAsyncClient(
             posts=[
-                _FakeResponse(json_data={
-                    "output": {
-                        "results": [{"url": "https://dash/x.png", "seed": 42}],
-                    },
-                }),
+                _FakeResponse(
+                    json_data={
+                        "output": {
+                            "results": [{"url": "https://dash/x.png", "seed": 42}],
+                        },
+                    }
+                ),
             ],
             gets=[_FakeResponse(content=b"IMAGEBYTES")],
         )
@@ -125,24 +125,29 @@ class TestDashScopeImageClient:
         """测试异步轮询模式：提交任务后轮询获取结果。"""
         fake = FakeAsyncClient(
             posts=[
-                _FakeResponse(json_data={
-                    "output": {"task_id": "task-123"},
-                }),
+                _FakeResponse(
+                    json_data={
+                        "output": {"task_id": "task-123"},
+                    }
+                ),
             ],
             gets=[
                 _FakeResponse(json_data={"output": {"task_status": "PENDING"}}),
-                _FakeResponse(json_data={
-                    "output": {
-                        "task_status": "SUCCEEDED",
-                        "results": [{"url": "https://dash/y.png"}],
-                    },
-                }),
+                _FakeResponse(
+                    json_data={
+                        "output": {
+                            "task_status": "SUCCEEDED",
+                            "results": [{"url": "https://dash/y.png"}],
+                        },
+                    }
+                ),
                 _FakeResponse(content=b"IMAGEBYTES2"),
             ],
         )
         client = DashScopeImageClient(settings=_img_settings(), httpx_client=fake)
         # 使用极短的轮询间隔以加快测试
         import src.clients.dashscope_image_client as _mod
+
         old_timeout = _mod._POLL_TIMEOUT
         old_max = _mod._MAX_POLL_INTERVAL
         _mod._POLL_TIMEOUT = 30.0
@@ -172,9 +177,11 @@ class TestDashScopeImageClient:
         """测试下载图片失败时抛出 ProviderUnavailableError。"""
         fake = FakeAsyncClient(
             posts=[
-                _FakeResponse(json_data={
-                    "output": {"results": [{"url": "https://dash/x.png"}]},
-                }),
+                _FakeResponse(
+                    json_data={
+                        "output": {"results": [{"url": "https://dash/x.png"}]},
+                    }
+                ),
             ],
             gets=[httpx.ConnectError("boom")],
         )
@@ -212,13 +219,16 @@ class TestDashScopeImageClient:
                 _FakeResponse(json_data={"output": {"task_id": "task-456"}}),
             ],
             gets=[
-                _FakeResponse(json_data={
-                    "output": {"task_status": "FAILED", "code": "ERR", "message": "bad"},
-                }),
+                _FakeResponse(
+                    json_data={
+                        "output": {"task_status": "FAILED", "code": "ERR", "message": "bad"},
+                    }
+                ),
             ],
         )
         client = DashScopeImageClient(settings=_img_settings(), httpx_client=fake)
         import src.clients.dashscope_image_client as _mod
+
         old_max = _mod._MAX_POLL_INTERVAL
         _mod._MAX_POLL_INTERVAL = 0.01
         try:
@@ -251,13 +261,18 @@ class TestKlingVideoClient:
     @pytest.mark.asyncio
     async def test_generate_happy_path(self) -> None:
         fake = FakeAsyncClient(
-            posts=[_FakeResponse(json_data={"code": 0, "message": "ok", "data": {"task_id": "t1"}})],
+            posts=[
+                _FakeResponse(json_data={"code": 0, "message": "ok", "data": {"task_id": "t1"}})
+            ],
             gets=[
                 _FakeResponse(json_data={"code": 0, "data": {"task_status": "processing"}}),
                 _FakeResponse(
                     json_data={
                         "code": 0,
-                        "data": {"task_status": "succeed", "works": [{"resource_url": "https://kling/v.mp4"}]},
+                        "data": {
+                            "task_status": "succeed",
+                            "works": [{"resource_url": "https://kling/v.mp4"}],
+                        },
                     }
                 ),
                 _FakeResponse(content=b"VIDEOBYTES"),
@@ -297,10 +312,7 @@ class TestKlingVideoClient:
     async def test_generate_timeout_raises(self) -> None:
         fake = FakeAsyncClient(
             posts=[_FakeResponse(json_data={"code": 0, "data": {"task_id": "t1"}})],
-            gets=[
-                _FakeResponse(json_data={"code": 0, "data": {"task_status": "processing"}})
-            ]
-            * 20,
+            gets=[_FakeResponse(json_data={"code": 0, "data": {"task_status": "processing"}})] * 20,
         )
         client = KlingVideoClient(
             settings=_vid_settings(), httpx_client=fake, poll_interval=0.01, poll_timeout=0.05

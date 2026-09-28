@@ -75,9 +75,7 @@ def sample_state(sample_product: Product) -> AgentState:
 # ---------------------------------------------------------------------------
 
 
-def _mock_category_memory_retriever(
-    retriever: MagicMock, context_string: str
-) -> MagicMock:
+def _mock_category_memory_retriever(retriever: MagicMock, context_string: str) -> MagicMock:
     """为 retriever 添加 retrieve_category_memory_context mock。
 
     Args:
@@ -87,9 +85,7 @@ def _mock_category_memory_retriever(
     Returns:
         更新后的 mock retriever。
     """
-    retriever.retrieve_category_memory_context = AsyncMock(
-        return_value=context_string
-    )
+    retriever.retrieve_category_memory_context = AsyncMock(return_value=context_string)
     return retriever
 
 
@@ -309,17 +305,20 @@ class TestListingCopywriterCategoryMemory:
         # Mock _retrieve_category_memory 返回固定值
         memory_text = "【类目记忆：Electronics】\n最佳实践：突出技术参数\n"
 
-        with patch.object(
-            agent,
-            "_retrieve_category_memory",
-            new_callable=AsyncMock,
-            return_value=memory_text,
-        ), patch.object(
-            agent,
-            "_enhance_with_llm",
-            new_callable=AsyncMock,
-            return_value="Enhanced text",
-        ) as mock_enhance:
+        with (
+            patch.object(
+                agent,
+                "_retrieve_category_memory",
+                new_callable=AsyncMock,
+                return_value=memory_text,
+            ),
+            patch.object(
+                agent,
+                "_enhance_with_llm",
+                new_callable=AsyncMock,
+                return_value="Enhanced text",
+            ) as mock_enhance,
+        ):
             result = await agent.execute(state)
 
         assert "copywriting_packages" in result
@@ -348,15 +347,18 @@ class TestListingCopywriterCategoryMemory:
 
         agent = AICopywritingAgent()
 
-        with patch.object(
-            agent,
-            "_retrieve_category_memory",
-            new_callable=AsyncMock,
-        ) as mock_memory, patch.object(
-            agent,
-            "_enhance_with_llm",
-            new_callable=AsyncMock,
-            return_value="Enhanced text",
+        with (
+            patch.object(
+                agent,
+                "_retrieve_category_memory",
+                new_callable=AsyncMock,
+            ) as mock_memory,
+            patch.object(
+                agent,
+                "_enhance_with_llm",
+                new_callable=AsyncMock,
+                return_value="Enhanced text",
+            ),
         ):
             await agent.execute(state)
 

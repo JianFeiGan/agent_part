@@ -150,9 +150,7 @@ class TestProductWithTenant:
     async def test_get_product_uses_tenant_namespace(self, client: RedisClient) -> None:
         """测试 get_product 使用租户命名空间 key。"""
         product = make_product("prod_001", name="智能手表")
-        client._client.hget = AsyncMock(
-            return_value=json.dumps(product.model_dump(mode="json"))
-        )
+        client._client.hget = AsyncMock(return_value=json.dumps(product.model_dump(mode="json")))
 
         result = await client.get_product("prod_001", tenant_id="tenant_001")
 
@@ -251,9 +249,7 @@ class TestTaskWithTenant:
         assert metadata["product_id"] == "prod_001"
 
     @pytest.mark.asyncio
-    async def test_create_task_uses_tenant_key_for_task_and_list(
-        self, client: RedisClient
-    ) -> None:
+    async def test_create_task_uses_tenant_key_for_task_and_list(self, client: RedisClient) -> None:
         """测试 create_task 的 task key 和 list key 都使用租户命名空间。"""
         request = make_request("task-1")
         mock_pipe = client._client.pipeline.return_value
@@ -280,9 +276,7 @@ class TestTaskWithTenant:
             "tenant_id": "tenant_001",
             "status": "pending",
         }
-        client._client.hget = AsyncMock(
-            return_value=json.dumps(metadata)
-        )
+        client._client.hget = AsyncMock(return_value=json.dumps(metadata))
 
         result = await client.get_task_metadata("task-1", tenant_id="tenant_001")
 
@@ -314,9 +308,7 @@ class TestTaskWithTenant:
         from src.graph.state import AgentState
 
         state = AgentState(current_step="test")
-        client._client.get = AsyncMock(
-            return_value=json.dumps(state.model_dump(mode="json"))
-        )
+        client._client.get = AsyncMock(return_value=json.dumps(state.model_dump(mode="json")))
 
         result = await client.get_task_state("task-1", tenant_id="tenant_001")
 
@@ -325,9 +317,7 @@ class TestTaskWithTenant:
         assert "tenant:tenant_001" in str(client._client.get.call_args[0][0])
 
     @pytest.mark.asyncio
-    async def test_update_task_progress_uses_tenant_namespace(
-        self, client: RedisClient
-    ) -> None:
+    async def test_update_task_progress_uses_tenant_namespace(self, client: RedisClient) -> None:
         """测试 update_task_progress 使用租户命名空间。"""
         metadata = {
             "task_id": "task-1",
@@ -353,9 +343,7 @@ class TestTaskWithTenant:
     ) -> None:
         """测试 list_tasks 在租户命名空间里先过滤状态再分页，total 是过滤后总数。"""
         # Simulate 3 tasks in tenant sorted set
-        client._client.zrevrange = AsyncMock(
-            return_value=["task-1", "task-2", "task-3"]
-        )
+        client._client.zrevrange = AsyncMock(return_value=["task-1", "task-2", "task-3"])
 
         def fake_hget(key: str, field: str) -> str | None:
             if "task-1" in str(key):
@@ -391,9 +379,7 @@ class TestTaskWithTenant:
         assert ":list" in zrevrange_key
 
     @pytest.mark.asyncio
-    async def test_list_tasks_tenant_isolation_no_cross_tenant(
-        self, client: RedisClient
-    ) -> None:
+    async def test_list_tasks_tenant_isolation_no_cross_tenant(self, client: RedisClient) -> None:
         """测试不同租户的 list_tasks 使用不同的 key。"""
         client._client.zrevrange = AsyncMock(return_value=[])
         client._client.get = AsyncMock(return_value=None)
@@ -409,9 +395,7 @@ class TestTaskWithTenant:
         assert key_a != key_b
 
     @pytest.mark.asyncio
-    async def test_delete_task_only_deletes_tenant_namespace(
-        self, client: RedisClient
-    ) -> None:
+    async def test_delete_task_only_deletes_tenant_namespace(self, client: RedisClient) -> None:
         """测试 delete_task 只删除租户命名空间内的 key。"""
         mock_pipe = client._client.pipeline.return_value
         mock_pipe.execute.return_value = [2, 1]  # delete returns 2 keys, zrem returns 1
@@ -424,9 +408,7 @@ class TestTaskWithTenant:
         assert mock_pipe.delete.called
         delete_args = mock_pipe.delete.call_args[0]
         for key in delete_args:
-            assert "tenant:tenant_001" in str(key), (
-                f"Key {key} missing tenant namespace"
-            )
+            assert "tenant:tenant_001" in str(key), f"Key {key} missing tenant namespace"
 
     @pytest.mark.asyncio
     async def test_save_task_state_calls_get_task_metadata_with_tenant(

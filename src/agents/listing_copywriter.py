@@ -186,7 +186,11 @@ class AICopywritingAgent:
             product: 商品信息。
             category_memory: 类目记忆上下文，注入到每个润色 prompt 中。
         """
-        memory_section = f"\n类目记忆：{category_memory}" if category_memory else "\n类目记忆：（无相关类目记忆）"
+        memory_section = (
+            f"\n类目记忆：{category_memory}"
+            if category_memory
+            else "\n类目记忆：（无相关类目记忆）"
+        )
 
         # 增强标题
         package.title = await self._enhance_with_llm(

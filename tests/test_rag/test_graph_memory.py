@@ -148,7 +148,8 @@ class TestGraphMemoryService:
     ) -> None:
         """测试类目记忆存在返回 CategoryMemory 对象。"""
         cm = _create_category_memory(
-            1, "digital",
+            1,
+            "digital",
             summary="智能手表类目",
             best_practices=["白色背景"],
             negative_patterns=["避免过曝"],
@@ -215,9 +216,7 @@ class TestGraphMemoryService:
         exec_result.scalars.return_value = scalars_mock
         mock_session.execute.return_value = exec_result
 
-        result = await service.list_entities(
-            mock_session, "digital", entity_type="brand"
-        )
+        result = await service.list_entities(mock_session, "digital", entity_type="brand")
 
         assert len(result) == 1
         assert result[0].entity_type == "brand"
@@ -259,7 +258,9 @@ class TestGraphMemoryService:
         edge = _create_edge(1, 1, 2, "has_attribute", "digital", 0.9, evidence="属性推断")
 
         row_mock = MagicMock()
-        row_mock.__getitem__ = MagicMock(side_effect=[edge, "智能手表", "concept", "长续航", "attribute"])
+        row_mock.__getitem__ = MagicMock(
+            side_effect=[edge, "智能手表", "concept", "长续航", "attribute"]
+        )
         row_mock.source_name = "智能手表"
         row_mock.source_type = "concept"
         row_mock.target_name = "长续航"
@@ -288,7 +289,9 @@ class TestGraphMemoryService:
         edge = _create_edge(1, 1, 2, "has_attribute", "digital", 0.9)
 
         row_mock = MagicMock()
-        row_mock.__getitem__ = MagicMock(side_effect=[edge, "智能手表", "concept", "长续航", "attribute"])
+        row_mock.__getitem__ = MagicMock(
+            side_effect=[edge, "智能手表", "concept", "长续航", "attribute"]
+        )
         row_mock.source_name = "智能手表"
         row_mock.source_type = "concept"
         row_mock.target_name = "长续航"
@@ -332,13 +335,22 @@ class TestGraphMemoryService:
         self, service: GraphMemoryService, mock_session: MagicMock
     ) -> None:
         """测试有数据的上下文构建。"""
-        entity = _create_entity(1, name="智能手表", entity_type="concept",
-                                description="一款智能手表产品", aliases=["手表", "smartwatch"])
-        cm = _create_category_memory(1, "digital", summary="类目摘要",
-                                     best_practices=["白色背景"],
-                                     negative_patterns=["避免过曝"],
-                                     style_guidelines={"风格": "科技简约"},
-                                     performance_hints={"表盘": "优先渲染"})
+        entity = _create_entity(
+            1,
+            name="智能手表",
+            entity_type="concept",
+            description="一款智能手表产品",
+            aliases=["手表", "smartwatch"],
+        )
+        cm = _create_category_memory(
+            1,
+            "digital",
+            summary="类目摘要",
+            best_practices=["白色背景"],
+            negative_patterns=["避免过曝"],
+            style_guidelines={"风格": "科技简约"},
+            performance_hints={"表盘": "优先渲染"},
+        )
 
         with (
             patch.object(service, "list_entities", new_callable=AsyncMock) as mock_entities,
@@ -346,23 +358,23 @@ class TestGraphMemoryService:
             patch.object(service, "get_category_memory", new_callable=AsyncMock) as mock_mem,
         ):
             mock_entities.return_value = [entity]
-            mock_edges.return_value = [{
-                "id": 1,
-                "source_entity_id": 1,
-                "target_entity_id": 2,
-                "relationship_type": "has_attribute",
-                "weight": 0.9,
-                "evidence": "属性推断",
-                "source_name": "智能手表",
-                "source_type": "concept",
-                "target_name": "长续航",
-                "target_type": "attribute",
-            }]
+            mock_edges.return_value = [
+                {
+                    "id": 1,
+                    "source_entity_id": 1,
+                    "target_entity_id": 2,
+                    "relationship_type": "has_attribute",
+                    "weight": 0.9,
+                    "evidence": "属性推断",
+                    "source_name": "智能手表",
+                    "source_type": "concept",
+                    "target_name": "长续航",
+                    "target_type": "attribute",
+                }
+            ]
             mock_mem.return_value = cm
 
-            context = await service.build_category_context(
-                mock_session, "digital"
-            )
+            context = await service.build_category_context(mock_session, "digital")
 
         assert len(context.entities) == 1
         assert context.entities[0]["name"] == "智能手表"
@@ -391,7 +403,8 @@ class TestGraphMemoryServiceFormatContext:
     def test_format_context_with_category_memory(self, service: GraphMemoryService) -> None:
         """测试带类目记忆的上下文格式化。"""
         cm = _create_category_memory(
-            1, "digital",
+            1,
+            "digital",
             summary="智能手表类目摘要",
             best_practices=["使用白色背景"],
             negative_patterns=["避免过曝"],
@@ -469,7 +482,8 @@ class TestGraphMemoryServiceFormatContext:
     def test_format_full_context(self, service: GraphMemoryService) -> None:
         """测试完整上下文格式化。"""
         cm = _create_category_memory(
-            1, "digital",
+            1,
+            "digital",
             summary="智能手表类目摘要",
             best_practices=["白色背景"],
             negative_patterns=["避免过曝"],
@@ -478,14 +492,27 @@ class TestGraphMemoryServiceFormatContext:
             category="digital",
             category_memory=cm,
             entities=[
-                {"id": 1, "name": "智能手表", "entity_type": "concept",
-                 "description": None, "aliases": []},
+                {
+                    "id": 1,
+                    "name": "智能手表",
+                    "entity_type": "concept",
+                    "description": None,
+                    "aliases": [],
+                },
             ],
             edges=[
-                {"id": 1, "source_entity_id": 1, "target_entity_id": 2,
-                 "relationship_type": "has_attribute", "weight": 1.0,
-                 "evidence": None, "source_name": "智能手表", "source_type": "concept",
-                 "target_name": "长续航", "target_type": "attribute"},
+                {
+                    "id": 1,
+                    "source_entity_id": 1,
+                    "target_entity_id": 2,
+                    "relationship_type": "has_attribute",
+                    "weight": 1.0,
+                    "evidence": None,
+                    "source_name": "智能手表",
+                    "source_type": "concept",
+                    "target_name": "长续航",
+                    "target_type": "attribute",
+                },
             ],
         )
         formatted = service.format_context(ctx)
@@ -507,6 +534,7 @@ class TestRetrieverGraphMemoryIntegration:
     def test_retriever_has_method(self) -> None:
         """测试 KnowledgeRetriever 有 retrieve_category_memory_context 方法。"""
         from src.rag.retriever import KnowledgeRetriever
+
         assert hasattr(KnowledgeRetriever, "retrieve_category_memory_context")
 
     @pytest.mark.asyncio
@@ -524,18 +552,14 @@ class TestRetrieverGraphMemoryIntegration:
             mock_session = MagicMock()
             mock_session.execute = AsyncMock()
 
-            with patch(
-                "src.rag.graph_memory.GraphMemoryService"
-            ) as mock_service_cls:
+            with patch("src.rag.graph_memory.GraphMemoryService") as mock_service_cls:
                 mock_service = MagicMock()
                 mock_service.build_category_context = AsyncMock(
                     return_value=GraphMemoryContext(category="digital")
                 )
                 mock_service_cls.return_value = mock_service
 
-                result = await retriever.retrieve_category_memory_context(
-                    mock_session, "digital"
-                )
+                result = await retriever.retrieve_category_memory_context(mock_session, "digital")
 
                 assert result == ""
 
@@ -554,33 +578,32 @@ class TestRetrieverGraphMemoryIntegration:
             mock_session = MagicMock()
             mock_session.execute = AsyncMock()
 
-            with patch(
-                "src.rag.graph_memory.GraphMemoryService"
-            ) as mock_service_cls:
+            with patch("src.rag.graph_memory.GraphMemoryService") as mock_service_cls:
                 cm = _create_category_memory(
-                    1, "digital",
+                    1,
+                    "digital",
                     summary="智能手表类目",
                     best_practices=["白色背景"],
                 )
                 context_with_data = GraphMemoryContext(
                     category="digital",
                     category_memory=cm,
-                    entities=[{"id": 1, "name": "test",
-                               "entity_type": "concept",
-                               "description": None, "aliases": []}],
+                    entities=[
+                        {
+                            "id": 1,
+                            "name": "test",
+                            "entity_type": "concept",
+                            "description": None,
+                            "aliases": [],
+                        }
+                    ],
                 )
                 mock_service = MagicMock()
-                mock_service.build_category_context = AsyncMock(
-                    return_value=context_with_data
-                )
-                mock_service.format_context = MagicMock(
-                    return_value="formatted context string"
-                )
+                mock_service.build_category_context = AsyncMock(return_value=context_with_data)
+                mock_service.format_context = MagicMock(return_value="formatted context string")
                 mock_service_cls.return_value = mock_service
 
-                result = await retriever.retrieve_category_memory_context(
-                    mock_session, "digital"
-                )
+                result = await retriever.retrieve_category_memory_context(mock_session, "digital")
 
                 assert result == "formatted context string"
                 assert isinstance(result, str)

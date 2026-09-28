@@ -302,9 +302,7 @@ class GraphSearchService:
 
         max_communities = self.settings.graph_rag_global_search_max_communities
         stmt = (
-            select(CommunitySummary)
-            .where(tenant_condition)
-            .order_by(CommunitySummary.rank.desc())
+            select(CommunitySummary).where(tenant_condition).order_by(CommunitySummary.rank.desc())
         )
         if category:
             stmt = stmt.where(CommunitySummary.category == category)

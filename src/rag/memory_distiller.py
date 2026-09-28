@@ -107,7 +107,12 @@ class MemoryDistiller:
             performance_hints = generation_result["performance_hints"]
             summary_parts.append(f"从任务 {task_id} 提炼了性能提示")
 
-        if not best_practices and not negative_patterns and not style_guidelines and not performance_hints:
+        if (
+            not best_practices
+            and not negative_patterns
+            and not style_guidelines
+            and not performance_hints
+        ):
             return None
 
         # 计算置信度：selling_points 和 quality_review 都有时完整，否则部分
@@ -137,7 +142,10 @@ class MemoryDistiller:
         await session.flush()
         logger.info(
             "Created memory proposal from task: tenant=%s task=%s category=%s confidence=%.1f",
-            tenant_id, task_id, category, confidence,
+            tenant_id,
+            task_id,
+            category,
+            confidence,
         )
         return proposal
 
@@ -206,7 +214,9 @@ class MemoryDistiller:
         await session.flush()
         logger.info(
             "Created memory proposal from compliance: tenant=%s report=%s category=%s",
-            tenant_id, report_id, category,
+            tenant_id,
+            report_id,
+            category,
         )
         return proposal
 
@@ -275,6 +285,8 @@ class MemoryDistiller:
         await session.flush()
         logger.info(
             "Created memory proposal from push result: tenant=%s listing=%s category=%s",
-            tenant_id, listing_id, category,
+            tenant_id,
+            listing_id,
+            category,
         )
         return proposal

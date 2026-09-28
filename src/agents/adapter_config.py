@@ -49,7 +49,10 @@ class AdapterConfigManager:
         return cls._instance
 
     async def get_config(
-        self, platform: Platform, shop_id: str = "default", tenant_id: str = _MISSING  # type: ignore[assignment]
+        self,
+        platform: Platform,
+        shop_id: str = "default",
+        tenant_id: str = _MISSING,  # type: ignore[assignment]
     ) -> dict[str, Any] | None:
         """获取平台适配器配置。
 
@@ -65,7 +68,9 @@ class AdapterConfigManager:
             ValueError: tenant_id 未提供。
         """
         if tenant_id is _MISSING:
-            raise ValueError("tenant_id is required — caller must provide authenticated tenant context")
+            raise ValueError(
+                "tenant_id is required — caller must provide authenticated tenant context"
+            )
         cache_key = (tenant_id, platform, shop_id)
 
         # 检查缓存
@@ -105,8 +110,7 @@ class AdapterConfigManager:
 
         except Exception:
             logger.exception(
-                f"Failed to load adapter config for tenant={tenant_id}, "
-                f"{platform.value}/{shop_id}"
+                f"Failed to load adapter config for tenant={tenant_id}, {platform.value}/{shop_id}"
             )
             return None
 
@@ -126,9 +130,7 @@ class AdapterConfigManager:
         if tenant_id and shop_id:
             self._cache.pop((tenant_id, platform, shop_id), None)
         elif tenant_id:
-            keys_to_remove = [
-                k for k in self._cache if k[0] == tenant_id and k[1] == platform
-            ]
+            keys_to_remove = [k for k in self._cache if k[0] == tenant_id and k[1] == platform]
             for k in keys_to_remove:
                 del self._cache[k]
         else:

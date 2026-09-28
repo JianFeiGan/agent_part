@@ -107,9 +107,7 @@ class TestListingWorkflow:
             mock_push_cls.return_value.push_to_platforms.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_asset_optimize_error_is_recorded(
-        self, product: ListingProduct
-    ) -> None:
+    async def test_asset_optimize_error_is_recorded(self, product: ListingProduct) -> None:
         """素材优化异常记入 state.errors，流程继续（文案仍生成）。"""
         with (
             patch("src.graph.listing_workflow.AssetOptimizerAgent") as mock_agent_cls,
@@ -122,9 +120,7 @@ class TestListingWorkflow:
             mock_push = MagicMock()
             mock_push.push_to_platforms = AsyncMock(
                 return_value={
-                    "amazon": PushResult(
-                        success=True, platform=Platform.AMAZON, listing_id="L-1"
-                    )
+                    "amazon": PushResult(success=True, platform=Platform.AMAZON, listing_id="L-1")
                 }
             )
             mock_push_cls.return_value = mock_push
@@ -142,9 +138,7 @@ class TestListingWorkflow:
             assert result.get("copywriting_packages")
 
     @pytest.mark.asyncio
-    async def test_compliance_fail_parks_reviewing(
-        self, product: ListingProduct
-    ) -> None:
+    async def test_compliance_fail_parks_reviewing(self, product: ListingProduct) -> None:
         """合规 FAIL → 不推送，任务挂起 reviewing。"""
         from src.models.listing import ComplianceReport, ComplianceStatus
 
@@ -176,17 +170,13 @@ class TestListingWorkflow:
             mock_push_cls.return_value.push_to_platforms.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_compliance_pass_proceeds_to_push(
-        self, product: ListingProduct
-    ) -> None:
+    async def test_compliance_pass_proceeds_to_push(self, product: ListingProduct) -> None:
         """合规全部通过 → 正常推送，终态 published。"""
         with patch("src.graph.listing_workflow.ListingPushService") as mock_push_cls:
             mock_push = MagicMock()
             mock_push.push_to_platforms = AsyncMock(
                 return_value={
-                    "amazon": PushResult(
-                        success=True, platform=Platform.AMAZON, listing_id="L-2"
-                    )
+                    "amazon": PushResult(success=True, platform=Platform.AMAZON, listing_id="L-2")
                 }
             )
             mock_push_cls.return_value = mock_push
@@ -203,9 +193,7 @@ class TestListingWorkflow:
             mock_push.push_to_platforms.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_push_auto_retries_transient_failure(
-        self, product: ListingProduct
-    ) -> None:
+    async def test_push_auto_retries_transient_failure(self, product: ListingProduct) -> None:
         """推送遇非永久错误自动重试一次，重试成功则终态 published。"""
         transient = PushResult(
             success=False, platform=Platform.AMAZON, error="timeout", error_code="HTTP_503"
@@ -229,9 +217,7 @@ class TestListingWorkflow:
         assert result["step_results"]["final_status"] == "published"
 
     @pytest.mark.asyncio
-    async def test_push_no_retry_when_all_success(
-        self, product: ListingProduct
-    ) -> None:
+    async def test_push_no_retry_when_all_success(self, product: ListingProduct) -> None:
         """全部成功时不触发重试。"""
         mock_push = MagicMock()
         mock_push.push_to_platforms = AsyncMock(
@@ -253,9 +239,7 @@ class TestListingWorkflow:
         assert result["step_results"]["final_status"] == "published"
 
     @pytest.mark.asyncio
-    async def test_push_all_failed_gives_failed_status(
-        self, product: ListingProduct
-    ) -> None:
+    async def test_push_all_failed_gives_failed_status(self, product: ListingProduct) -> None:
         """重试后仍全部失败 → 终态 failed。"""
         failure = PushResult(
             success=False, platform=Platform.AMAZON, error="boom", error_code="HTTP_500"
@@ -276,9 +260,7 @@ class TestListingWorkflow:
         assert result["step_results"]["final_status"] == "failed"
 
     @pytest.mark.asyncio
-    async def test_workflow_persists_each_stage(
-        self, product: ListingProduct
-    ) -> None:
+    async def test_workflow_persists_each_stage(self, product: ListingProduct) -> None:
         """task_id 非空时：状态流转与各阶段产物均持久化。"""
         with (
             patch("src.graph.listing_workflow.listing_persistence") as mock_persist,
@@ -296,9 +278,7 @@ class TestListingWorkflow:
             mock_push = MagicMock()
             mock_push.push_to_platforms = AsyncMock(
                 return_value={
-                    "amazon": PushResult(
-                        success=True, platform=Platform.AMAZON, listing_id="L-5"
-                    )
+                    "amazon": PushResult(success=True, platform=Platform.AMAZON, listing_id="L-5")
                 }
             )
             mock_push_cls.return_value = mock_push
@@ -313,9 +293,7 @@ class TestListingWorkflow:
             )
 
             # 状态流转：generating → pushing → published
-            statuses = [
-                c.args[2] for c in mock_persist.update_task_status.call_args_list
-            ]
+            statuses = [c.args[2] for c in mock_persist.update_task_status.call_args_list]
             assert statuses == ["generating", "pushing", "published"]
 
             mock_persist.save_asset_packages.assert_called_once()
@@ -347,9 +325,7 @@ class TestListingWorkflow:
             mock_push = MagicMock()
             mock_push.push_to_platforms = AsyncMock(
                 return_value={
-                    "amazon": PushResult(
-                        success=True, platform=Platform.AMAZON, listing_id="L-6"
-                    )
+                    "amazon": PushResult(success=True, platform=Platform.AMAZON, listing_id="L-6")
                 }
             )
             mock_push_cls.return_value = mock_push
@@ -408,9 +384,7 @@ class TestResumePush:
             patch("src.graph.listing_workflow.listing_persistence") as mock_persist,
             patch("src.graph.listing_workflow.ListingPushService") as mock_push_cls,
         ):
-            mock_persist.load_asset_packages = AsyncMock(
-                return_value={Platform.AMAZON: asset_pkg}
-            )
+            mock_persist.load_asset_packages = AsyncMock(return_value={Platform.AMAZON: asset_pkg})
             mock_persist.load_copywriting_packages = AsyncMock(
                 return_value={Platform.AMAZON: copy_pkg}
             )
@@ -423,12 +397,8 @@ class TestResumePush:
             mock_push = MagicMock()
             mock_push.push_to_platforms = AsyncMock(
                 return_value={
-                    "amazon": PushResult(
-                        success=True, platform=Platform.AMAZON, listing_id="L-7"
-                    ),
-                    "ebay": PushResult(
-                        success=True, platform=Platform.EBAY, listing_id="E-7"
-                    ),
+                    "amazon": PushResult(success=True, platform=Platform.AMAZON, listing_id="L-7"),
+                    "ebay": PushResult(success=True, platform=Platform.EBAY, listing_id="E-7"),
                 }
             )
             mock_push_cls.return_value = mock_push
@@ -486,9 +456,7 @@ class TestResumePush:
             mock_persist.load_copywriting_packages = AsyncMock(return_value={})
             mock_persist.update_task_status = AsyncMock()
             mock_persist.save_push_results = AsyncMock()
-            mock_persist.load_push_result_statuses = AsyncMock(
-                return_value={"amazon": False}
-            )
+            mock_persist.load_push_result_statuses = AsyncMock(return_value={"amazon": False})
 
             mock_push = MagicMock()
             mock_push.push_to_platforms = AsyncMock(return_value={"amazon": failure})
@@ -514,6 +482,4 @@ class TestResumePush:
         with patch("src.graph.listing_workflow.get_db_session", return_value=cm):
             workflow = ListingWorkflow()
             with pytest.raises(ValueError, match="不存在"):
-                await workflow.resume_push(
-                    task_id=999, tenant_id="t1", platforms=[Platform.AMAZON]
-                )
+                await workflow.resume_push(task_id=999, tenant_id="t1", platforms=[Platform.AMAZON])

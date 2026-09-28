@@ -171,9 +171,7 @@ class ListingWorkflow:
                     )
                 if image_refs:
                     product.source_images = image_refs
-                    logger.info(
-                        f"商品 {product.sku} 加载 {len(image_refs)} 张 AI 生成图"
-                    )
+                    logger.info(f"商品 {product.sku} 加载 {len(image_refs)} 张 AI 生成图")
             except Exception as e:
                 logger.error(f"加载 AI 生成图失败: {e}")
                 return {
@@ -188,9 +186,7 @@ class ListingWorkflow:
         """素材优化节点：调用 AssetOptimizerAgent。"""
         if not state.product:
             return {
-                "errors": [
-                    {"node": "optimize_assets", "error": "No product available"}
-                ],
+                "errors": [{"node": "optimize_assets", "error": "No product available"}],
                 "current_step": "optimize_skipped",
             }
 
@@ -244,9 +240,7 @@ class ListingWorkflow:
         """合规检查节点：输出报告并标记被阻断平台。"""
         if not state.product:
             return {
-                "errors": [
-                    {"node": "compliance_check", "error": "No product available"}
-                ],
+                "errors": [{"node": "compliance_check", "error": "No product available"}],
                 "current_step": "compliance_failed",
             }
         agent = ComplianceCheckerAgent(settings=self._settings)
@@ -254,9 +248,7 @@ class ListingWorkflow:
         reports = result.get("compliance_reports", {})
         blocked = [p for p, r in reports.items() if r.overall == ComplianceStatus.FAIL]
         if blocked:
-            logger.warning(
-                f"合规阻断平台: {[p.value for p in blocked]}，任务挂起等待人工审核"
-            )
+            logger.warning(f"合规阻断平台: {[p.value for p in blocked]}，任务挂起等待人工审核")
         if state.task_id is not None:
             await listing_persistence.save_compliance_reports(
                 state.task_id, state.tenant_id, reports
@@ -331,9 +323,7 @@ class ListingWorkflow:
             }
 
         # 防御：被阻断平台不推送（正常路由不会到达此分支）
-        push_platforms = [
-            p for p in state.target_platforms if p not in state.blocked_platforms
-        ]
+        push_platforms = [p for p in state.target_platforms if p not in state.blocked_platforms]
         if not push_platforms:
             return {"current_step": "push_skipped"}
 
@@ -381,7 +371,9 @@ class ListingWorkflow:
         """
         if task_id is not None:
             await listing_persistence.update_task_status(
-                task_id, tenant_id, TaskStatus.GENERATING.value,
+                task_id,
+                tenant_id,
+                TaskStatus.GENERATING.value,
                 workflow_state="import_product",
             )
         config = {"configurable": {"thread_id": thread_id}}
@@ -448,9 +440,7 @@ class ListingWorkflow:
             source_images=[ImageRef(**img) for img in (product_po.source_images or [])],
             attributes=product_po.attributes or {},
         )
-        asset_packages = await listing_persistence.load_asset_packages(
-            task_id, tenant_id
-        )
+        asset_packages = await listing_persistence.load_asset_packages(task_id, tenant_id)
         copywriting_packages = await listing_persistence.load_copywriting_packages(
             task_id, tenant_id
         )
@@ -469,9 +459,7 @@ class ListingWorkflow:
         )
 
         # 终态基于任务累计推送结果（含历史成功）
-        statuses = await listing_persistence.load_push_result_statuses(
-            task_id, tenant_id
-        )
+        statuses = await listing_persistence.load_push_result_statuses(task_id, tenant_id)
         succeeded = {name for name, ok in statuses.items() if ok}
         target_names = {p.value for p in target}
         if succeeded >= target_names:
@@ -486,7 +474,6 @@ class ListingWorkflow:
         )
 
         logger.info(
-            f"恢复推送完成: task_id={task_id}, final={final_status}, "
-            f"pushed={sorted(succeeded)}"
+            f"恢复推送完成: task_id={task_id}, final={final_status}, pushed={sorted(succeeded)}"
         )
         return {"push_results": results, "final_status": final_status}

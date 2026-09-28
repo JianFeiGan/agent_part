@@ -57,9 +57,7 @@ class ProviderFactory:
         Returns:
             LLM Provider 实例，未配置时返回 None。
         """
-        config = await _resolve_provider_config(
-            session, tenant_id, "llm", provider_id
-        )
+        config = await _resolve_provider_config(session, tenant_id, "llm", provider_id)
         if config is not None:
             return _create_llm_from_config(config)
 
@@ -84,9 +82,7 @@ class ProviderFactory:
         Returns:
             图片 Provider 实例，未配置时返回 None。
         """
-        config = await _resolve_provider_config(
-            session, tenant_id, "image", provider_id
-        )
+        config = await _resolve_provider_config(session, tenant_id, "image", provider_id)
         if config is not None:
             return _create_image_from_config(config, **kwargs)
 
@@ -111,9 +107,7 @@ class ProviderFactory:
         Returns:
             视频 Provider 实例，未配置时返回 None。
         """
-        config = await _resolve_provider_config(
-            session, tenant_id, "video", provider_id
-        )
+        config = await _resolve_provider_config(session, tenant_id, "video", provider_id)
         if config is not None:
             return _create_video_from_config(config, **kwargs)
 
@@ -182,9 +176,7 @@ def _create_llm_from_config(config: Any) -> LLMProviderProtocol:
     raise ValueError(f"不支持的 LLM 协议: {config.protocol}")
 
 
-def _create_image_from_config(
-    config: Any, **kwargs: Any
-) -> ImageProviderProtocol:
+def _create_image_from_config(config: Any, **kwargs: Any) -> ImageProviderProtocol:
     """根据 DB 配置创建图片 Provider 实例。
 
     Args:
@@ -220,9 +212,7 @@ def _create_image_from_config(
     raise ValueError(f"不支持的图片厂商: {config.name} (protocol={config.protocol})")
 
 
-def _create_video_from_config(
-    config: Any, **kwargs: Any
-) -> VideoProviderProtocol:
+def _create_video_from_config(config: Any, **kwargs: Any) -> VideoProviderProtocol:
     """根据 DB 配置创建视频 Provider 实例。
 
     Args:
@@ -287,9 +277,7 @@ def _create_image_from_settings(**kwargs: Any) -> ImageProviderProtocol | None:
     # 优先使用 SenseNova 图片 Provider
     sensenova_key = getattr(settings, "sensenova_api_key", "")
     if sensenova_key:
-        sensenova_url = getattr(
-            settings, "sensenova_base_url", "https://token.sensenova.cn/v1"
-        )
+        sensenova_url = getattr(settings, "sensenova_base_url", "https://token.sensenova.cn/v1")
         return OpenAICompatibleImageProvider(
             base_url=sensenova_url,
             api_key=sensenova_key,

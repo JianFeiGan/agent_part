@@ -28,7 +28,9 @@ from src.config.settings import Settings
 logger = logging.getLogger(__name__)
 
 # DashScope 图片生成 API 端点
-_DASHSCOPE_IMAGE_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+_DASHSCOPE_IMAGE_URL = (
+    "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+)
 # DashScope 异步任务查询端点
 _DASHSCOPE_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks/{task_id}"
 # 轮询退避上限（秒）
@@ -42,10 +44,15 @@ _SYNC_MODELS = {"wanx-v1", "wanx-v1-edit"}
 
 # wanx 系列支持的尺寸枚举（非标准尺寸会被拒绝）
 _SUPPORTED_SIZES = {
-    "1024*1024", "720*1280", "1280*720",
-    "960*1280", "1280*960",
-    "768*1024", "1024*768",
-    "720*480", "480*720",
+    "1024*1024",
+    "720*1280",
+    "1280*720",
+    "960*1280",
+    "1280*960",
+    "768*1024",
+    "1024*768",
+    "720*480",
+    "480*720",
 }
 
 
@@ -116,9 +123,7 @@ class DashScopeImageClient:
         """
         client = self._httpx or httpx.AsyncClient()
         try:
-            result = await self._call_api(
-                client, prompt, negative_prompt, width, height, n, seed
-            )
+            result = await self._call_api(client, prompt, negative_prompt, width, height, n, seed)
             return result
         finally:
             if self._httpx is None:
@@ -211,9 +216,7 @@ class DashScopeImageClient:
             )
             resp.raise_for_status()
         except httpx.HTTPError as exc:
-            raise ProviderUnavailableError(
-                f"DashScope 图片生成提交失败: {exc}"
-            ) from exc
+            raise ProviderUnavailableError(f"DashScope 图片生成提交失败: {exc}") from exc
 
         data = resp.json()
 
@@ -231,13 +234,9 @@ class DashScopeImageClient:
         if task_id:
             return await self._poll_task(client, task_id)
 
-        raise ProviderUnavailableError(
-            f"DashScope 图片生成未返回结果或 task_id: {data}"
-        )
+        raise ProviderUnavailableError(f"DashScope 图片生成未返回结果或 task_id: {data}")
 
-    async def _poll_task(
-        self, client: httpx.AsyncClient, task_id: str
-    ) -> ImageGenerationResult:
+    async def _poll_task(self, client: httpx.AsyncClient, task_id: str) -> ImageGenerationResult:
         """轮询异步任务状态直到成功或失败。
 
         Args:
@@ -260,9 +259,7 @@ class DashScopeImageClient:
                 resp = await client.get(url, headers=headers, timeout=30.0)
                 resp.raise_for_status()
             except httpx.HTTPError as exc:
-                raise ProviderUnavailableError(
-                    f"DashScope 任务查询失败: {exc}"
-                ) from exc
+                raise ProviderUnavailableError(f"DashScope 任务查询失败: {exc}") from exc
 
             data = resp.json()
             output = data.get("output", {})
@@ -314,12 +311,8 @@ class DashScopeImageClient:
                 img_resp = await client.get(url, timeout=60.0)
                 img_resp.raise_for_status()
             except httpx.HTTPError as exc:
-                raise ProviderUnavailableError(
-                    f"下载 DashScope 图片失败: {exc}"
-                ) from exc
-            images.append(
-                SingleImageResult(data=img_resp.content, url=url, seed=item.get("seed"))
-            )
+                raise ProviderUnavailableError(f"下载 DashScope 图片失败: {exc}") from exc
+            images.append(SingleImageResult(data=img_resp.content, url=url, seed=item.get("seed")))
 
         if not images:
             raise ProviderUnavailableError("DashScope 返回的图片列表为空或下载全部失败")

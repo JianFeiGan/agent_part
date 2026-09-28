@@ -333,9 +333,7 @@ class TestComplianceAPI:
             assert "amazon" in data["data"]
             mock_save_reports.assert_called_once()
 
-    def test_run_compliance_check_without_packages_returns_409(
-        self, client: TestClient
-    ) -> None:
+    def test_run_compliance_check_without_packages_returns_409(self, client: TestClient) -> None:
         """无已生成文案包时返回 409，而非用空包假检查。"""
         mock_task_po = _make_task_po(id=1, product_sku="COMPL-001", target_platforms=["amazon"])
         mock_product_po = _make_product_po(sku="COMPL-001", title="Clean Product")

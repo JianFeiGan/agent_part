@@ -49,27 +49,15 @@ class AIConversationLog(Base):
     tenant_id: Mapped[str] = mapped_column(
         String(100), nullable=False, index=True, comment="租户 ID"
     )
-    task_id: Mapped[str | None] = mapped_column(
-        String(100), index=True, comment="关联任务 ID"
-    )
-    session_id: Mapped[str | None] = mapped_column(
-        String(100), index=True, comment="会话 ID"
-    )
-    agent_name: Mapped[str | None] = mapped_column(
-        String(50), index=True, comment="Agent 名称"
-    )
-    model_name: Mapped[str] = mapped_column(
-        String(100), nullable=False, comment="模型名称"
-    )
+    task_id: Mapped[str | None] = mapped_column(String(100), index=True, comment="关联任务 ID")
+    session_id: Mapped[str | None] = mapped_column(String(100), index=True, comment="会话 ID")
+    agent_name: Mapped[str | None] = mapped_column(String(50), index=True, comment="Agent 名称")
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False, comment="模型名称")
     provider: Mapped[str] = mapped_column(
         String(50), nullable=False, default="qwen", comment="LLM 提供商"
     )
-    input_content: Mapped[str | None] = mapped_column(
-        Text, comment="输入内容摘要"
-    )
-    output_content: Mapped[str | None] = mapped_column(
-        Text, comment="输出内容摘要"
-    )
+    input_content: Mapped[str | None] = mapped_column(Text, comment="输入内容摘要")
+    output_content: Mapped[str | None] = mapped_column(Text, comment="输出内容摘要")
     input_tokens: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, comment="输入 token 数"
     )
@@ -85,15 +73,11 @@ class AIConversationLog(Base):
     cost_cny: Mapped[float] = mapped_column(
         Float, nullable=False, default=0.0, comment="估算费用（人民币）"
     )
-    latency_ms: Mapped[int | None] = mapped_column(
-        Integer, comment="响应延迟（毫秒）"
-    )
+    latency_ms: Mapped[int | None] = mapped_column(Integer, comment="响应延迟（毫秒）")
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="success", index=True, comment="状态"
     )
-    error_message: Mapped[str | None] = mapped_column(
-        Text, comment="错误信息"
-    )
+    error_message: Mapped[str | None] = mapped_column(Text, comment="错误信息")
     extra_data: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, default=dict, comment="额外元数据"
     )

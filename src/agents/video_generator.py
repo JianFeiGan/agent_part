@@ -371,9 +371,7 @@ class VideoGeneratorAgent(BaseAgent[AgentRuntimeState]):
         # Kling 模型时长上限保护：超过则裁剪并打 info 日志
         duration = float(storyboard.total_duration)
         if duration > 10.0:
-            logger.info(
-                "视频时长 %.1fs 超过模型上限，裁剪为 10.0s", duration
-            )
+            logger.info("视频时长 %.1fs 超过模型上限，裁剪为 10.0s", duration)
             duration = 10.0
 
         # 真实路径：调用视频生成 Provider
@@ -428,8 +426,7 @@ class VideoGeneratorAgent(BaseAgent[AgentRuntimeState]):
                     raise
         else:
             logger.warning(
-                "视频生成 Provider 不可用，回退 mock 占位行为 "
-                "(tenant=%s, allow_mock_assets=%s)",
+                "视频生成 Provider 不可用，回退 mock 占位行为 (tenant=%s, allow_mock_assets=%s)",
                 tenant_id,
                 self.settings.allow_mock_assets,
             )

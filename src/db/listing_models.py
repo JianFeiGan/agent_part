@@ -47,9 +47,7 @@ class ListingProductPO(Base):
     dimensions: Mapped[dict | None] = mapped_column(JSONB)
     source_images: Mapped[list[dict]] = mapped_column(JSONB, default=list)
     attributes: Mapped[dict] = mapped_column(JSONB, default=dict)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(UTC),
@@ -85,16 +83,17 @@ class ListingTaskPO(Base):
         String(100), nullable=False, index=True, comment="租户 ID"
     )
     product_sku: Mapped[str] = mapped_column(
-        String(100), ForeignKey("listing_products.sku"), nullable=False, index=True,
+        String(100),
+        ForeignKey("listing_products.sku"),
+        nullable=False,
+        index=True,
         comment="关联商品SKU",
     )
     target_platforms: Mapped[list[str]] = mapped_column(JSONB, default=list)
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     workflow_state: Mapped[str | None] = mapped_column(String(50))
     auto_execute: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(UTC),
@@ -140,9 +139,7 @@ class AssetPackagePO(Base):
     variant_images: Mapped[list[str]] = mapped_column(JSONB, default=list)
     video_url: Mapped[str | None] = mapped_column(String(1000))
     a_plus_images: Mapped[list[str]] = mapped_column(JSONB, default=list)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     task: Mapped["ListingTaskPO"] = relationship("ListingTaskPO", back_populates="asset_packages")
 
@@ -168,9 +165,7 @@ class CopywritingPackagePO(Base):
     bullet_points: Mapped[list[str]] = mapped_column(JSONB, default=list)
     description: Mapped[str] = mapped_column(Text, default="")
     search_terms: Mapped[list[str]] = mapped_column(JSONB, default=list)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     task: Mapped["ListingTaskPO"] = relationship(
         "ListingTaskPO", back_populates="copywriting_packages"
@@ -194,9 +189,7 @@ class ComplianceReportPO(Base):
     )
     platform: Mapped[str] = mapped_column(String(20), nullable=False)
     report_data: Mapped[dict] = mapped_column(JSONB, default=dict)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     task: Mapped["ListingTaskPO"] = relationship(
         "ListingTaskPO", back_populates="compliance_reports"
@@ -221,9 +214,7 @@ class TaskResultPO(Base):
     platform: Mapped[str] = mapped_column(String(20), nullable=False)
     success: Mapped[bool] = mapped_column(Boolean, default=False)
     result_data: Mapped[dict] = mapped_column(JSONB, default=dict)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     task: Mapped["ListingTaskPO"] = relationship("ListingTaskPO", back_populates="push_results")
 
@@ -250,7 +241,13 @@ class AdapterConfigPO(Base):
     )
 
     __table_args__ = (
-        Index("uq_adapter_config_tenant_platform_shop", "tenant_id", "platform", "shop_id", unique=True),
+        Index(
+            "uq_adapter_config_tenant_platform_shop",
+            "tenant_id",
+            "platform",
+            "shop_id",
+            unique=True,
+        ),
     )
 
     def __repr__(self) -> str:
@@ -306,9 +303,7 @@ class GeneratedAssetPO(Base):
     provider: Mapped[str] = mapped_column(
         String(50), nullable=False, comment="供应商: mock/wanx/kling/user_upload 等"
     )
-    url: Mapped[str] = mapped_column(
-        String(2000), nullable=False, comment="前端可访问 URL"
-    )
+    url: Mapped[str] = mapped_column(String(2000), nullable=False, comment="前端可访问 URL")
     storage_key: Mapped[str] = mapped_column(
         String(500), nullable=False, index=True, comment="StorageBackend key"
     )
@@ -316,28 +311,26 @@ class GeneratedAssetPO(Base):
         String(50), nullable=False, default="local", comment="存储后端: local/oss/s3"
     )
     mime_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    file_size: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="文件大小（字节）")
+    file_size: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="文件大小（字节）"
+    )
     width: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="宽度（像素）")
     height: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="高度（像素）")
-    duration: Mapped[float | None] = mapped_column(
-        nullable=True, comment="视频时长（秒）"
-    )
+    duration: Mapped[float | None] = mapped_column(nullable=True, comment="视频时长（秒）")
     sha256: Mapped[str | None] = mapped_column(
         String(64), nullable=True, index=True, comment="SHA256 哈希，用于去重"
     )
     status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="completed",
-        comment="状态: pending/processing/completed/failed"
+        String(20),
+        nullable=False,
+        default="completed",
+        comment="状态: pending/processing/completed/failed",
     )
     is_mock: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, comment="是否 mock 生成"
     )
-    extra_data: Mapped[dict] = mapped_column(
-        "metadata", JSONB, default=dict, comment="额外数据"
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(UTC)
-    )
+    extra_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, comment="额外数据")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=lambda: datetime.now(UTC),

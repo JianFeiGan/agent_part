@@ -152,9 +152,7 @@ class KlingVideoClient:
                     f"Kling 任务 {task_id} 未返回视频 URL (status={status})"
                 )
             data = await self._download(client, url)
-            return VideoGenerationResult(
-                data=data, url=url, duration=duration, task_id=task_id
-            )
+            return VideoGenerationResult(data=data, url=url, duration=duration, task_id=task_id)
         finally:
             if self._httpx is None:
                 await client.aclose()
@@ -177,9 +175,7 @@ class KlingVideoClient:
             "exp": exp,
             "nbf": now - 5,
         }
-        token: str | bytes = jwt.encode(
-            payload, self._secret_key, algorithm="HS256"
-        )
+        token: str | bytes = jwt.encode(payload, self._secret_key, algorithm="HS256")
         if isinstance(token, bytes):
             token = token.decode("utf-8")
         self._token_cache = (token, float(exp))
@@ -249,9 +245,7 @@ class KlingVideoClient:
         task_id = data["data"]["task_id"]
         return task_id
 
-    async def _query(
-        self, client: httpx.AsyncClient, task_id: str
-    ) -> tuple[str, str | None]:
+    async def _query(self, client: httpx.AsyncClient, task_id: str) -> tuple[str, str | None]:
         """轮询任务状态直到 succeed / failed 或超时。
 
         Args:

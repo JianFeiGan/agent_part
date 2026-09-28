@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>PROTOTYPE · 大卖家内容中台业务流程</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #1a2332;
+    --ink: #e7ecf3;
+    --muted: #8b9bb4;
+    --ok: #3dd68c;
+    --partial: #f5a524;
+    --gap: #f31260;
+    --accent: #66b3ff;
+    --line: #2a3a52;
+  }
+  * { box-sizing: border-box; font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif; }
+  body { margin: 0; background: var(--bg); color: var(--ink); min-height: 100vh; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 99px; background: #3a1f12; color: var(--partial); border: 1px solid #6b3d12; }
+  .badge.out { background: #1a2a1a; color: var(--ok); border-color: #2a5a3a; }
+  main { display: grid; grid-template-columns: 220px 1fr 300px; gap: 0; min-height: calc(100vh - 52px); }
+  nav { border-right: 1px solid var(--line); padding: 12px; }
+  nav button { display: block; width: 100%; text-align: left; margin-bottom: 6px; padding: 10px 12px; background: transparent; border: 1px solid var(--line); color: var(--ink); border-radius: 8px; cursor: pointer; }
+  nav button.active { border-color: var(--accent); background: #152238; }
+  nav button small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+  section { padding: 16px 20px; overflow: auto; }
+  aside { border-left: 1px solid var(--line); padding: 16px; background: #121a26; font-size: 13px; }
+  aside h2 { font-size: 12px; color: var(--muted); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .flow { display: flex; flex-direction: column; gap: 8px; }
+  .node { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel); }
+  .node .t { font-weight: 600; font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
+  .node .d { color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.45; }
+  .st-ok { color: var(--ok); }
+  .st-part { color: var(--partial); }
+  .st-gap { color: var(--gap); }
+  .edge { text-align: center; color: var(--muted); font-size: 11px; }
+  .controls { display: flex; gap: 8px; margin: 12px 0 16px; flex-wrap: wrap; }
+  .controls button { padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); background: #1e2d45; color: var(--ink); cursor: pointer; }
+  .controls button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .state { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; white-space: pre-wrap; background: #0a1018; border: 1px solid var(--line); border-radius: 8px; padding: 10px; line-height: 1.5; }
+  .legend { display: flex; gap: 12px; font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+  .note { margin-top: 16px; padding: 10px; border-left: 3px solid var(--accent); background: #132033; font-size: 12px; line-height: 1.5; color: var(--muted); }
+  h3 { margin: 0 0 4px; font-size: 16px; }
+  .sub { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; } nav, aside { border: 0; border-bottom: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<header>
+  <h1>PROTOTYPE · 大卖家内容中台业务流程</h1>
+  <span class="badge">throwaway · 可双击打开</span>
+  <span class="badge out">对照地图 #29 · 能力矩阵 #30</span>
+</header>
+<div class="main">
+<main>
+  <nav id="scenarios"></nav>
+  <section>
+    <h3 id="title"></h3>
+    <div class="sub" id="subtitle"></div>
+    <div class="controls">
+      <button id="btnPrev">上一步</button>
+      <button id="btnPlay">▶ 逐步推演</button>
+      <button id="btnNext">下一步</button>
+      <button id="btnReset">重置</button>
+    </div>
+    <div class="legend">
+      <span class="st-ok">● 已覆盖</span>
+      <span class="st-part">● 部分</span>
+      <span class="st-gap">● 缺失 / 断点</span>
+    </div>
+    <div class="flow" id="flow"></div>
+    <div class="note" id="note"></div>
+  </section>
+  <aside>
+    <h2>运行状态（每步打印）</h2>
+    <div class="state" id="state">ready</div>
+    <h2 style="margin-top:16px">架构师结论摘要</h2>
+    <div class="state" style="white-space:normal">终点：内部运营 Compose 自托管（#23）。业务终点：5000 SKU/月内容中台（#29）。定位：互补 ERP/刊登，不重建履约分发。</div>
+  </aside>
+</main>
+</div>
+<script>
+const scenarios = {
+  listing: {
+    label: '新品铺货',
+    sub: '商品 → 内容包 → 多平台刊登（部分覆盖）',
+    note: '断点：单 SKU 单任务、AssetOptimizer 透传、reviewing 无人工闸门。海量需批量编排层。',
+    steps: [
+      { t: '商品/需求进入', s: 'ok', d: 'Product + 类目 + 卖点；可来自 PIM/Excel（本系统 Product API）' },
+      { t: '需求分析 Agent', s: 'ok', d: 'RequirementAnalyzer + RAG 品牌/类目知识' },
+      { t: '创意策划 Agent', s: 'ok', d: 'CreativePlanner：主题/风格/配色' },
+      { t: '视觉设计 + 出图/视频', s: 'ok', d: 'VisualDesigner → Image/Video Gen（DashScope / 可灵）' },
+      { t: '素材规格化', s: 'gap', d: 'AssetOptimizer 仅转发 URL：白底/裁剪/压缩未产品化' },
+      { t: '文案 Copywriter', s: 'ok', d: '多语言标题/五点/描述，平台风格适配' },
+      { t: '合规检查', s: 'part', d: '静态禁词 + 尺寸；无存量巡检、无申诉回路' },
+      { t: '人工审核门', s: 'gap', d: '状态机有 reviewing，图上 Compliance→Push 无人工节点' },
+      { t: 'PlatformPush', s: 'part', d: 'Amazon/eBay/Shopify 有；独立站/新兴平台未接' },
+      { t: '批量编排', s: 'gap', d: '无 CSV/队列/配额/失败重排 —— 5000 SKU/月 主瓶颈' }
+    ]
+  },
+  iterate: {
+    label: '素材迭代',
+    sub: '不合格 → 重生成 → 版本对比（缺失）',
+    note: 'QualityReviewer 直达 END，无回边。运营反馈进不了 VisualDesigner。',
+    steps: [
+      { t: '存量素材/转化数据', s: 'gap', d: '无 CTR/转化回传接入' },
+      { t: '质量审核 Agent', s: 'ok', d: 'QualityReviewer 打分与 issue 列表' },
+      { t: '自动重生成回边', s: 'gap', d: '图工作流无 quality→regen 边' },
+      { t: '版本/A-B', s: 'gap', d: '无资产版本树与实验' },
+      { t: '类目记忆沉淀', s: 'part', d: 'MemoryDistiller + HITL 提案有；前端审核已补，规模化抽检未定' }
+    ]
+  },
+  ads: {
+    label: '投放素材',
+    sub: '货架 spec ≠ 广告 spec（整体缺失）',
+    note: '多平台大卖最大内容消耗口。当前 listing_platform_specs 仅主图尺寸/标题长度。',
+    steps: [
+      { t: '投放 brief', s: 'gap', d: '无广告任务类型（仅 image_only / video_only / image_and_video）' },
+      { t: '广告规格引擎', s: 'gap', d: '无 Meta/TikTok/Google 尺寸/安全区/文案上限' },
+      { t: '批量出片', s: 'gap', d: '无竖版 9:16 模板与变体矩阵' },
+      { t: '投放回传', s: 'gap', d: '无 CTR/ROAS 闭环驱动迭代' }
+    ]
+  },
+  compliance: {
+    label: '合规治理',
+    sub: '一次性检查 → 需运营态（部分覆盖）',
+    note: '词表外挂可复用；缺存量巡检与修复工作流。知识 Agent 仍占位。',
+    steps: [
+      { t: '规则/品牌知识库', s: 'part', d: '/knowledge documents + compliance_rule 类型可用' },
+      { t: '生成期拦截', s: 'ok', d: 'RAG QualityReviewer / Listing compliance 内嵌' },
+      { t: '存量 listing 巡检', s: 'gap', d: '无定时扫描与风险分级' },
+      { t: '修复与申诉', s: 'gap', d: '无工单/责任人流转' },
+      { t: '知识 Agent 问答', s: 'gap', d: 'agent_workflow 占位，README 超前' }
+    ]
+  },
+  stack: {
+    label: '工具栈边界',
+    sub: '内容中台 · 不重建 ERP（已决议 #34）',
+    note: '互补：ERP 管货与单，刊登 SaaS 管分发，美工管精品，本系统管结构化内容流水线。',
+    steps: [
+      { t: 'ERP / PIM', s: 'ok', d: 'SKU/库存/订单 —— Agent Part 只消费商品事实' },
+      { t: 'Agent Part 中台', s: 'ok', d: '卖点→创意→图/视频/文案→合规→内容包 + 可观测编排' },
+      { t: '刊登 SaaS / 平台', s: 'ok', d: '渠道映射与上架 —— 输入应是可灌入内容包' },
+      { t: '美工例外通道', s: 'ok', d: '头部 SKU 精修回灌；系统输出可编辑草稿' },
+      { t: '市场工具 H10 等', s: 'ok', d: '只消费导出关键词/竞品作分析输入' }
+    ]
+  }
+};
+
+let key = 'listing';
+let idx = 0;
+let timer = null;
+
+function statusClass(s) {
+  return s === 'ok' ? 'st-ok' : s === 'part' ? 'st-part' : 'st-gap';
+}
+function statusText(s) {
+  return s === 'ok' ? '已覆盖' : s === 'part' ? '部分' : '缺失';
+}
+
+function renderNav() {
+  const nav = document.getElementById('scenarios');
+  nav.innerHTML = Object.entries(scenarios).map(([k, v]) =>
+    `<button data-k="${k}" class="${k===key?'active':''}">${v.label}<small>${v.sub}</small></button>`
+  ).join('');
+  nav.querySelectorAll('button').forEach(b => b.onclick = () => {
+    stopPlay();
+    key = b.dataset.k;
+    idx = 0;
+    render();
+  });
+}
+
+function render() {
+  const sc = scenarios[key];
+  document.getElementById('title').textContent = sc.label;
+  document.getElementById('subtitle').textContent = sc.sub;
+  document.getElementById('note').textContent = sc.note;
+  const flow = document.getElementById('flow');
+  flow.innerHTML = sc.steps.map((s, i) => {
+    const dim = i > idx ? 'opacity:.35;' : '';
+    return (i ? '<div class="edge">↓</div>' : '') +
+      `<div class="node" style="${dim}">
+        <div class="t"><span>${i+1}. ${s.t}</span><span class="${statusClass(s.s)}">${statusText(s.s)}</span></div>
+        <div class="d">${s.d}</div>
+      </div>`;
+  }).join('');
+  const cur = sc.steps[Math.min(idx, sc.steps.length-1)];
+  document.getElementById('state').textContent = JSON.stringify({
+    scenario: sc.label,
+    step: idx + 1,
+    total: sc.steps.length,
+    node: cur.t,
+    coverage: statusText(cur.s),
+    detail: cur.d
+  }, null, 2);
+  document.getElementById('btnPrev').disabled = idx <= 0;
+  document.getElementById('btnNext').disabled = idx >= sc.steps.length - 1;
+}
+
+function stopPlay() {
+  if (timer) { clearInterval(timer); timer = null; document.getElementById('btnPlay').textContent = '▶ 逐步推演'; }
+}
+
+document.getElementById('btnPrev').onclick = () => { stopPlay(); if (idx>0) { idx--; render(); } };
+document.getElementById('btnNext').onclick = () => { stopPlay(); if (idx < scenarios[key].steps.length-1) { idx++; render(); } };
+document.getElementById('btnReset').onclick = () => { stopPlay(); idx = 0; render(); };
+document.getElementById('btnPlay').onclick = () => {
+  if (timer) { stopPlay(); return; }
+  document.getElementById('btnPlay').textContent = '⏸ 暂停';
+  timer = setInterval(() => {
+    if (idx < scenarios[key].steps.length - 1) { idx++; render(); }
+    else stopPlay();
+  }, 900);
+};
+
+renderNav();
+render();
+</script>
+</body>
+</html>

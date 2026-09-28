@@ -106,7 +106,9 @@ class KnowledgeChunk(Base):
     doc_id: Mapped[int] = mapped_column(Integer, ForeignKey("knowledge_docs.id"), index=True)
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(get_settings().embedding_dimension), comment="Embedding 向量")
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(get_settings().embedding_dimension), comment="Embedding 向量"
+    )
     extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
 
@@ -278,7 +280,9 @@ class GraphRAGEntity(Base):
     description: Mapped[str | None] = mapped_column(Text, comment="实体描述")
     aliases: Mapped[list[str]] = mapped_column(JSONB, default=list)
     extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(get_settings().embedding_dimension), comment="Embedding 向量")
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(get_settings().embedding_dimension), comment="Embedding 向量"
+    )
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -438,7 +442,9 @@ class AgentMemory(Base):
     )
     content: Mapped[str] = mapped_column(Text, nullable=False, comment="记忆内容")
     key_concepts: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="关键概念列表")
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(get_settings().embedding_dimension), comment="Embedding 向量")
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(get_settings().embedding_dimension), comment="Embedding 向量"
+    )
     access_count: Mapped[int] = mapped_column(Integer, default=0, comment="访问计数")
     last_accessed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, comment="最后访问时间")
     importance: Mapped[float] = mapped_column(Float, default=0.5, comment="重要性评分")
@@ -494,18 +500,14 @@ class ModelProviderPO(Base):
     provider_type: Mapped[str] = mapped_column(
         String(20), nullable=False, index=True, comment="类型: llm/image/video"
     )
-    base_url: Mapped[str] = mapped_column(
-        String(500), nullable=False, comment="API 基址"
-    )
+    base_url: Mapped[str] = mapped_column(String(500), nullable=False, comment="API 基址")
     api_key: Mapped[dict] = mapped_column(
         EncryptedJSONB, default=dict, comment="API Key（加密存储）"
     )
     extra_credentials: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict, comment="额外凭证（如 secret_key）"
     )
-    default_model: Mapped[str] = mapped_column(
-        String(100), nullable=False, comment="默认模型 ID"
-    )
+    default_model: Mapped[str] = mapped_column(String(100), nullable=False, comment="默认模型 ID")
     supported_models: Mapped[list[str]] = mapped_column(
         JSONB, default=list, comment="支持的模型列表"
     )
@@ -513,18 +515,16 @@ class ModelProviderPO(Base):
         JSONB, default=dict, comment="模型额外配置"
     )
     protocol: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="openai_compatible",
-        comment="协议: openai_compatible/custom_rest"
+        String(20),
+        nullable=False,
+        default="openai_compatible",
+        comment="协议: openai_compatible/custom_rest",
     )
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, default=True, comment="是否启用"
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, comment="是否启用")
     is_default: Mapped[bool] = mapped_column(
         Boolean, default=False, comment="是否为该类型的默认厂商"
     )
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, default=datetime.utcnow
-    )
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
     )
@@ -587,7 +587,9 @@ class CategoryMemory(Base):
         JSONB, default=dict, comment="性能提示"
     )
     extra_data: Mapped[dict[str, Any]] = mapped_column("metadata", JSONB, default=dict)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(get_settings().embedding_dimension), comment="Embedding 向量")
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(get_settings().embedding_dimension), comment="Embedding 向量"
+    )
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow
@@ -638,12 +640,16 @@ class CategoryMemoryProposalPO(Base):
     )
     summary: Mapped[str | None] = mapped_column(Text, comment="类目摘要")
     best_practices: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="最佳实践")
-    negative_patterns: Mapped[list[str]] = mapped_column(JSONB, default=list, comment="避坑/负面模式")
-    style_guidelines: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, comment="风格指南")
-    performance_hints: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, comment="性能提示")
-    source_type: Mapped[str] = mapped_column(
-        String(50), nullable=False, comment="来源类型"
+    negative_patterns: Mapped[list[str]] = mapped_column(
+        JSONB, default=list, comment="避坑/负面模式"
     )
+    style_guidelines: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, comment="风格指南"
+    )
+    performance_hints: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, comment="性能提示"
+    )
+    source_type: Mapped[str] = mapped_column(String(50), nullable=False, comment="来源类型")
     source_ref: Mapped[str | None] = mapped_column(String(200), comment="来源引用")
     status: Mapped[str] = mapped_column(
         String(20), default="pending", index=True, comment="审核状态"

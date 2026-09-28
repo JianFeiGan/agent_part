@@ -37,9 +37,7 @@ class ModelProviderRepository(TenantRepository[ModelProviderPO]):
         """
         super().__init__(ModelProviderPO, session)
 
-    async def get_default(
-        self, tenant_id: str, provider_type: str
-    ) -> ModelProviderPO | None:
+    async def get_default(self, tenant_id: str, provider_type: str) -> ModelProviderPO | None:
         """获取指定类型的默认厂商配置。
 
         Args:

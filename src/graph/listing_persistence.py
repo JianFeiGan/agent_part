@@ -172,9 +172,7 @@ async def save_push_results(
                 )
                 po = result.scalar_one_or_none()
                 if po is None:
-                    po = TaskResultPO(
-                        tenant_id=tenant_id, task_id=task_id, platform=platform_name
-                    )
+                    po = TaskResultPO(tenant_id=tenant_id, task_id=task_id, platform=platform_name)
                     session.add(po)
                 po.success = r.success
                 po.result_data = {
@@ -189,9 +187,7 @@ async def save_push_results(
         logger.error(f"持久化推送结果失败 task_id={task_id}: {e}")
 
 
-async def load_asset_packages(
-    task_id: int, tenant_id: str
-) -> dict[Platform, AssetPackage]:
+async def load_asset_packages(task_id: int, tenant_id: str) -> dict[Platform, AssetPackage]:
     """加载任务的素材包（不存在返回空 dict）。"""
     async with get_db_session() as session:
         result = await session.execute(

@@ -203,9 +203,7 @@ class RAGEnhancedCreativePlanner(BaseAgent[AgentRuntimeState]):
                 if hasattr(product.category, "value")
                 else str(product.category)
             )
-            category_memory = await self._retrieve_category_memory_context(
-                self._session, category
-            )
+            category_memory = await self._retrieve_category_memory_context(self._session, category)
 
             # 生成创意方案
             creative_plan = await self._generate_creative_plan_with_rag(

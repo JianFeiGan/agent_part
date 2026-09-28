@@ -36,6 +36,7 @@ from src.db.postgres import Base
 # Helper: check tenant_id column properties
 # ---------------------------------------------------------------------------
 
+
 def _has_tenant_id(model: type) -> bool:
     return "tenant_id" in model.__table__.columns
 
@@ -49,9 +50,7 @@ def _tenant_id_indexed(model: type) -> bool:
     col = model.__table__.columns.get("tenant_id")
     if col is None:
         return False
-    return col.index is True or any(
-        col in idx.columns for idx in model.__table__.indexes
-    )
+    return col.index is True or any(col in idx.columns for idx in model.__table__.indexes)
 
 
 # ---------------------------------------------------------------------------
@@ -78,9 +77,7 @@ class TestCoreModelTenantId:
     @pytest.mark.parametrize("model", CORE_NON_NULL_MODELS)
     def test_tenant_id_not_nullable(self, model: type) -> None:
         """测试核心模型 tenant_id 不可为空。"""
-        assert _tenant_id_nullable(model) is False, (
-            f"{model.__name__}.tenant_id 应为 non-nullable"
-        )
+        assert _tenant_id_nullable(model) is False, f"{model.__name__}.tenant_id 应为 non-nullable"
 
     @pytest.mark.parametrize("model", CORE_NON_NULL_MODELS)
     def test_tenant_id_indexed(self, model: type) -> None:
@@ -106,9 +103,7 @@ class TestGraphRAGTenantId:
     @pytest.mark.parametrize("model", GRAPH_RAG_MODELS)
     def test_tenant_id_nullable(self, model: type) -> None:
         """测试 GraphRAG 模型 tenant_id 可为空。"""
-        assert _tenant_id_nullable(model) is True, (
-            f"{model.__name__}.tenant_id 应为 nullable"
-        )
+        assert _tenant_id_nullable(model) is True, f"{model.__name__}.tenant_id 应为 nullable"
 
     @pytest.mark.parametrize("model", GRAPH_RAG_MODELS)
     def test_tenant_id_indexed(self, model: type) -> None:
@@ -142,9 +137,7 @@ class TestListingModelTenantId:
     @pytest.mark.parametrize("model", LISTING_MODELS)
     def test_tenant_id_not_nullable(self, model: type) -> None:
         """测试刊登模型 tenant_id 不可为空。"""
-        assert _tenant_id_nullable(model) is False, (
-            f"{model.__name__}.tenant_id 应为 non-nullable"
-        )
+        assert _tenant_id_nullable(model) is False, f"{model.__name__}.tenant_id 应为 non-nullable"
 
     @pytest.mark.parametrize("model", LISTING_MODELS)
     def test_tenant_id_indexed(self, model: type) -> None:
@@ -156,15 +149,14 @@ class TestListingModelTenantId:
 # ListingProductPO – sku no longer globally unique
 # ---------------------------------------------------------------------------
 
+
 class TestListingProductSkuConstraint:
     """ListingProductPO sku 约束测试。"""
 
     def test_sku_no_longer_globally_unique(self) -> None:
         """测试 sku 不再有全局 unique 约束。"""
         col = ListingProductPO.__table__.columns["sku"]
-        assert col.unique is False or col.unique is None, (
-            "sku 不应再有 global unique 约束"
-        )
+        assert col.unique is False or col.unique is None, "sku 不应再有 global unique 约束"
 
     def test_tenant_sku_composite_unique(self) -> None:
         """测试 (tenant_id, sku) 复合唯一约束。"""
@@ -182,6 +174,7 @@ class TestListingProductSkuConstraint:
 # AdapterConfigPO – tenant composite unique
 # ---------------------------------------------------------------------------
 
+
 class TestAdapterConfigConstraint:
     """AdapterConfigPO 约束测试。"""
 
@@ -192,9 +185,7 @@ class TestAdapterConfigConstraint:
             col_names = [c.name for c in idx.columns]
             # 旧索引名或旧列组合不应再是 unique
             if col_names == ["platform", "shop_id"]:
-                assert not idx.unique, (
-                    "旧的 (platform, shop_id) unique 索引应已移除"
-                )
+                assert not idx.unique, "旧的 (platform, shop_id) unique 索引应已移除"
 
     def test_tenant_platform_shop_composite_unique(self) -> None:
         """测试 (tenant_id, platform, shop_id) 复合唯一约束。"""
@@ -222,6 +213,4 @@ class TestAllModelsRegistered:
     def test_model_registered_in_metadata(self, model: type) -> None:
         """测试所有模型已注册到 Base.metadata。"""
         table_names = Base.metadata.tables.keys()
-        assert model.__tablename__ in table_names, (
-            f"{model.__name__} 未注册到 Base.metadata"
-        )
+        assert model.__tablename__ in table_names, f"{model.__name__} 未注册到 Base.metadata"

@@ -406,7 +406,7 @@ class TestRealProviderPath:
         img = result.data["generated_images"][0]
         assert img["metadata"]["is_mock"] is False
         assert img["metadata"]["provider"] == "wanx-v1"
-        key = img["url"][len("/static/"):]
+        key = img["url"][len("/static/") :]
         raw = Path(storage_backend._base_path) / key
         assert raw.read_bytes() == b"REALIMG"
 
@@ -429,7 +429,7 @@ class TestRealProviderPath:
         video = result.data["generated_video"]
         assert video["metadata"]["is_mock"] is False
         assert video["metadata"]["provider"] == "kling-v1"
-        key = video["url"][len("/static/"):]
+        key = video["url"][len("/static/") :]
         raw = Path(storage_backend._base_path) / key
         assert raw.read_bytes() == b"REALVID"
 

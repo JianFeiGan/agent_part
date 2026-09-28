@@ -162,7 +162,6 @@ class MemoryStore:
 
         # 向量相似度排序（如果有 embedding）
         if query_embedding:
-
             stmt = stmt.order_by(AgentMemory.embedding.cosine_distance(query_embedding))
         else:
             stmt = stmt.order_by(AgentMemory.importance.desc())

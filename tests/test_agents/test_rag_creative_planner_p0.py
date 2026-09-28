@@ -59,7 +59,9 @@ def sample_state(sample_product: Product) -> AgentState:
 class TestRAGCreativePlannerExecuteSignature:
     """验证 execute() 方法签名和参数访问。"""
 
-    def test_execute_method_exists(self, mock_session: MagicMock, mock_retriever: MagicMock) -> None:
+    def test_execute_method_exists(
+        self, mock_session: MagicMock, mock_retriever: MagicMock
+    ) -> None:
         """验证 execute 方法存在且参数名为 state。"""
         agent = RAGEnhancedCreativePlanner(
             session=mock_session,
@@ -70,9 +72,7 @@ class TestRAGCreativePlannerExecuteSignature:
 
         sig = inspect.signature(agent.execute)
         params = list(sig.parameters.keys())
-        assert "state" in params, (
-            f"execute() 参数名应为 'state'，实际为: {params}"
-        )
+        assert "state" in params, f"execute() 参数名应为 'state'，实际为: {params}"
 
     def test_execute_accepts_state_arg(
         self, mock_session: MagicMock, mock_retriever: MagicMock
@@ -139,8 +139,6 @@ class TestRAGCreativePlannerP0:
         ):
             result = await agent.execute(sample_state)
 
-        assert result.success is True, (
-            f"有商品信息时应返回 success=True，实际为 {result.success}"
-        )
+        assert result.success is True, f"有商品信息时应返回 success=True，实际为 {result.success}"
         assert "creative_plan" in result.data
         assert result.success is True

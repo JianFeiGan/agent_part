@@ -47,9 +47,7 @@ async def test_import_node_loads_assets_for_source_product() -> None:
         result = await workflow._import_node(state)
 
     assert result["product"].source_images == [mock_image_ref]
-    mock_loader.load_images.assert_called_once_with(
-        tenant_id="tenant-1", product_id="prod_001"
-    )
+    mock_loader.load_images.assert_called_once_with(tenant_id="tenant-1", product_id="prod_001")
 
 
 @pytest.mark.asyncio

@@ -165,7 +165,6 @@ def _apply_trace_to_log(agent: Any, log: AgentLog) -> None:
     log.provider = trace.get("provider")
 
 
-
 def make_agent_node(
     agent_key: str,
     step_name: str,
@@ -314,9 +313,7 @@ class WorkflowBuilder:
             )
         from src.agents.requirement_analyzer import RequirementAnalyzerAgent
 
-        return RequirementAnalyzerAgent(
-            tenant_id=self._tenant_id, task_id=self._task_id
-        )
+        return RequirementAnalyzerAgent(tenant_id=self._tenant_id, task_id=self._task_id)
 
     def _create_creative_planner(self) -> Any:
         """创建创意策划 Agent。
@@ -337,9 +334,7 @@ class WorkflowBuilder:
             )
         from src.agents.creative_planner import CreativePlannerAgent
 
-        return CreativePlannerAgent(
-            tenant_id=self._tenant_id, task_id=self._task_id
-        )
+        return CreativePlannerAgent(tenant_id=self._tenant_id, task_id=self._task_id)
 
     def _create_quality_reviewer(self) -> Any:
         """创建质量审核 Agent。
@@ -360,9 +355,7 @@ class WorkflowBuilder:
             )
         from src.agents.quality_reviewer import QualityReviewerAgent
 
-        return QualityReviewerAgent(
-            tenant_id=self._tenant_id, task_id=self._task_id
-        )
+        return QualityReviewerAgent(tenant_id=self._tenant_id, task_id=self._task_id)
 
     def _create_image_generator(self) -> Any:
         """创建图片生成 Agent。
@@ -374,9 +367,7 @@ class WorkflowBuilder:
         """
         from src.agents.image_generator import ImageGeneratorAgent
 
-        base_agent = ImageGeneratorAgent(
-            tenant_id=self._tenant_id, task_id=self._task_id
-        )
+        base_agent = ImageGeneratorAgent(tenant_id=self._tenant_id, task_id=self._task_id)
         if self._rag_enabled and self._retriever and get_settings().image_rag_enabled:
             from src.agents.rag_image_generator import RAGEnhancedImageGenerator
 
@@ -401,18 +392,12 @@ class WorkflowBuilder:
         from src.agents.visual_designer import VisualDesignerAgent
 
         # 创建 Agent 实例（根据 RAG 配置选择版本）
-        orchestrator = OrchestratorAgent(
-            tenant_id=self._tenant_id, task_id=self._task_id
-        )
+        orchestrator = OrchestratorAgent(tenant_id=self._tenant_id, task_id=self._task_id)
         requirement_analyzer = self._create_requirement_analyzer()
         creative_planner = self._create_creative_planner()
-        visual_designer = VisualDesignerAgent(
-            tenant_id=self._tenant_id, task_id=self._task_id
-        )
+        visual_designer = VisualDesignerAgent(tenant_id=self._tenant_id, task_id=self._task_id)
         image_generator = self._create_image_generator()
-        video_generator = VideoGeneratorAgent(
-            tenant_id=self._tenant_id, task_id=self._task_id
-        )
+        video_generator = VideoGeneratorAgent(tenant_id=self._tenant_id, task_id=self._task_id)
         quality_reviewer = self._create_quality_reviewer()
 
         # 使用统一工厂构建节点处理函数
@@ -459,9 +444,7 @@ class WorkflowBuilder:
                 },
                 summarize="创意方案生成完成",
                 input_snapshot=lambda s: (
-                    {"selling_points_count": len(s.selling_points)}
-                    if s.selling_points
-                    else None
+                    {"selling_points_count": len(s.selling_points)} if s.selling_points else None
                 ),
             ),
             "visual_designer": make_agent_node(
@@ -472,13 +455,9 @@ class WorkflowBuilder:
                     "generation_prompts": r.data.get("image_prompts", []),
                     "storyboard": r.data.get("storyboard"),
                 },
-                summarize=lambda r: (
-                    f"生成 {len(r.data.get('image_prompts', []))} 个图片提示词"
-                ),
+                summarize=lambda r: f"生成 {len(r.data.get('image_prompts', []))} 个图片提示词",
                 input_snapshot=lambda s: {"creative_plan": _trunc(s.creative_plan)},
-                output_snapshot=lambda r: {
-                    "prompts_count": len(r.data.get("image_prompts", []))
-                },
+                output_snapshot=lambda r: {"prompts_count": len(r.data.get("image_prompts", []))},
             ),
             "image_generator": make_agent_node(
                 "image_generator",
@@ -486,17 +465,11 @@ class WorkflowBuilder:
                 image_generator,
                 lambda r: {"generated_images": r.data.get("generated_images", [])},
                 apply_trace=False,
-                summarize=lambda r: (
-                    f"成功生成 {len(r.data.get('generated_images', []))} 张图片"
-                ),
+                summarize=lambda r: f"成功生成 {len(r.data.get('generated_images', []))} 张图片",
                 input_snapshot=lambda s: (
-                    {"prompts_count": len(s.generation_prompts)}
-                    if s.generation_prompts
-                    else None
+                    {"prompts_count": len(s.generation_prompts)} if s.generation_prompts else None
                 ),
-                output_snapshot=lambda r: {
-                    "images_count": len(r.data.get("generated_images", []))
-                },
+                output_snapshot=lambda r: {"images_count": len(r.data.get("generated_images", []))},
             ),
             "video_generator": make_agent_node(
                 "video_generator",

@@ -70,7 +70,11 @@ class TestDistillFromTask:
         }
 
         proposal = await distiller.distill_from_task(
-            session, "tenant-a", "task-001", gen_result, "digital",
+            session,
+            "tenant-a",
+            "task-001",
+            gen_result,
+            "digital",
         )
 
         assert proposal is not None
@@ -101,7 +105,11 @@ class TestDistillFromTask:
         }
 
         proposal = await distiller.distill_from_task(
-            session, "tenant-a", "task-002", gen_result, "digital",
+            session,
+            "tenant-a",
+            "task-002",
+            gen_result,
+            "digital",
         )
 
         assert proposal is not None
@@ -121,7 +129,11 @@ class TestDistillFromTask:
         }
 
         proposal = await distiller.distill_from_task(
-            session, "tenant-a", "task-003", gen_result, "digital",
+            session,
+            "tenant-a",
+            "task-003",
+            gen_result,
+            "digital",
         )
 
         assert proposal is not None
@@ -135,7 +147,11 @@ class TestDistillFromTask:
         gen_result: dict[str, Any] = {}
 
         proposal = await distiller.distill_from_task(
-            session, "tenant-a", "task-004", gen_result, "digital",
+            session,
+            "tenant-a",
+            "task-004",
+            gen_result,
+            "digital",
         )
 
         assert proposal is None
@@ -154,7 +170,11 @@ class TestDistillFromTask:
         }
 
         proposal = await distiller.distill_from_task(
-            session, "tenant-a", "task-005", gen_result, "digital",
+            session,
+            "tenant-a",
+            "task-005",
+            gen_result,
+            "digital",
         )
 
         assert proposal is not None
@@ -176,7 +196,11 @@ class TestDistillFromTask:
         }
 
         proposal = await distiller.distill_from_task(
-            session, "tenant-a", "task-006", gen_result, "digital",
+            session,
+            "tenant-a",
+            "task-006",
+            gen_result,
+            "digital",
         )
 
         assert proposal is not None
@@ -193,7 +217,11 @@ class TestDistillFromTask:
         }
 
         proposal = await distiller.distill_from_task(
-            session, "tenant-a", "task-007", gen_result, "digital",
+            session,
+            "tenant-a",
+            "task-007",
+            gen_result,
+            "digital",
         )
 
         assert proposal is not None
@@ -222,7 +250,9 @@ class TestDistillFromCompliance:
         }
 
         proposal = await distiller.distill_from_compliance(
-            session, "tenant-a", compliance_report,
+            session,
+            "tenant-a",
+            compliance_report,
         )
 
         assert proposal is not None
@@ -249,7 +279,9 @@ class TestDistillFromCompliance:
         }
 
         proposal = await distiller.distill_from_compliance(
-            session, "tenant-a", compliance_report,
+            session,
+            "tenant-a",
+            compliance_report,
         )
 
         assert proposal is None
@@ -273,7 +305,9 @@ class TestDistillFromPushResult:
         }
 
         proposal = await distiller.distill_from_push_result(
-            session, "tenant-a", push_result,
+            session,
+            "tenant-a",
+            push_result,
         )
 
         assert proposal is not None
@@ -299,7 +333,9 @@ class TestDistillFromPushResult:
         }
 
         proposal = await distiller.distill_from_push_result(
-            session, "tenant-a", push_result,
+            session,
+            "tenant-a",
+            push_result,
         )
 
         assert proposal is not None
@@ -317,7 +353,9 @@ class TestDistillFromPushResult:
         }
 
         proposal = await distiller.distill_from_push_result(
-            session, "tenant-a", push_result,
+            session,
+            "tenant-a",
+            push_result,
         )
 
         assert proposal is None

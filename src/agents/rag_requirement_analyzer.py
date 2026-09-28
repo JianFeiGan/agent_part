@@ -155,9 +155,7 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
                 if hasattr(product.category, "value")
                 else str(product.category)
             )
-            category_memory = await self._retrieve_category_memory_context(
-                self._session, category
-            )
+            category_memory = await self._retrieve_category_memory_context(self._session, category)
 
             # 执行分析
             report = await self._analyze_product_with_rag(
@@ -186,7 +184,9 @@ class RAGEnhancedRequirementAnalyzer(BaseAgent[AgentRuntimeState]):
                 error=f"需求分析失败: {e}",
             )
 
-    async def _retrieve_knowledge(self, state: AgentRuntimeState) -> tuple[str, list[dict[str, Any]]]:
+    async def _retrieve_knowledge(
+        self, state: AgentRuntimeState
+    ) -> tuple[str, list[dict[str, Any]]]:
         """检索相关知识（领域方法：类目知识+品牌规范+历史案例）。
 
         Args:

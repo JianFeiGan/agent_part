@@ -204,9 +204,7 @@ class TestResumePushAPI:
 
         outcome = {
             "push_results": {
-                "amazon": PushResult(
-                    success=True, platform=Platform.AMAZON, listing_id="L-8"
-                )
+                "amazon": PushResult(success=True, platform=Platform.AMAZON, listing_id="L-8")
             },
             "final_status": "partial",
         }
@@ -220,9 +218,7 @@ class TestResumePushAPI:
             patch("src.api.router.listing_push.ListingWorkflow") as mock_workflow_cls,
         ):
             mock_blocked.return_value = {Platform.EBAY}
-            mock_workflow_cls.return_value.resume_push = AsyncMock(
-                return_value=outcome
-            )
+            mock_workflow_cls.return_value.resume_push = AsyncMock(return_value=outcome)
 
             resp = client.post("/api/v1/listing/tasks/1/resume-push", json={})
 
@@ -232,9 +228,7 @@ class TestResumePushAPI:
         called = mock_workflow_cls.return_value.resume_push.call_args
         assert called.kwargs["platforms"] == [Platform.AMAZON]
 
-    def test_resume_push_explicit_platforms_override_blocked(
-        self, client: TestClient
-    ) -> None:
+    def test_resume_push_explicit_platforms_override_blocked(self, client: TestClient) -> None:
         """显式列出被阻断平台视为人工放行。"""
         mock_task_po = _make_task_po(
             id=1,
@@ -261,13 +255,9 @@ class TestResumePushAPI:
             patch("src.api.router.listing_push.ListingWorkflow") as mock_workflow_cls,
         ):
             mock_blocked.return_value = {Platform.EBAY}
-            mock_workflow_cls.return_value.resume_push = AsyncMock(
-                return_value=outcome
-            )
+            mock_workflow_cls.return_value.resume_push = AsyncMock(return_value=outcome)
 
-            resp = client.post(
-                "/api/v1/listing/tasks/1/resume-push", json={"platforms": ["ebay"]}
-            )
+            resp = client.post("/api/v1/listing/tasks/1/resume-push", json={"platforms": ["ebay"]})
 
         assert resp.json()["code"] == 200
         called = mock_workflow_cls.return_value.resume_push.call_args

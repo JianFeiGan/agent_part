@@ -1,6 +1,5 @@
 """刊登数据库模型测试。"""
 
-
 from src.db.listing_models import (
     AdapterConfigPO,
     AssetPackagePO,

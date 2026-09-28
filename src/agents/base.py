@@ -366,10 +366,16 @@ class BaseAgent(ABC, Generic[StateT]):
                 "cost_cny": 0.0,
                 "model_name": model_name,
                 "provider": self.settings.llm_provider,
-                "latency_ms": int((recorder._start_time and __import__("time").monotonic() - recorder._start_time) * 1000) if recorder._start_time else None,
+                "latency_ms": int(
+                    (recorder._start_time and __import__("time").monotonic() - recorder._start_time)
+                    * 1000
+                )
+                if recorder._start_time
+                else None,
             }
             # 计算费用
             from src.api.service.conversation_recorder import _calculate_cost
+
             cost_usd, cost_cny = _calculate_cost(
                 model_name, recorder._input_tokens, recorder._output_tokens
             )

@@ -148,9 +148,7 @@ class TenantRepository(BaseRepository[ModelT]):
         """
         self._tenant_filter()
         stmt = (
-            select(self.model)
-            .where(self.model.id == id)
-            .where(self.model.tenant_id == tenant_id)
+            select(self.model).where(self.model.id == id).where(self.model.tenant_id == tenant_id)
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()

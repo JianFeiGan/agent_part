@@ -25,6 +25,7 @@ from src.db.encrypted_json import EncryptedJSONB
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def fernet_key() -> bytes:
     """生成测试用 Fernet 密钥。"""
@@ -46,6 +47,7 @@ def type_decorator() -> EncryptedJSONB:
 # ---------------------------------------------------------------------------
 # process_bind_param (加密写入)
 # ---------------------------------------------------------------------------
+
 
 class TestProcessBindParam:
     """写入加密测试。"""
@@ -97,6 +99,7 @@ class TestProcessBindParam:
 # process_result_value (解密读取)
 # ---------------------------------------------------------------------------
 
+
 class TestProcessResultValue:
     """读取解密测试。"""
 
@@ -127,9 +130,7 @@ class TestProcessResultValue:
         result = type_decorator.process_result_value(plain, None)
         assert result == plain
 
-    def test_legacy_plaintext_no_encrypted_flag(
-        self, type_decorator: EncryptedJSONB
-    ) -> None:
+    def test_legacy_plaintext_no_encrypted_flag(self, type_decorator: EncryptedJSONB) -> None:
         """测试没有 _encrypted: True 标记时原样返回。"""
         value = {"_encrypted": False, "data": "something"}
         result = type_decorator.process_result_value(value, None)
@@ -164,9 +165,7 @@ class TestProcessResultValue:
             with pytest.raises(ValueError, match="Failed to decrypt"):
                 type_decorator.process_result_value(encrypted, None)
 
-    def test_roundtrip(
-        self, type_decorator: EncryptedJSONB, fernet_key_str: str
-    ) -> None:
+    def test_roundtrip(self, type_decorator: EncryptedJSONB, fernet_key_str: str) -> None:
         """测试加密-解密往返。"""
         with patch("src.db.encrypted_json.get_settings") as mock_settings:
             mock_settings.return_value.credentials_encryption_key = fernet_key_str

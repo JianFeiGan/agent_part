@@ -148,9 +148,7 @@ class TestAdapterConfigManager:
         assert ("tenant-h", Platform.EBAY, "shop-1") in manager._cache
 
     @pytest.mark.asyncio
-    async def test_different_tenants_separate_cache(
-        self, manager: AdapterConfigManager
-    ) -> None:
+    async def test_different_tenants_separate_cache(self, manager: AdapterConfigManager) -> None:
         """测试不同租户的配置相互隔离。"""
         mock_session = AsyncMock()
         mock_result_a = MagicMock()
@@ -170,20 +168,14 @@ class TestAdapterConfigManager:
             is_active=True,
         )
         # First call returns a, second returns b
-        mock_session.execute = AsyncMock(
-            side_effect=[mock_result_a, mock_result_b]
-        )
+        mock_session.execute = AsyncMock(side_effect=[mock_result_a, mock_result_b])
 
         with patch("src.agents.adapter_config.get_db_session") as mock_get_db:
             mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_get_db.return_value.__aexit__ = AsyncMock(return_value=None)
 
-            config_a = await manager.get_config(
-                Platform.AMAZON, "default", tenant_id="tenant-a"
-            )
-            config_b = await manager.get_config(
-                Platform.AMAZON, "default", tenant_id="tenant-b"
-            )
+            config_a = await manager.get_config(Platform.AMAZON, "default", tenant_id="tenant-a")
+            config_b = await manager.get_config(Platform.AMAZON, "default", tenant_id="tenant-b")
 
             assert config_a["client_id"] == "from_a"
             assert config_b["client_id"] == "from_b"

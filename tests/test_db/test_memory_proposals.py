@@ -109,12 +109,10 @@ class TestCategoryMemoryProposalPO:
         from sqlalchemy import Index
 
         indexes = [
-            idx for idx in CategoryMemoryProposalPO.__table__.indexes
-            if isinstance(idx, Index)
+            idx for idx in CategoryMemoryProposalPO.__table__.indexes if isinstance(idx, Index)
         ]
         found = any(
-            {"tenant_id", "status"}.issubset({col.name for col in idx.columns})
-            for idx in indexes
+            {"tenant_id", "status"}.issubset({col.name for col in idx.columns}) for idx in indexes
         )
         assert found is True
 
@@ -123,8 +121,7 @@ class TestCategoryMemoryProposalPO:
         from sqlalchemy import Index
 
         indexes = [
-            idx for idx in CategoryMemoryProposalPO.__table__.indexes
-            if isinstance(idx, Index)
+            idx for idx in CategoryMemoryProposalPO.__table__.indexes if isinstance(idx, Index)
         ]
         found = any(
             {"tenant_id", "category", "status"}.issubset({col.name for col in idx.columns})

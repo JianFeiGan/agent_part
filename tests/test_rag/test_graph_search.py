@@ -111,9 +111,7 @@ class TestLocalSearch:
         mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content="答案"))
 
         with patch.object(service, "_get_llm", return_value=mock_llm):
-            result = await service._local_search(
-                mock_session, query="智能手表", category="digital"
-            )
+            result = await service._local_search(mock_session, query="智能手表", category="digital")
 
         assert result.entities_used == 2
         assert "心率传感器" in result.context

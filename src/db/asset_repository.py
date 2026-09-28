@@ -36,9 +36,7 @@ class AssetRepository(TenantRepository[GeneratedAssetPO]):
         """
         super().__init__(GeneratedAssetPO, session)
 
-    async def find_by_sha256(
-        self, tenant_id: str, sha256: str
-    ) -> GeneratedAssetPO | None:
+    async def find_by_sha256(self, tenant_id: str, sha256: str) -> GeneratedAssetPO | None:
         """按 sha256 哈希查找资产（去重查询）。
 
         Args:
@@ -81,9 +79,7 @@ class AssetRepository(TenantRepository[GeneratedAssetPO]):
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
-    async def list_by_task(
-        self, tenant_id: str, task_id: str
-    ) -> Sequence[GeneratedAssetPO]:
+    async def list_by_task(self, tenant_id: str, task_id: str) -> Sequence[GeneratedAssetPO]:
         """按任务 ID 查询资产列表。
 
         Args:

@@ -81,7 +81,7 @@ class TestExtractJsonList:
         [
             ('[{"a": 1}]', [{"a": 1}]),
             ("[]", []),
-            ('前缀 [] 后缀', []),
+            ("前缀 [] 后缀", []),
         ],
     )
     def test_parametrized_lists(self, text: str, expected: list) -> None:

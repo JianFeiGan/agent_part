@@ -17,10 +17,10 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from src.config.settings import get_settings
-from src.db.postgres import Base
 
 # 导入所有模型模块，确保表定义注册到 Base.metadata
 from src.db import conversation_models, listing_models, models  # noqa: F401
+from src.db.postgres import Base
 
 config = context.config
 

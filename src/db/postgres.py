@@ -135,9 +135,7 @@ async def init_db() -> None:
         await _db_manager.init()
 
         if not get_settings().db_auto_create:
-            logger.info(
-                "db_auto_create 已关闭，跳过 create_all；schema 由 Alembic 迁移管理"
-            )
+            logger.info("db_auto_create 已关闭，跳过 create_all；schema 由 Alembic 迁移管理")
             return
 
         # 导入所有模型以确保表定义被注册到 Base.metadata

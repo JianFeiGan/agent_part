@@ -51,11 +51,13 @@ __all__ = [
     "get_video_client",
 ]
 
+
 # 延迟导入 ProviderFactory，避免循环依赖
 def __getattr__(name: str) -> object:
     """延迟导入 ProviderFactory。"""
     if name == "ProviderFactory":
         from src.clients.provider_factory import ProviderFactory
+
         return ProviderFactory
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 

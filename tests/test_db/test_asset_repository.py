@@ -27,9 +27,7 @@ class TestAssetRepository:
     # ---- find_by_sha256 ----
 
     @pytest.mark.asyncio
-    async def test_find_by_sha256_hit(
-        self, repo: AssetRepository, mock_session: AsyncMock
-    ) -> None:
+    async def test_find_by_sha256_hit(self, repo: AssetRepository, mock_session: AsyncMock) -> None:
         """测试按 sha256 查找命中。"""
         expected = GeneratedAssetPO(
             tenant_id="t-1",
@@ -159,9 +157,7 @@ class TestAssetRepository:
         assert result[0].task_id == "task-1"
 
     @pytest.mark.asyncio
-    async def test_list_by_task_empty(
-        self, repo: AssetRepository, mock_session: AsyncMock
-    ) -> None:
+    async def test_list_by_task_empty(self, repo: AssetRepository, mock_session: AsyncMock) -> None:
         """测试 list_by_task 无结果。"""
         scalars_mock = MagicMock()
         scalars_mock.all.return_value = []

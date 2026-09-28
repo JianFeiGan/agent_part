@@ -119,9 +119,7 @@ async def get_hit_rate(
             period=f"{start_date.date()} ~ {end_date.date()}",
             total_retrievals=stats["total_retrievals"],
             unique_chunks_hit=chunk_stats["unique_chunks_hit"],
-            unique_docs_hit=len(
-                {c["chunk_id"] // 100 for c in chunk_stats.get("top_chunks", [])}
-            ),
+            unique_docs_hit=len({c["chunk_id"] // 100 for c in chunk_stats.get("top_chunks", [])}),
             avg_results_per_query=round(avg_results, 2),
             top_hit_chunks=chunk_stats.get("top_chunks", []),
         )
@@ -154,9 +152,7 @@ async def compare_rag_vs_non_rag(
     else:
         start_date = datetime.utcnow() - timedelta(days=30)
 
-    end_date = (
-        datetime.fromisoformat(request.end_date) if request.end_date else datetime.utcnow()
-    )
+    end_date = datetime.fromisoformat(request.end_date) if request.end_date else datetime.utcnow()
 
     # 统计启用 RAG 的任务
     rag_result = await session.execute(

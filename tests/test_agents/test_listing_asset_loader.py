@@ -53,9 +53,7 @@ async def test_load_images_returns_only_image_assets(
 
 
 @pytest.mark.asyncio
-async def test_load_images_first_is_main(
-    mock_repo: MagicMock, mock_image_assets: list
-) -> None:
+async def test_load_images_first_is_main(mock_repo: MagicMock, mock_image_assets: list) -> None:
     """测试第一张图标记为主图。"""
     mock_repo.list_by_product = AsyncMock(return_value=mock_image_assets)
     loader = ListingAssetLoader(repo=mock_repo)

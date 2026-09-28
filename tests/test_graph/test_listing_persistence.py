@@ -75,9 +75,7 @@ async def test_save_asset_packages_insert() -> None:
     with patch.object(
         listing_persistence, "get_db_session", return_value=_make_session_cm(session)
     ):
-        await listing_persistence.save_asset_packages(
-            1, "t1", {Platform.AMAZON: pkg}
-        )
+        await listing_persistence.save_asset_packages(1, "t1", {Platform.AMAZON: pkg})
 
     session.add.assert_called_once()
     po = session.add.call_args[0][0]
@@ -174,8 +172,6 @@ async def test_load_copywriting_packages() -> None:
 @pytest.mark.asyncio
 async def test_save_failure_is_best_effort() -> None:
     """DB 异常只记日志不抛出（best-effort）。"""
-    with patch.object(
-        listing_persistence, "get_db_session", side_effect=RuntimeError("db down")
-    ):
+    with patch.object(listing_persistence, "get_db_session", side_effect=RuntimeError("db down")):
         # 不应抛出
         await listing_persistence.save_asset_packages(1, "t1", {})

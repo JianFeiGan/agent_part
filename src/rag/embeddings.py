@@ -69,6 +69,7 @@ class EmbeddingService:
         """获取千问 Embedding 客户端。"""
         if self._qwen_client is None:
             from src.clients.qwen_embedding_client import QwenEmbeddingClient
+
             self._qwen_client = QwenEmbeddingClient(self.settings)
         return self._qwen_client
 
@@ -138,6 +139,7 @@ class EmbeddingService:
             return await client.embed(text)
 
         import asyncio
+
         return await asyncio.to_thread(self.embed_single, text)
 
     async def aembed_batch(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
@@ -155,6 +157,7 @@ class EmbeddingService:
             return await client.embed_batch(texts)
 
         import asyncio
+
         return await asyncio.to_thread(self.embed_batch, texts, batch_size)
 
 

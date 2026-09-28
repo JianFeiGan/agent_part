@@ -39,12 +39,8 @@ def _disable_real_media_providers(monkeypatch: pytest.MonkeyPatch) -> None:
     from src.agents.base import BaseAgent
     from src.clients.provider_factory import ProviderFactory
 
-    monkeypatch.setattr(
-        ProviderFactory, "get_image_provider", AsyncMock(return_value=None)
-    )
-    monkeypatch.setattr(
-        ProviderFactory, "get_video_provider", AsyncMock(return_value=None)
-    )
+    monkeypatch.setattr(ProviderFactory, "get_image_provider", AsyncMock(return_value=None))
+    monkeypatch.setattr(ProviderFactory, "get_video_provider", AsyncMock(return_value=None))
 
     def _no_llm(self: BaseAgent) -> None:
         raise ImportError("LLM 在测试中被禁用（conftest._disable_real_media_providers）")

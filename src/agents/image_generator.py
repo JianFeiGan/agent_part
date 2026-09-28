@@ -418,8 +418,7 @@ class ImageGeneratorAgent(BaseAgent[AgentRuntimeState]):
                     raise
         else:
             logger.warning(
-                "图片生成 Provider 不可用，回退 mock 占位行为 "
-                "(tenant=%s, allow_mock_assets=%s)",
+                "图片生成 Provider 不可用，回退 mock 占位行为 (tenant=%s, allow_mock_assets=%s)",
                 tenant_id,
                 self.settings.allow_mock_assets,
             )

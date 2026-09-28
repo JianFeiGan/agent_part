@@ -12,21 +12,19 @@ Revises:
 Create Date: 2026-08-25
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
-
-from src.db.postgres import Base
 
 # 导入所有模型模块，确保表定义注册到 Base.metadata
 from src.db import conversation_models, listing_models, models  # noqa: F401
+from src.db.postgres import Base
 
 # revision identifiers, used by Alembic.
 revision: str = "0001"
-down_revision: Union[str, None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:

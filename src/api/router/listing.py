@@ -79,9 +79,7 @@ async def _run_listing_workflow(
         logger.info(f"刊登任务 {task_id} 工作流执行结束")
     except Exception as e:
         logger.exception(f"刊登任务 {task_id} 工作流执行失败: {e}")
-        await update_task_status(
-            task_id, tenant_id, "failed", workflow_state="workflow_error"
-        )
+        await update_task_status(task_id, tenant_id, "failed", workflow_state="workflow_error")
 
 
 def _po_to_product(po: ListingProductPO) -> ListingProduct:
