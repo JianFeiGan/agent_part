@@ -617,7 +617,10 @@ def create_workflow(
 
 # 类型别名 - 编译后的图类型
 if TYPE_CHECKING:
-    CompiledGraph = Pregel[AgentState]
+    # Pregel 有 4 个参数：StateT / ContextT / InputT / OutputT。ainvoke 的入参是
+    # InputT，因此必须把四个参数全部绑死；只绑第一个会让 InputT 保持自由，
+    # 3.11 与 3.12 对这种残缺参数化的推断不同（3.11 报 arg-type）。
+    CompiledGraph = Pregel[AgentState, Any, AgentState, AgentState]
 else:
     CompiledGraph = Any
 

@@ -54,8 +54,8 @@ class ListingWorkflow:
         self._builder = StateGraph(ListingState)
         self._build_graph()
         self._checkpointer = MemorySaver()
-        self.app: Pregel[ListingState] = cast(
-            "Pregel[ListingState]",
+        self.app: Pregel[ListingState, Any, ListingState, ListingState] = cast(
+            "Pregel[ListingState, Any, ListingState, ListingState]",
             self._builder.compile(checkpointer=self._checkpointer),
         )
 
