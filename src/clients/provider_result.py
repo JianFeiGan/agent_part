@@ -10,7 +10,7 @@ Provider 结果数据类与共享辅助函数。
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from src.config.settings import Settings
@@ -106,7 +106,7 @@ def is_video_provider_configured(settings: Settings) -> bool:
     return bool(access_key) and bool(secret_key)
 
 
-def get_api_key_value(api_key_field: dict | str | None) -> str:
+def get_api_key_value(api_key_field: dict[str, Any] | str | None) -> str:
     """从 EncryptedJSONB 或字符串中提取 API Key 明文。
 
     ModelProviderPO.api_key 字段使用 EncryptedJSONB 存储，

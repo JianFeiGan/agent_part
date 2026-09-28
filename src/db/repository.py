@@ -10,10 +10,11 @@ Description:
 """
 
 from collections.abc import Sequence
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, TypeVar, cast
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from src.db.postgres import Base
 
@@ -26,6 +27,17 @@ class BaseRepository(Generic[ModelT]):
     def __init__(self, model: type[ModelT], session: AsyncSession) -> None:
         self.model = model
         self.session = session
+
+    def _col(self, name: str) -> InstrumentedAttribute[Any]:
+        """按列名获取模型列，供泛型仓储拼查询条件。
+
+        Args:
+            name: 列名（如 id、tenant_id）。
+
+        Returns:
+            SQLAlchemy InstrumentedAttribute。
+        """
+        return cast("InstrumentedAttribute[Any]", getattr(self.model, name))
 
     async def get(self, id: int) -> ModelT | None:
         """按主键获取记录。
@@ -148,7 +160,9 @@ class TenantRepository(BaseRepository[ModelT]):
         """
         self._tenant_filter()
         stmt = (
-            select(self.model).where(self.model.id == id).where(self.model.tenant_id == tenant_id)
+            select(self.model)
+            .where(self._col("id") == id)
+            .where(self._col("tenant_id") == tenant_id)
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
@@ -164,7 +178,7 @@ class TenantRepository(BaseRepository[ModelT]):
             模型实例列表。
         """
         self._tenant_filter()
-        stmt = select(self.model).where(self.model.tenant_id == tenant_id)
+        stmt = select(self.model).where(self._col("tenant_id") == tenant_id)
         for field, value in filters.items():
             stmt = stmt.where(getattr(self.model, field) == value)
         result = await self.session.execute(stmt)

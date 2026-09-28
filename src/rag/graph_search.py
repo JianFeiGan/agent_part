@@ -15,6 +15,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from pydantic import SecretStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -77,8 +78,7 @@ class GraphSearchService:
 
                 self._llm = ChatTongyi(
                     model=settings.llm_model,
-                    dashscope_api_key=settings.effective_dashscope_api_key,
-                    temperature=0,
+                    api_key=SecretStr(settings.effective_dashscope_api_key),
                 )
             else:
                 from src.clients.qwen_llm_client import get_qwen_llm
@@ -194,7 +194,7 @@ class GraphSearchService:
         max_depth = max(1, self.settings.graph_rag_local_search_depth)
 
         for _hop in range(max_depth):
-            stmt = (
+            edge_stmt = (
                 select(GraphRAGEdge)
                 .where(edge_tenant_condition)
                 .where(
@@ -203,10 +203,10 @@ class GraphSearchService:
                 )
             )
             if category:
-                stmt = stmt.where(GraphRAGEdge.category == category)
-            stmt = stmt.limit(20)
-            result = await session.execute(stmt)
-            hop_edges = [e for e in result.scalars().all() if e.id not in seen_edge_ids]
+                edge_stmt = edge_stmt.where(GraphRAGEdge.category == category)
+            edge_stmt = edge_stmt.limit(20)
+            edge_result = await session.execute(edge_stmt)
+            hop_edges = [e for e in edge_result.scalars().all() if e.id not in seen_edge_ids]
             if not hop_edges:
                 break
             seen_edge_ids.update(e.id for e in hop_edges)

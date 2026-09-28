@@ -14,7 +14,7 @@ import logging
 import re
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,6 +23,18 @@ from src.config.settings import get_settings
 from src.db.models import CommunitySummary, GraphRAGEdge, GraphRAGEntity
 
 logger = logging.getLogger(__name__)
+
+
+def _text(value: object) -> str:
+    """将 LLM JSON 字段规整为可 strip 的字符串。
+
+    Args:
+        value: 原始字段值（可能是 str、None 或其他类型）。
+
+    Returns:
+        字符串值；非字符串或 None 时返回空串。
+    """
+    return value.strip() if isinstance(value, str) else ""
 
 
 class ExtractedEntity(BaseModel):
@@ -90,8 +102,7 @@ class GraphBuilderPipeline:
 
                 self._llm = ChatTongyi(
                     model=settings.llm_model,
-                    dashscope_api_key=settings.effective_dashscope_api_key,
-                    temperature=0,
+                    api_key=SecretStr(settings.effective_dashscope_api_key),
                 )
             else:
                 from src.clients.qwen_llm_client import get_qwen_llm
@@ -192,8 +203,8 @@ class GraphBuilderPipeline:
         for item in data:
             if not isinstance(item, dict):
                 continue
-            name = item.get("name", "").strip()
-            entity_type = item.get("type", item.get("entity_type", "")).strip()
+            name = _text(item.get("name", ""))
+            entity_type = _text(item.get("type", item.get("entity_type", "")))
             if not name or not entity_type:
                 continue
             entities.append(
@@ -227,9 +238,9 @@ class GraphBuilderPipeline:
         for item in data:
             if not isinstance(item, dict):
                 continue
-            source = item.get("source", item.get("source_name", "")).strip()
-            target = item.get("target", item.get("target_name", "")).strip()
-            rel_type = item.get("type", item.get("relationship_type", "")).strip()
+            source = _text(item.get("source", item.get("source_name", "")))
+            target = _text(item.get("target", item.get("target_name", "")))
+            rel_type = _text(item.get("type", item.get("relationship_type", "")))
             if not source or not target or not rel_type:
                 continue
             relations.append(
@@ -421,7 +432,7 @@ class GraphBuilderPipeline:
         try:
             llm = await self._get_llm()
             response = await llm.ainvoke(prompt)
-            return response.content.strip()
+            return _text(response.content)
         except Exception as e:
             logger.warning(f"社区摘要生成失败: {e}")
             return f"包含实体: {entities_text}"

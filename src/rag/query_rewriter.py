@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 
 from src.config.settings import get_settings
 
@@ -111,7 +111,7 @@ class QueryRewriter:
 
             return ChatOpenAI(
                 model=self.settings.qwen_llm_model,
-                api_key=api_key,
+                api_key=SecretStr(api_key),
                 base_url=self.settings.qwen_api_base,
                 temperature=0.3,
             )
@@ -125,8 +125,7 @@ class QueryRewriter:
 
         return ChatTongyi(
             model=self.settings.llm_model,
-            dashscope_api_key=api_key,
-            temperature=0.3,
+            api_key=SecretStr(api_key),
         )
 
     async def rewrite(self, query: str) -> RewriteResult:

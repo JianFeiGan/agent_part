@@ -23,7 +23,7 @@ from src.config.settings import get_settings
 logger = logging.getLogger(__name__)
 
 
-class EncryptedJSONB(TypeDecorator):
+class EncryptedJSONB(TypeDecorator[dict[str, Any] | None]):
     """加密 JSONB TypeDecorator。
 
     透明加密写入、解密读取。使用 SQLAlchemy TypeDecorator，
@@ -62,9 +62,9 @@ class EncryptedJSONB(TypeDecorator):
 
     def process_bind_param(
         self,
-        value: dict | None,
+        value: dict[str, Any] | None,
         dialect: Dialect,  # noqa: ARG002
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """写入数据库前加密。
 
         Args:
@@ -90,9 +90,9 @@ class EncryptedJSONB(TypeDecorator):
 
     def process_result_value(
         self,
-        value: dict | None,
+        value: dict[str, Any] | None,
         dialect: Dialect,  # noqa: ARG002
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         """从数据库读取后解密。
 
         兼容旧明文数据：无 _encrypted 标记时原样返回。
@@ -116,7 +116,8 @@ class EncryptedJSONB(TypeDecorator):
             fernet = Fernet(key)
             token = value["ciphertext"].encode("utf-8")
             plaintext = fernet.decrypt(token)
-            return json.loads(plaintext)
+            decrypted: dict[str, Any] = json.loads(plaintext)
+            return decrypted
         except Exception:
             logger.exception("Failed to decrypt credentials")
             raise ValueError("Failed to decrypt credentials") from None

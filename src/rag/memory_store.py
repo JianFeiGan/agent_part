@@ -11,8 +11,10 @@ Description:
 
 import logging
 from datetime import datetime, timedelta
+from typing import Any, cast
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.settings import get_settings
@@ -307,7 +309,7 @@ class MemoryStore:
         result = await session.execute(stmt)
         await session.flush()
 
-        deleted_count = result.rowcount
+        deleted_count = int(cast("CursorResult[Any]", result).rowcount)
         if deleted_count > 0:
             logger.info(f"清理过期记忆: count={deleted_count}, threshold={threshold_days}天")
 

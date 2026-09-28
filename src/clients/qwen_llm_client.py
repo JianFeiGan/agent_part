@@ -11,6 +11,7 @@ from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
+from pydantic import SecretStr
 
 from src.config.settings import Settings, get_settings
 
@@ -50,7 +51,7 @@ def get_qwen_llm(
 
     return ChatOpenAI(
         model=model_name,
-        api_key=api_key,
+        api_key=SecretStr(api_key),
         base_url=base_url,
         temperature=temperature,
         **kwargs,

@@ -10,6 +10,7 @@ Description:
 
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -77,7 +78,7 @@ class GeneratedImage(BaseModel):
     completed_at: datetime | None = Field(default=None, description="完成时间")
 
     # 元数据
-    metadata: dict = Field(default_factory=dict, description="额外元数据")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="额外元数据")
 
     model_config = {
         "json_schema_extra": {
@@ -155,7 +156,7 @@ class GeneratedVideo(BaseModel):
     completed_at: datetime | None = Field(default=None, description="完成时间")
 
     # 元数据
-    metadata: dict = Field(default_factory=dict, description="额外元数据")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="额外元数据")
 
     model_config = {
         "json_schema_extra": {

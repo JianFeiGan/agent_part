@@ -12,10 +12,12 @@ Description:
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
+from langgraph.pregel import Pregel
 from sqlalchemy import select
 
 from src.agents.listing_asset_loader import ListingAssetLoader
@@ -52,7 +54,10 @@ class ListingWorkflow:
         self._builder = StateGraph(ListingState)
         self._build_graph()
         self._checkpointer = MemorySaver()
-        self.app = self._builder.compile(checkpointer=self._checkpointer)
+        self.app: Pregel[ListingState] = cast(
+            "Pregel[ListingState]",
+            self._builder.compile(checkpointer=self._checkpointer),
+        )
 
     def _build_graph(self) -> None:
         """构建状态图。
@@ -103,7 +108,7 @@ class ListingWorkflow:
             return ["finalize"]
         return ["platform_push"]
 
-    async def _finalize_node(self, state: ListingState) -> dict:
+    async def _finalize_node(self, state: ListingState) -> dict[str, Any]:
         """汇总工作流结果，计算并持久化任务终态。
 
         终态规则:
@@ -146,7 +151,7 @@ class ListingWorkflow:
             "step_results": {**state.step_results, "final_status": final_status},
         }
 
-    async def _import_node(self, state: ListingState) -> dict:
+    async def _import_node(self, state: ListingState) -> dict[str, Any]:
         """商品导入节点。
 
         若商品 attributes 中包含 source_product_id，从 generated_assets
@@ -182,7 +187,7 @@ class ListingWorkflow:
 
         return {"product": product, "current_step": "imported"}
 
-    async def _asset_optimize_node(self, state: ListingState) -> dict:
+    async def _asset_optimize_node(self, state: ListingState) -> dict[str, Any]:
         """素材优化节点：调用 AssetOptimizerAgent。"""
         if not state.product:
             return {
@@ -209,7 +214,7 @@ class ListingWorkflow:
                 "current_step": "optimize_failed",
             }
 
-    async def _copy_node(self, state: ListingState) -> dict:
+    async def _copy_node(self, state: ListingState) -> dict[str, Any]:
         """文案生成节点：调用 AICopywritingAgent（含 LLM）。"""
         if not state.product:
             return {
@@ -236,7 +241,7 @@ class ListingWorkflow:
                 "current_step": "copy_failed",
             }
 
-    async def _compliance_node(self, state: ListingState) -> dict:
+    async def _compliance_node(self, state: ListingState) -> dict[str, Any]:
         """合规检查节点：输出报告并标记被阻断平台。"""
         if not state.product:
             return {
@@ -314,7 +319,7 @@ class ListingWorkflow:
 
         return results
 
-    async def _push_node(self, state: ListingState) -> dict:
+    async def _push_node(self, state: ListingState) -> dict[str, Any]:
         """平台推送节点：并行推送到未被阻断的平台。"""
         if not state.product:
             return {
@@ -359,7 +364,7 @@ class ListingWorkflow:
         thread_id: str = "default",
         task_id: int | None = None,
         tenant_id: str = "",
-    ) -> dict:
+    ) -> dict[str, Any]:
         """执行刊登工作流。
 
         Args:
@@ -376,14 +381,15 @@ class ListingWorkflow:
                 TaskStatus.GENERATING.value,
                 workflow_state="import_product",
             )
-        config = {"configurable": {"thread_id": thread_id}}
+        config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
         initial_state = ListingState(
             product=product,
             target_platforms=target_platforms,
             task_id=task_id,
             tenant_id=tenant_id,
         )
-        return await self.app.ainvoke(initial_state, config=config)
+        result = await self.app.ainvoke(initial_state, config=config)
+        return cast(dict[str, Any], result)
 
     async def resume_push(
         self,

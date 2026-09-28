@@ -9,6 +9,7 @@ Description:
 """
 
 from functools import lru_cache
+from typing import Any
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -244,7 +245,7 @@ class Settings(BaseSettings):
         """
         return self.langchain_tracing_v2 and bool(self.langchain_api_key)
 
-    def get_storage_config(self) -> dict:
+    def get_storage_config(self) -> dict[str, Any]:
         """获取存储配置。
 
         Returns:

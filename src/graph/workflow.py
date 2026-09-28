@@ -11,8 +11,9 @@ Description:
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
@@ -195,7 +196,7 @@ def make_agent_node(
         LangGraph 节点异步函数。
     """
 
-    async def _node(state: AgentState) -> dict:
+    async def _node(state: AgentState) -> dict[str, Any]:
         """通用 Agent 节点。"""
         start_log = create_agent_log(agent_key, "running")
 
@@ -582,7 +583,7 @@ class WorkflowBuilder:
         if not self._nodes_added or not self._edges_added:
             raise RuntimeError("请先调用 add_agent_nodes() 和 add_edges() 完成工作流构建")
 
-        return self.graph.compile(checkpointer=self.checkpointer)
+        return cast("CompiledGraph", self.graph.compile(checkpointer=self.checkpointer))
 
 
 def create_workflow(
@@ -616,7 +617,7 @@ def create_workflow(
 
 # 类型别名 - 编译后的图类型
 if TYPE_CHECKING:
-    CompiledGraph = Pregel
+    CompiledGraph = Pregel[AgentState]
 else:
     CompiledGraph = Any
 
@@ -697,13 +698,13 @@ class ProductVisualWorkflow:
             image_provider_id=image_provider_id,
             video_provider_id=video_provider_id,
         )
-        config = {"configurable": {"thread_id": thread_id}}
+        config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
 
         result = await self.app.ainvoke(initial_state, config=config)
         # 将结果转换为 AgentState
         if isinstance(result, dict):
             return AgentState(**result)
-        return result
+        return cast(AgentState, result)
 
     async def get_state(self, thread_id: str = "default") -> AgentState | None:
         """获取当前状态。
@@ -714,12 +715,12 @@ class ProductVisualWorkflow:
         Returns:
             当前状态。
         """
-        config = {"configurable": {"thread_id": thread_id}}
+        config: RunnableConfig = {"configurable": {"thread_id": thread_id}}
         state = await self.app.aget_state(config)
         if state and state.values:
             if isinstance(state.values, dict):
                 return AgentState(**state.values)
-            return state.values
+            return cast(AgentState, state.values)
         return None
 
     def set_session(self, session: "AsyncSession") -> None:

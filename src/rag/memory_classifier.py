@@ -15,6 +15,8 @@ import re
 from enum import StrEnum
 from typing import Any
 
+from pydantic import SecretStr
+
 from src.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
@@ -119,8 +121,7 @@ class MemoryClassifier:
 
                 self._llm = ChatTongyi(
                     model=settings.llm_model,
-                    dashscope_api_key=settings.effective_dashscope_api_key,
-                    temperature=0,
+                    api_key=SecretStr(settings.effective_dashscope_api_key),
                 )
             else:
                 from src.clients.qwen_llm_client import get_qwen_llm

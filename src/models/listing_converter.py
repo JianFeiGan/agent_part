@@ -9,6 +9,8 @@ Description:
 2026-07-22
 """
 
+from typing import Any
+
 from src.models.listing import ListingProduct
 from src.models.product import Product
 
@@ -33,7 +35,7 @@ def product_to_listing(product: Product) -> ListingProduct:
     """
     if product.product_id:
         sku = product.product_id
-        attributes: dict = {"source_product_id": product.product_id}
+        attributes: dict[str, Any] = {"source_product_id": product.product_id}
     else:
         sku = f"VIS-{abs(hash(product.name)) % 100000:05d}"
         attributes = {}

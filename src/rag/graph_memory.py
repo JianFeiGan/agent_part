@@ -13,7 +13,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -133,7 +133,7 @@ class GraphMemoryService:
         """
         if tenant_id:
             # 查询条件: (tenant_id == current OR tenant_id IS NULL)，优先 tenant-specific
-            tenant_condition = (GraphRAGEntity.tenant_id == tenant_id) | (
+            tenant_condition: ColumnElement[bool] = (GraphRAGEntity.tenant_id == tenant_id) | (
                 GraphRAGEntity.tenant_id.is_(None)
             )
         else:
@@ -197,7 +197,7 @@ class GraphMemoryService:
         target_entity = aliased(GraphRAGEntity)
 
         if tenant_id:
-            edge_tenant_condition = (GraphRAGEdge.tenant_id == tenant_id) | (
+            edge_tenant_condition: ColumnElement[bool] = (GraphRAGEdge.tenant_id == tenant_id) | (
                 GraphRAGEdge.tenant_id.is_(None)
             )
         else:

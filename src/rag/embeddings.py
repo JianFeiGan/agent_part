@@ -9,9 +9,12 @@ Description:
 """
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from src.config.settings import get_settings
+
+if TYPE_CHECKING:
+    from src.clients.qwen_embedding_client import QwenEmbeddingClient
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,7 @@ class EmbeddingService:
         self.settings = get_settings()
         self._model: Any = None
         self._initialized = False
-        self._qwen_client = None
+        self._qwen_client: QwenEmbeddingClient | None = None
 
     def _is_qwen_provider(self) -> bool:
         """检查是否使用千问 Embedding。"""
@@ -65,8 +68,12 @@ class EmbeddingService:
                 "Run: pip install sentence-transformers FlagEmbedding"
             ) from e
 
-    async def _get_qwen_client(self):
-        """获取千问 Embedding 客户端。"""
+    async def _get_qwen_client(self) -> "QwenEmbeddingClient":
+        """获取千问 Embedding 客户端。
+
+        Returns:
+            千问 Embedding 客户端实例。
+        """
         if self._qwen_client is None:
             from src.clients.qwen_embedding_client import QwenEmbeddingClient
 
@@ -83,7 +90,8 @@ class EmbeddingService:
         if self._is_qwen_provider():
             return self.settings.qwen_embedding_dimensions
         self._ensure_model_loaded()
-        return self._model.get_sentence_embedding_dimension()
+        dimension: int = self._model.get_sentence_embedding_dimension()
+        return dimension
 
     def embed_single(self, text: str) -> list[float]:
         """将单个文本转换为向量。
@@ -100,7 +108,8 @@ class EmbeddingService:
         self._ensure_model_loaded()
 
         embedding = self._model.encode(text, normalize_embeddings=True)
-        return embedding.tolist()
+        vector: list[float] = embedding.tolist()
+        return vector
 
     def embed_batch(self, texts: list[str], batch_size: int = 32) -> list[list[float]]:
         """批量将文本转换为向量。
@@ -123,7 +132,8 @@ class EmbeddingService:
             normalize_embeddings=True,
             show_progress_bar=len(texts) > 100,
         )
-        return [emb.tolist() for emb in embeddings]
+        vectors: list[list[float]] = [emb.tolist() for emb in embeddings]
+        return vectors
 
     async def aembed_single(self, text: str) -> list[float]:
         """异步将单个文本转换为向量。

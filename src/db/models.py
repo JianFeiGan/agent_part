@@ -501,7 +501,7 @@ class ModelProviderPO(Base):
         String(20), nullable=False, index=True, comment="类型: llm/image/video"
     )
     base_url: Mapped[str] = mapped_column(String(500), nullable=False, comment="API 基址")
-    api_key: Mapped[dict] = mapped_column(
+    api_key: Mapped[dict[str, Any]] = mapped_column(
         EncryptedJSONB, default=dict, comment="API Key（加密存储）"
     )
     extra_credentials: Mapped[dict[str, Any]] = mapped_column(

@@ -16,6 +16,7 @@ import logging
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
+from pydantic import SecretStr
 
 from src.config.settings import Settings, get_settings
 
@@ -85,10 +86,10 @@ class OpenAICompatibleLLMProvider:
 
         return ChatOpenAI(
             model=self._model,
-            api_key=self._api_key,
+            api_key=SecretStr(self._api_key),
             base_url=self._base_url,
             temperature=self._temperature,
-            max_tokens=self._max_tokens,
+            max_completion_tokens=self._max_tokens,
         )
 
 

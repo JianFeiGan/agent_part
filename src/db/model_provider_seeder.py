@@ -9,6 +9,7 @@ Description:
 """
 
 import logging
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,7 +19,7 @@ from src.db.models import ModelProviderPO
 logger = logging.getLogger(__name__)
 
 # 预置厂商配置模板（不含 tenant_id，seed 时按租户填充）
-_PRESET_PROVIDERS: list[dict] = [
+_PRESET_PROVIDERS: list[dict[str, Any]] = [
     # ===== LLM =====
     {
         "name": "sensenova",

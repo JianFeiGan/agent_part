@@ -10,6 +10,7 @@ Description:
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -44,9 +45,9 @@ class ListingProductPO(Base):
     brand: Mapped[str | None] = mapped_column(String(200))
     price: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     weight: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
-    dimensions: Mapped[dict | None] = mapped_column(JSONB)
-    source_images: Mapped[list[dict]] = mapped_column(JSONB, default=list)
-    attributes: Mapped[dict] = mapped_column(JSONB, default=dict)
+    dimensions: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    source_images: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
+    attributes: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
@@ -188,7 +189,7 @@ class ComplianceReportPO(Base):
         Integer, ForeignKey("listing_tasks.id"), nullable=False, index=True
     )
     platform: Mapped[str] = mapped_column(String(20), nullable=False)
-    report_data: Mapped[dict] = mapped_column(JSONB, default=dict)
+    report_data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     task: Mapped["ListingTaskPO"] = relationship(
@@ -213,7 +214,7 @@ class TaskResultPO(Base):
     )
     platform: Mapped[str] = mapped_column(String(20), nullable=False)
     success: Mapped[bool] = mapped_column(Boolean, default=False)
-    result_data: Mapped[dict] = mapped_column(JSONB, default=dict)
+    result_data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
 
     task: Mapped["ListingTaskPO"] = relationship("ListingTaskPO", back_populates="push_results")
@@ -233,7 +234,7 @@ class AdapterConfigPO(Base):
     )
     platform: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
     shop_id: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    credentials: Mapped[dict] = mapped_column(EncryptedJSONB, default=dict)
+    credentials: Mapped[dict[str, Any]] = mapped_column(EncryptedJSONB, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
@@ -329,7 +330,9 @@ class GeneratedAssetPO(Base):
     is_mock: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, comment="是否 mock 生成"
     )
-    extra_data: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, comment="额外数据")
+    extra_data: Mapped[dict[str, Any]] = mapped_column(
+        "metadata", JSONB, default=dict, comment="额外数据"
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime,
