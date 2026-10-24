@@ -6,6 +6,7 @@
 
 **基于 LangGraph 的多 Agent 协作 · 跨境电商视觉生成 · 可观测 Agent 工作台**
 
+[![CI](https://github.com/JianFeiGan/agent_part/actions/workflows/ci.yml/badge.svg)](https://github.com/JianFeiGan/agent_part/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-teal.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.4-42b883.svg?logo=vue.js&logoColor=white)](https://vuejs.org/)
@@ -77,7 +78,7 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
 | **可观测性** | ❌ 黑盒 | ⚠️ 基础日志 | ✅ DAG 流程图 + 提示词轨迹 + 实时协作 |
 | **国产大模型生态** | ❌ | ⚠️ | ✅ 千问百炼 + DashScope 万象 + 可灵 AI |
 | **RAG 知识增强** | ❌ | ⚠️ 单一向量 | ✅ PGVector + Graph RAG + 混合检索 |
-| **生产就绪** | ❌ | ❌ | ✅ 认证鉴权 + 多租户 + 优雅降级 |
+| **生产就绪** | ❌ | ❌ | ✅ 认证鉴权 + 多租户 + 硬门禁 CI + 存活/就绪探针 |
 
 ---
 
@@ -142,6 +143,7 @@ Agent Part 是一个面向跨境电商的 **多 Agent 协作系统**，利用 La
 | 📊 **会话追踪** | Token 统计、双币种（USD/CNY）费用预算、内容搜索 |
 | 🔐 **认证鉴权** | API Token（SHA256 + Scope 权限）+ 多租户隔离 |
 | 🛡️ **优雅降级** | 无 API Key 时可配置 Mock 降级（默认 fail-closed），LLM 兜底链（SenseNova → DashScope）+ 文案规则草稿降级 |
+| 🚦 **硬门禁交付链路** | CI 六道阻塞门禁（format / lint / mypy strict / pytest+覆盖率 / 前端测试 / 前端构建）+ 存活/就绪探针（`/health` `/ready`）+ 环境变量契约测试 |
 | 🎨 **管理后台** | Vue 3 + Element Plus，17 个页面 |
 
 ---
@@ -249,6 +251,7 @@ npm run dev
 | `QWEN_API_BASE` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 百炼 OpenAI 兼容端点 |
 | `DASHSCOPE_API_KEY` | - | DashScope API Key（可与 QWEN_API_KEY 共用） |
 | `QWEN_LLM_MODEL` | `qwen-plus` | LLM 模型名称 |
+| `SENSENOVA_API_KEY` | - | SenseNova API Key（LLM 兜底链与图片生成） |
 | `KLING_ACCESS_KEY` | - | 可灵 AI Access Key |
 | `KLING_SECRET_KEY` | - | 可灵 AI Secret Key |
 | `EMBEDDING_PROVIDER` | `local` | Embedding 提供商：`local`（BGE-large-zh）或 `qwen` |
@@ -347,7 +350,7 @@ agent_part/
 ## 🧪 开发与测试
 
 ```bash
-# 运行测试
+# 运行测试（1400+ 用例，覆盖率 90%+）
 uv run pytest
 
 # 带覆盖率报告
@@ -359,9 +362,11 @@ uv run ruff format .
 # Lint 检查
 uv run ruff check .
 
-# 类型检查
+# 类型检查（strict 模式，全仓 0 错误）
 uv run mypy src/
 ```
+
+> 🚦 CI 上六道门禁全部为**阻塞式**：`ruff format --check` / `ruff check` / `mypy src/` / `pytest --cov` / 前端 `npm run test` / 前端 `npm run build`，任一不过即拒绝合并。另配有存活探针（`/health`，仅看进程）与就绪探针（`/ready`，实测 PostgreSQL + Redis，任一不可用返回 503）与环境变量契约测试。
 
 详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
@@ -443,6 +448,7 @@ uv run mypy src/
 
 **Multi-Agent collaboration via LangGraph · Cross-border e-commerce visual generation · Observable Agent workbench**
 
+[![CI](https://github.com/JianFeiGan/agent_part/actions/workflows/ci.yml/badge.svg)](https://github.com/JianFeiGan/agent_part/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg?logo=python&logoColor=white)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-teal.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.4-42b883.svg?logo=vue.js&logoColor=white)](https://vuejs.org/)
@@ -470,6 +476,7 @@ uv run mypy src/
 | 📊 **Tracking** | Token stats, dual-currency (USD/CNY) budgeting, content search |
 | 🔐 **Auth** | API Token (SHA256 + Scope) + Multi-tenant isolation |
 | 🛡️ **Graceful Degradation** | Configurable mock fallback without API keys (fail-closed by default), LLM fallback chain |
+| 🚦 **Hard-Gated Delivery** | CI with 6 blocking gates (format / lint / mypy strict / pytest+coverage / frontend test / frontend build) + liveness/readiness probes (`/health` `/ready`) + env contract tests |
 | 🎨 **Dashboard** | Vue 3 + Element Plus, 17 pages |
 
 ## 🏗️ Architecture
@@ -552,12 +559,14 @@ docker compose up -d
 ## 🧪 Development
 
 ```bash
-uv run pytest                    # Run tests
+uv run pytest                    # Run tests (1400+ cases, 90%+ coverage)
 uv run pytest --cov=src          # With coverage
 uv run ruff format .             # Format code
 uv run ruff check .              # Lint
-uv run mypy src/                 # Type check
+uv run mypy src/                 # Type check (strict mode, 0 errors)
 ```
+
+> 🚦 All 6 CI gates are **blocking**: `ruff format --check` / `ruff check` / `mypy src/` / `pytest --cov` / frontend `npm run test` / frontend `npm run build`. Liveness (`/health`) and readiness (`/ready`) probes plus env-variable contract tests are also enforced.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
@@ -566,6 +575,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 - [x] **v0.1.0** - LangGraph 7-Agent visual workflow + RAG + compliance + Vue 3 dashboard
 - [x] **v0.2.0** - Qwen/Bailian integration + AI conversation tracking + observable workbench
 - [x] **v0.3.0** - Advanced RAG (HyDE / multi-query) + GraphRAG + production listing + image RAG
+- [ ] **v0.4.0** - Agent adaptive retry & self-healing + visual workflow editor
 - [ ] **v1.0.0** - Multi-tenant SaaS + plugin Agent marketplace + full production readiness
 
 ## 🤝 Contributing
