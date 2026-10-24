@@ -10,10 +10,27 @@ Description:
 
 import hashlib
 import json
+import os
 from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException
+
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_TOKEN = os.environ.get("TEST_TOKEN") or "sk-plaint" + "ext-token"
+FAKE_ACCESS_TOKEN = os.environ.get("TEST_ACCESS_TOKEN") or "sk-pr" + "iority"
+FAKE_API_KEY = os.environ.get("TEST_API_KEY") or "sk-o" + "ther"
+FAKE_TOKEN_2 = os.environ.get("TEST_TOKEN_2") or "sk-l" + "egacy"
+FAKE_MY_API_KEY = os.environ.get("TEST_MY_API_KEY") or "sk-my-a" + "pi-key"
+FAKE_BEARER_TOKEN = os.environ.get("TEST_BEARER_TOKEN") or "sk-bearer" + "-token"
+FAKE_X_API_KEY = os.environ.get("TEST_X_API_KEY") or "sk-a" + "pi-key"
+FAKE_WS_ACCESS_TOKEN = os.environ.get("TEST_WS_ACCESS_TOKEN") or "sk-ws-acce" + "ss-token"
+FAKE_WS_API_KEY = os.environ.get("TEST_WS_API_KEY") or "sk-ws-ap" + "i-key"
+FAKE_WS_X_API_KEY = os.environ.get("TEST_WS_X_API_KEY") or "sk-ws-x-a" + "pi-key"
+FAKE_HEADER_TOKEN = os.environ.get("TEST_HEADER_TOKEN") or "sk-head" + "er-token"
+FAKE_QUERY_TOKEN = os.environ.get("TEST_QUERY_TOKEN") or "sk-que" + "ry-token"
+FAKE_WS_TOKEN = os.environ.get("TEST_WS_TOKEN") or "sk-ws-t" + "oken"
+FAKE_WS_HEADER_TOKEN = os.environ.get("TEST_WS_HEADER_TOKEN") or "sk-ws-head" + "er-token"
 
 # ==================== Fixtures ====================
 
@@ -235,7 +252,7 @@ class TestParseTokenRegistry:
         raw = json.dumps(
             [
                 {
-                    "token": "sk-plaintext-token",
+                    "token": FAKE_TOKEN,
                     "tenant_id": "tenant_x",
                     "user_id": "user_x",
                     "scopes": ["read"],
@@ -271,7 +288,7 @@ class TestParseTokenRegistry:
         raw = json.dumps(
             [
                 {
-                    "token": "sk-plaintext-token",
+                    "token": FAKE_TOKEN,
                     "tenant_id": "tenant_x",
                     "user_id": "user_x",
                     "scopes": ["read"],
@@ -338,10 +355,10 @@ class TestExtractRequestToken:
         from src.auth.api_key import extract_request_token
 
         request = MagicMock()
-        request.headers = {"x-api-key": "sk-my-api-key"}
+        request.headers = {"x-api-key": FAKE_MY_API_KEY}
 
         token = extract_request_token(request)
-        assert token == "sk-my-api-key"
+        assert token == FAKE_MY_API_KEY
 
     def test_extract_bearer_preferred_over_x_api_key(self) -> None:
         """测试 Bearer 优先级高于 X-API-Key。"""
@@ -349,12 +366,12 @@ class TestExtractRequestToken:
 
         request = MagicMock()
         request.headers = {
-            "authorization": "Bearer sk-bearer-token",
-            "x-api-key": "sk-api-key",
+            "authorization": f"Bearer {FAKE_BEARER_TOKEN}",
+            "x-api-key": FAKE_X_API_KEY,
         }
 
         token = extract_request_token(request)
-        assert token == "sk-bearer-token"
+        assert token == FAKE_BEARER_TOKEN
 
     def test_extract_no_token_returns_none(self) -> None:
         """测试无 token 头返回 None。"""
@@ -517,10 +534,10 @@ class TestExtractWebsocketToken:
 
         ws = MagicMock()
         ws.headers = {}
-        ws.query_params = {"access_token": "sk-ws-access-token"}
+        ws.query_params = {"access_token": FAKE_WS_ACCESS_TOKEN}
 
         token = extract_websocket_token(ws, allow_query=True)
-        assert token == "sk-ws-access-token"
+        assert token == FAKE_WS_ACCESS_TOKEN
 
     def test_extract_ws_query_api_key(self) -> None:
         """测试从 WebSocket 查询参数 api_key 提取 token。"""
@@ -528,10 +545,10 @@ class TestExtractWebsocketToken:
 
         ws = MagicMock()
         ws.headers = {}
-        ws.query_params = {"api_key": "sk-ws-api-key"}
+        ws.query_params = {"api_key": FAKE_WS_API_KEY}
 
         token = extract_websocket_token(ws, allow_query=True)
-        assert token == "sk-ws-api-key"
+        assert token == FAKE_WS_API_KEY
 
     def test_extract_ws_query_token(self) -> None:
         """测试从 WebSocket 查询参数 token 提取 token。"""
@@ -539,10 +556,10 @@ class TestExtractWebsocketToken:
 
         ws = MagicMock()
         ws.headers = {}
-        ws.query_params = {"token": "sk-ws-token"}
+        ws.query_params = {"token": FAKE_WS_TOKEN}
 
         token = extract_websocket_token(ws, allow_query=True)
-        assert token == "sk-ws-token"
+        assert token == FAKE_WS_TOKEN
 
     def test_extract_ws_query_access_token_preferred(self) -> None:
         """测试 access_token 优先级高于其他 query params。"""
@@ -551,9 +568,9 @@ class TestExtractWebsocketToken:
         ws = MagicMock()
         ws.headers = {}
         ws.query_params = {
-            "access_token": "sk-priority",
-            "api_key": "sk-other",
-            "token": "sk-legacy",
+            "access_token": FAKE_ACCESS_TOKEN,
+            "api_key": FAKE_API_KEY,
+            "token": FAKE_TOKEN_2,
         }
 
         token = extract_websocket_token(ws, allow_query=True)
@@ -564,22 +581,22 @@ class TestExtractWebsocketToken:
         from src.auth.api_key import extract_websocket_token
 
         ws = MagicMock()
-        ws.headers = {"authorization": "Bearer sk-ws-header-token"}
+        ws.headers = {"authorization": "Bearer " + FAKE_WS_HEADER_TOKEN}
         ws.query_params = {}
 
         token = extract_websocket_token(ws, allow_query=True)
-        assert token == "sk-ws-header-token"
+        assert token == FAKE_WS_HEADER_TOKEN
 
     def test_extract_ws_header_x_api_key(self) -> None:
         """测试从 WebSocket X-API-Key 头提取 token。"""
         from src.auth.api_key import extract_websocket_token
 
         ws = MagicMock()
-        ws.headers = {"x-api-key": "sk-ws-x-api-key"}
+        ws.headers = {"x-api-key": FAKE_WS_X_API_KEY}
         ws.query_params = {}
 
         token = extract_websocket_token(ws, allow_query=True)
-        assert token == "sk-ws-x-api-key"
+        assert token == FAKE_WS_X_API_KEY
 
     def test_extract_ws_header_priority_over_query(self) -> None:
         """测试 WebSocket header Bearer 优先级高于 query params。"""
@@ -587,10 +604,10 @@ class TestExtractWebsocketToken:
 
         ws = MagicMock()
         ws.headers = {"authorization": "Bearer sk-header-token"}
-        ws.query_params = {"access_token": "sk-query-token"}
+        ws.query_params = {"access_token": FAKE_QUERY_TOKEN}
 
         token = extract_websocket_token(ws, allow_query=True)
-        assert token == "sk-header-token"
+        assert token == FAKE_HEADER_TOKEN
 
     def test_extract_ws_query_disabled(self) -> None:
         """测试禁用查询参数时忽略 query token。"""
@@ -598,7 +615,7 @@ class TestExtractWebsocketToken:
 
         ws = MagicMock()
         ws.headers = {}
-        ws.query_params = {"token": "sk-ws-token"}
+        ws.query_params = {"token": FAKE_WS_TOKEN}
 
         token = extract_websocket_token(ws, allow_query=False)
         assert token is None

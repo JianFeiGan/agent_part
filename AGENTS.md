@@ -439,7 +439,8 @@ class AgentState(BaseModel):
 | 端点 | 方法 | 描述 |
 |------|------|------|
 | `/api/v1/` | GET | API 欢迎信息 |
-| `/api/v1/health` | GET | 健康检查 |
+| `/api/v1/health` | GET | 存活探针（liveness）：进程可响应即 200，不依赖外部存储 |
+| `/api/v1/ready` | GET | 就绪探针（readiness）：PostgreSQL 与 Redis 同时可用才 200，任一不可用返回 503；根路径 `/health`、`/ready` 为等价运维别名 |
 | `/api/v1/products` | POST | 创建商品 |
 | `/api/v1/products/{id}` | GET | 获取商品详情 |
 | `/api/v1/tasks` | POST | 创建生成任务 |

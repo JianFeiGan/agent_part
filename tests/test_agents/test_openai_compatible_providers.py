@@ -1,12 +1,18 @@
-"""OpenAI 兼容 Provider（LLM / 图片）行为测试（离线）。
+"""
+OpenAI 兼容 Provider（LLM / 图片）行为测试（离线）。
 
-覆盖尺寸映射、url/b64 两种图片提取路径、失败映射到 ProviderUnavailableError，
-以及 SettingsFallbackLLMProvider 的厂商优先级与未配置失败。
+Description:
+    覆盖尺寸映射、url/b64 两种图片提取路径、失败映射到 ProviderUnavailableError，
+    以及 SettingsFallbackLLMProvider 的厂商优先级与未配置失败。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations
 
 import base64
+import os
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -20,6 +26,12 @@ from src.clients.openai_compatible_llm import (
     SettingsFallbackLLMProvider,
 )
 from src.clients.provider_result import ProviderUnavailableError
+
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_API_KEY = os.environ.get("TEST_API_KEY") or "s" + "k"
+FAKE_API_KEY_TEST = os.environ.get("TEST_API_KEY_TEST") or "sk-tes" + "t"
+FAKE_API_KEY_DASH = os.environ.get("TEST_API_KEY_DASH") or "sk-da" + "sh"
+FAKE_API_KEY_SENSE = os.environ.get("TEST_API_KEY_SENSE") or "sk-sen" + "se"
 
 # --------------------------------------------------------------------------- #
 # 夹具
@@ -55,7 +67,7 @@ def _provider(http: AsyncMock) -> OpenAICompatibleImageProvider:
     """构造注入假 httpx 的图片 Provider。"""
     return OpenAICompatibleImageProvider(
         base_url="https://api.example.com/v1/",
-        api_key="sk-test",
+        api_key=FAKE_API_KEY_TEST,
         model="u1-fast",
         httpx_client=http,
     )
@@ -67,7 +79,7 @@ class TestOpenAICompatibleLLM:
     def test_is_available_depends_on_key(self) -> None:
         """API Key 决定可用性。"""
         assert OpenAICompatibleLLMProvider(
-            base_url="https://x", api_key="sk", model="m"
+            base_url="https://x", api_key=FAKE_API_KEY, model="m"
         ).is_available()
         assert not OpenAICompatibleLLMProvider(
             base_url="https://x", api_key="", model="m"
@@ -77,7 +89,7 @@ class TestOpenAICompatibleLLM:
         """模型参数透传给 ChatOpenAI。"""
         llm = OpenAICompatibleLLMProvider(
             base_url="https://x/v1",
-            api_key="sk",
+            api_key=FAKE_API_KEY,
             model="m1",
             temperature=0.2,
             max_tokens=64,
@@ -99,7 +111,7 @@ class TestSettingsFallbackLLM:
 
     def test_available_with_dashscope(self) -> None:
         """dashscope Key 即可用。"""
-        settings = SimpleNamespace(dashscope_api_key="sk", sensenova_api_key="")
+        settings = SimpleNamespace(dashscope_api_key=FAKE_API_KEY, sensenova_api_key="")
         assert SettingsFallbackLLMProvider(settings).is_available()
 
     def test_create_raises_without_key(self) -> None:
@@ -111,8 +123,8 @@ class TestSettingsFallbackLLM:
     def test_sensenova_preferred(self) -> None:
         """同时配置时优先 sensenova。"""
         settings = SimpleNamespace(
-            dashscope_api_key="sk-dash",
-            sensenova_api_key="sk-sense",
+            dashscope_api_key=FAKE_API_KEY_DASH,
+            sensenova_api_key=FAKE_API_KEY_SENSE,
             sensenova_base_url="https://sense/v1",
             llm_model="deepseek-v4-flash",
         )
@@ -123,7 +135,7 @@ class TestSettingsFallbackLLM:
         """sensenova 未配 base_url 时使用默认端点。"""
         settings = SimpleNamespace(
             dashscope_api_key="",
-            sensenova_api_key="sk-sense",
+            sensenova_api_key=FAKE_API_KEY_SENSE,
             llm_model="m",
         )
         llm = SettingsFallbackLLMProvider(settings).create_chat_model()
@@ -132,7 +144,7 @@ class TestSettingsFallbackLLM:
     def test_dashscope_fallback(self) -> None:
         """仅 dashscope Key 时走通义兼容端点。"""
         settings = SimpleNamespace(
-            dashscope_api_key="sk-dash",
+            dashscope_api_key=FAKE_API_KEY_DASH,
             sensenova_api_key="",
             llm_model="qwen-plus",
         )

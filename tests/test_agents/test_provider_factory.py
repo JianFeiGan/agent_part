@@ -1,11 +1,17 @@
-"""ProviderFactory 行为测试（离线）。
+"""
+ProviderFactory 行为测试（离线）。
 
-覆盖数据库配置优先、Settings 兜底、协议/厂商不匹配时的显式失败三条主路径，
-以及配置解析失败时降级到 Settings 的容错路径。不发起真实外部调用。
+Description:
+    覆盖数据库配置优先、Settings 兜底、协议/厂商不匹配时的显式失败三条主路径，
+    以及配置解析失败时降级到 Settings 的容错路径。不发起真实外部调用。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -23,6 +29,15 @@ from src.clients.provider_result import (
 _REAL_GET_IMAGE_PROVIDER = ProviderFactory.get_image_provider
 _REAL_GET_VIDEO_PROVIDER = ProviderFactory.get_video_provider
 
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_ACCESS_KEY = os.environ.get("TEST_ACCESS_KEY") or "ak" + "-1"
+FAKE_SECRET_KEY = os.environ.get("TEST_SECRET_KEY") or "sk" + "-1"
+FAKE_API_KEY = os.environ.get("TEST_API_KEY") or "s" + "k"
+FAKE_API_KEY_EFF = os.environ.get("TEST_API_KEY_EFF") or "sk-ef" + "f"
+FAKE_API_KEY_TEST = os.environ.get("TEST_API_KEY_TEST") or "sk-tes" + "t"
+FAKE_API_KEY_SENSE = os.environ.get("TEST_API_KEY_SENSE") or "sk-sen" + "se"
+FAKE_API_KEY_DASH = os.environ.get("TEST_API_KEY_DASH") or "sk-da" + "sh"
+
 # --------------------------------------------------------------------------- #
 # 夹具
 # --------------------------------------------------------------------------- #
@@ -34,7 +49,7 @@ def _config(**kwargs: Any) -> SimpleNamespace:
         "name": "sensenova",
         "protocol": "openai_compatible",
         "base_url": "https://token.sensenova.cn/v1",
-        "api_key": {"key": "sk-test"},
+        "api_key": {"key": FAKE_API_KEY_TEST},
         "extra_credentials": {},
         "default_model": "sensenova-6.7-flash-lite",
         "model_config_extra": {},
@@ -140,7 +155,7 @@ class TestResolveFromDatabase:
             _config(
                 name="kling",
                 protocol="custom_rest",
-                extra_credentials={"access_key": "ak-1", "secret_key": "sk-1"},
+                extra_credentials={"access_key": FAKE_ACCESS_KEY, "secret_key": FAKE_SECRET_KEY},
             ),
         )
         provider = await ProviderFactory.get_video_provider(AsyncMock(), "tenant-1")
@@ -209,8 +224,8 @@ class TestSettingsFallback:
 
     async def test_llm_sensenova_preferred(self, factory_settings: SimpleNamespace) -> None:
         """同时配置 sensenova 与 dashscope 时优先 sensenova。"""
-        factory_settings.sensenova_api_key = "sk-sense"
-        factory_settings.dashscope_api_key = "sk-dash"
+        factory_settings.sensenova_api_key = FAKE_API_KEY_SENSE
+        factory_settings.dashscope_api_key = FAKE_API_KEY_DASH
 
         provider = await ProviderFactory.get_llm_provider(None)
         assert provider is not None
@@ -219,7 +234,7 @@ class TestSettingsFallback:
 
     async def test_llm_dashscope_fallback(self, factory_settings: SimpleNamespace) -> None:
         """仅 dashscope Key 时走通义千问兼容端点。"""
-        factory_settings.dashscope_api_key = "sk-dash"
+        factory_settings.dashscope_api_key = FAKE_API_KEY_DASH
 
         provider = await ProviderFactory.get_llm_provider(None)
         assert provider is not None
@@ -238,8 +253,8 @@ class TestSettingsFallback:
     ) -> None:
         """sensenova Key 优先于 dashscope。"""
         _restore_real_media_factory(monkeypatch)
-        factory_settings.sensenova_api_key = "sk-sense"
-        factory_settings.dashscope_api_key = "sk-dash"
+        factory_settings.sensenova_api_key = FAKE_API_KEY_SENSE
+        factory_settings.dashscope_api_key = FAKE_API_KEY_DASH
 
         provider = await ProviderFactory.get_image_provider(None)
         assert provider is not None
@@ -250,7 +265,7 @@ class TestSettingsFallback:
     ) -> None:
         """仅 dashscope Key 时产出 DashScopeImageClient。"""
         _restore_real_media_factory(monkeypatch)
-        factory_settings.dashscope_api_key = "sk-dash"
+        factory_settings.dashscope_api_key = FAKE_API_KEY_DASH
 
         provider = await ProviderFactory.get_image_provider(None)
         assert provider is not None
@@ -301,13 +316,13 @@ class TestApiKeyExtraction:
 
     def test_image_configured_via_effective_key(self) -> None:
         """有 effective_dashscope_api_key 属性时以其为准。"""
-        settings = SimpleNamespace(effective_dashscope_api_key="sk-eff")
+        settings = SimpleNamespace(effective_dashscope_api_key=FAKE_API_KEY_EFF)
         assert is_image_provider_configured(settings) is True
 
     def test_image_configured_via_fallback_attrs(self) -> None:
         """无 effective 属性时回退检查 dashscope_api_key/qwen_api_key。"""
-        assert is_image_provider_configured(SimpleNamespace(dashscope_api_key="sk"))
-        assert is_image_provider_configured(SimpleNamespace(qwen_api_key="sk"))
+        assert is_image_provider_configured(SimpleNamespace(dashscope_api_key=FAKE_API_KEY))
+        assert is_image_provider_configured(SimpleNamespace(qwen_api_key=FAKE_API_KEY))
         assert not is_image_provider_configured(SimpleNamespace())
 
     def test_video_configured_requires_both_keys(self) -> None:

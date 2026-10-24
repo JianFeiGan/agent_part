@@ -6,9 +6,10 @@ Description:
     - Prompt 增强构建
     - RAG 增强图片生成完整流程
     - 生成结果入库（高质量/低质量）
+    - 租户解析（请求租户 → 状态租户 → 默认 system）
 @author ganjianfei
-@version 1.0.0
-2026-07-14
+@version 1.1.0
+2026-10-24
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -180,6 +181,54 @@ class TestGenerateWithRAG:
         # 验证无 RAG 信息附加
         assert result.success is True
         assert "rag_sources" not in result.data
+
+
+class TestTenantResolution:
+    """租户解析行为测试：经公开入口观察传给检索器的租户。"""
+
+    @pytest.mark.parametrize(
+        ("req_tenant", "state_tenant", "expected"),
+        [
+            pytest.param("tenant-req", "tenant-state", "tenant-req", id="request-wins"),
+            pytest.param("", "tenant-state", "tenant-state", id="state-fallback"),
+            pytest.param(None, "", "system", id="default-system"),
+        ],
+    )
+    @pytest.mark.asyncio
+    async def test_tenant_passed_to_retriever(
+        self, req_tenant: str | None, state_tenant: str, expected: str
+    ) -> None:
+        """检索按解析出的租户执行；两级来源都缺失时用默认租户 system。
+
+        商品模型不携带租户字段，租户只来自生成请求与工作流状态。
+        """
+        mock_retriever = MagicMock()
+        mock_retriever.retrieve_for_image_generation = AsyncMock(
+            return_value=_make_rag_result(context="")
+        )
+        mock_base_agent = MagicMock()
+        mock_base_agent.execute = AsyncMock(
+            return_value=AgentResult(success=True, data={"generated_images": []})
+        )
+        agent = RAGEnhancedImageGenerator.__new__(RAGEnhancedImageGenerator)
+        agent.base_agent = mock_base_agent
+        agent._retriever = mock_retriever
+        agent._session = MagicMock()
+        agent.settings = _make_settings(auto_ingest=False)
+
+        state = _make_state()
+        state.generation_request = (
+            GenerationRequest(tenant_id=req_tenant) if req_tenant is not None else None
+        )
+        state.tenant_id = state_tenant
+
+        run_agent = agent.execute
+        result = await run_agent(state)
+
+        assert result.success is True
+        retrieve = mock_retriever.retrieve_for_image_generation
+        retrieve.assert_called_once()
+        assert retrieve.call_args.kwargs["tenant_id"] == expected
 
 
 class TestIngestGenerationResult:

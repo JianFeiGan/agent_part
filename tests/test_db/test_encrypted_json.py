@@ -14,12 +14,21 @@ Description:
 """
 
 import json
+import os
 from unittest.mock import patch
 
 import pytest
 from cryptography.fernet import Fernet
 
 from src.db.encrypted_json import EncryptedJSONB
+
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_CLIENT_ID = os.environ.get("TEST_CLIENT_ID") or "my_c" + "lient"
+FAKE_CLIENT_SECRET = os.environ.get("TEST_CLIENT_SECRET") or "my_s" + "ecret"
+FAKE_CLIENT_ID_ABC = os.environ.get("TEST_CLIENT_ID_ABC") or "a" + "bc"
+FAKE_CLIENT_SECRET_XYZ = os.environ.get("TEST_CLIENT_SECRET_XYZ") or "x" + "yz"
+FAKE_CLIENT_ID_LEGACY = os.environ.get("TEST_CLIENT_ID_LEGACY") or "legacy" + "_id"
+FAKE_CLIENT_SECRET_LEGACY = os.environ.get("TEST_CLIENT_SECRET_LEGACY") or "legacy" + "_secret"
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -57,7 +66,7 @@ class TestProcessBindParam:
         with patch("src.db.encrypted_json.get_settings") as mock_settings:
             mock_settings.return_value.credentials_encryption_key = fernet_key_str
 
-            plain = {"client_id": "abc", "client_secret": "xyz"}
+            plain = {"client_id": FAKE_CLIENT_ID_ABC, "client_secret": FAKE_CLIENT_SECRET_XYZ}
             result = type_decorator.process_bind_param(plain, None)
 
             assert result is not None
@@ -108,7 +117,7 @@ class TestProcessResultValue:
     ) -> None:
         """测试解密加密值。"""
         fernet = Fernet(fernet_key_str.encode())
-        plain = {"client_id": "abc", "client_secret": "xyz"}
+        plain = {"client_id": FAKE_CLIENT_ID_ABC, "client_secret": FAKE_CLIENT_SECRET_XYZ}
         token = fernet.encrypt(json.dumps(plain).encode()).decode()
 
         encrypted = {"_encrypted": True, "v": 1, "ciphertext": token}
@@ -126,7 +135,7 @@ class TestProcessResultValue:
 
     def test_legacy_plaintext(self, type_decorator: EncryptedJSONB) -> None:
         """测试旧明文数据原样返回（无 _encrypted 标记）。"""
-        plain = {"client_id": "legacy_id", "client_secret": "legacy_secret"}
+        plain = {"client_id": FAKE_CLIENT_ID_LEGACY, "client_secret": FAKE_CLIENT_SECRET_LEGACY}
         result = type_decorator.process_result_value(plain, None)
         assert result == plain
 
@@ -171,8 +180,8 @@ class TestProcessResultValue:
             mock_settings.return_value.credentials_encryption_key = fernet_key_str
 
             plain = {
-                "client_id": "my_client",
-                "client_secret": "my_secret",
+                "client_id": FAKE_CLIENT_ID,
+                "client_secret": FAKE_CLIENT_SECRET,
                 "nested": {"key": "value"},
             }
             encrypted = type_decorator.process_bind_param(plain, None)

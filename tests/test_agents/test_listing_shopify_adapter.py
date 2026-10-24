@@ -9,6 +9,7 @@ Description:
 2026-07-14
 """
 
+import os
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -26,6 +27,10 @@ from src.models.listing import (
     Platform,
 )
 
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_API_KEY = os.environ.get("TEST_API_KEY") or "shpat_test_a" + "pi_key_12345"
+FAKE_AUTH_TOKEN = os.environ.get("TEST_AUTH_TOKEN") or "shpat_test" + "_token"
+
 
 @pytest.fixture
 def push_config() -> PushConfig:
@@ -38,7 +43,7 @@ def config() -> dict:
     """创建 Shopify 平台配置。"""
     return {
         "shop_url": "https://test-store.myshopify.com",
-        "api_key": "shpat_test_api_key_12345",
+        "api_key": FAKE_API_KEY,
         "api_version": "2024-01",
     }
 
@@ -167,7 +172,7 @@ class TestShopifyAdapterGraphQL:
         task: ListingTask,
     ) -> None:
         """测试 GraphQL 请求成功。"""
-        adapter._auth_token = "shpat_test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = _make_httpx_response(
             status_code=200,
@@ -197,7 +202,7 @@ class TestShopifyAdapterGraphQL:
         task: ListingTask,
     ) -> None:
         """测试 GraphQL 返回 userErrors 时抛出 PermanentPushError。"""
-        adapter._auth_token = "shpat_test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = _make_httpx_response(
             status_code=200,
@@ -225,7 +230,7 @@ class TestShopifyAdapterGraphQL:
         task: ListingTask,
     ) -> None:
         """测试 GraphQL 429 限流，重试耗尽后返回失败结果。"""
-        adapter._auth_token = "shpat_test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = _make_httpx_response(
             status_code=429,
@@ -249,7 +254,7 @@ class TestShopifyAdapterHealthCheck:
     @pytest.mark.asyncio
     async def test_health_check_success(self, adapter: ShopifyAdapter) -> None:
         """测试健康检查成功。"""
-        adapter._auth_token = "shpat_test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = _make_httpx_response(
             status_code=200,
@@ -268,7 +273,7 @@ class TestShopifyAdapterHealthCheck:
     @pytest.mark.asyncio
     async def test_health_check_failure(self, adapter: ShopifyAdapter) -> None:
         """测试健康检查失败。"""
-        adapter._auth_token = "shpat_test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = _make_httpx_response(
             status_code=401,

@@ -1,7 +1,12 @@
-"""存储层补充行为测试。
+"""
+存储层补充行为测试。
 
-覆盖 AssetPersister 的构造校验与视频落库，
-以及 VectorStore 的向量写入、按文档删除与统计聚合。
+Description:
+    覆盖 AssetPersister 的构造校验与视频落库，
+    以及 VectorStore 的向量写入、按文档删除与统计聚合。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations

@@ -1,7 +1,12 @@
-"""ModelProviderRepository 与 seed_model_providers 行为测试。
+"""
+ModelProviderRepository 与 seed_model_providers 行为测试。
 
-覆盖默认厂商查询、按类型列表、set_default 的互斥切换与类型校验，
-以及 seed 的空表写入 / 非空跳过两条路径。
+Description:
+    覆盖默认厂商查询、按类型列表、set_default 的互斥切换与类型校验，
+    以及 seed 的空表写入 / 非空跳过两条路径。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations

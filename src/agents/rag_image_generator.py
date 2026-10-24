@@ -253,6 +253,11 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentState]):
     def _resolve_tenant_id(self, state: AgentState) -> str:
         """从状态中解析 tenant_id。
 
+        解析顺序：生成请求携带的租户 → 工作流状态上的租户 → 默认租户
+        "system"。商品模型不携带租户字段，不是租户来源；两级来源都未携带
+        时回落到的 "system" 是文档化默认租户，与
+        src.graph.state.create_initial_state 的兜底约定一致。
+
         Args:
             state: 当前状态。
 
@@ -260,14 +265,10 @@ class RAGEnhancedImageGenerator(BaseAgent[AgentState]):
             tenant_id 字符串。
         """
         if state.generation_request is not None:
-            req_tenant = getattr(state.generation_request, "tenant_id", None)
+            req_tenant = state.generation_request.tenant_id
             if isinstance(req_tenant, str) and req_tenant:
                 return req_tenant
-        if state.product_info is not None:
-            prod_tenant = getattr(state.product_info, "tenant_id", None)
-            if isinstance(prod_tenant, str) and prod_tenant:
-                return prod_tenant
-        state_tenant = getattr(state, "tenant_id", None)
+        state_tenant = state.tenant_id
         if isinstance(state_tenant, str) and state_tenant:
             return state_tenant
         return "system"

@@ -11,10 +11,11 @@ Description:
 """
 
 import logging
-import xml.etree.ElementTree as ET
 from typing import Any
 
 import requests
+from defusedxml.ElementTree import ParseError as DefusedParseError
+from defusedxml.ElementTree import fromstring as safe_fromstring
 
 from src.agents.listing_platform_adapter import BasePlatformAdapter, PushResult
 from src.models.listing import (
@@ -28,7 +29,6 @@ from src.models.listing import (
 logger = logging.getLogger(__name__)
 
 # eBay Trading API 常量
-EBAY_OAUTH_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
 EBAY_TRADING_API_URL = "https://api.ebay.com/ws/api.dll"
 EBAY_XML_NS = "urn:ebay:apis:eBLBaseComponents"
 DEFAULT_SITE_ID = "0"  # US Site
@@ -71,7 +71,11 @@ class EbayAdapter(BasePlatformAdapter):
             "client_secret": client_secret,
         }
 
-        response = requests.post(EBAY_OAUTH_TOKEN_URL, data=payload)
+        response = requests.post(
+            "https://api.ebay.com/identity/v1/oauth2/token",
+            data=payload,
+            allow_redirects=False,
+        )
 
         if response.status_code != 200:
             error_msg = (
@@ -528,7 +532,8 @@ class EbayAdapter(BasePlatformAdapter):
             (ack, item_id, errors) 三元组。
         """
         try:
-            root = ET.fromstring(xml_text)
+            # defusedxml：禁用 DTD/实体扩展，防 billion-lauses / quadratic blowup。
+            root = safe_fromstring(xml_text)
 
             bare_ns = "{" + EBAY_XML_NS + "}"
 
@@ -568,6 +573,6 @@ class EbayAdapter(BasePlatformAdapter):
 
             return ack, item_id, errors
 
-        except ET.ParseError:
+        except DefusedParseError:
             logger.exception("Failed to parse eBay XML response")
             return "Failure", None, [f"XML parse error: {xml_text[:200]}"]

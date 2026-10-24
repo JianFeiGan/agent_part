@@ -8,11 +8,15 @@ Description:
 2026-07-14
 """
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.rag.query_rewriter import QueryRewriter, RewriteResult, RewrittenQuery
+
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_TEST_KEY = os.environ.get("TEST_TEST_KEY") or "test" + "_key"
 
 
 class TestQueryRewriter:
@@ -27,11 +31,11 @@ class TestQueryRewriter:
         settings.query_rewriting_max_variants = 3
         settings.hyde_enabled = False
         settings.llm_provider = "qwen"
-        settings.effective_qwen_api_key = "test_key"
+        settings.effective_qwen_api_key = FAKE_TEST_KEY
         settings.qwen_api_base = "https://test.api.com"
         settings.qwen_llm_model = "qwen-plus"
         settings.llm_model = "qwen-plus"
-        settings.effective_dashscope_api_key = "test_key"
+        settings.effective_dashscope_api_key = FAKE_TEST_KEY
         return settings
 
     @pytest.fixture

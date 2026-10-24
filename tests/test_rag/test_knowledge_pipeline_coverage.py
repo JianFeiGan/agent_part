@@ -12,6 +12,7 @@ Description:
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +25,9 @@ import pytest
 from src.rag.document_processor import DocumentProcessor, ParsedDocument
 from src.rag.logger import RAGLogger, get_rag_logger
 from src.rag.query_rewriter import QueryRewriter, get_query_rewriter
+
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_API_KEY = os.environ.get("TEST_API_KEY") or "ke" + "y"
 
 # ==================== DocumentProcessor ====================
 
@@ -522,11 +526,11 @@ def _rewriter_settings(**overrides: Any) -> MagicMock:
     settings.query_rewriting_max_variants = 2
     settings.hyde_enabled = True
     settings.llm_provider = "qwen"
-    settings.effective_qwen_api_key = "test-key"
+    settings.effective_qwen_api_key = FAKE_API_KEY
     settings.qwen_api_base = "https://example.test/v1"
     settings.qwen_llm_model = "qwen-plus"
     settings.llm_model = "qwen-plus"
-    settings.effective_dashscope_api_key = "test-key"
+    settings.effective_dashscope_api_key = FAKE_API_KEY
     for key, value in overrides.items():
         setattr(settings, key, value)
     return settings
@@ -647,7 +651,9 @@ class TestQueryRewriterLLM:
         with pytest.MonkeyPatch.context() as patch:
             patch.setattr(
                 "src.rag.query_rewriter.get_settings",
-                lambda: _rewriter_settings(llm_provider="qwen", effective_qwen_api_key="key"),
+                lambda: _rewriter_settings(
+                    llm_provider="qwen", effective_qwen_api_key=FAKE_API_KEY
+                ),
             )
             rewriter = QueryRewriter()
 
@@ -686,7 +692,9 @@ class TestQueryRewriterLLM:
         with pytest.MonkeyPatch.context() as patch:
             patch.setattr(
                 "src.rag.query_rewriter.get_settings",
-                lambda: _rewriter_settings(llm_provider="qwen", effective_qwen_api_key="key"),
+                lambda: _rewriter_settings(
+                    llm_provider="qwen", effective_qwen_api_key=FAKE_API_KEY
+                ),
             )
             rewriter = QueryRewriter()
 

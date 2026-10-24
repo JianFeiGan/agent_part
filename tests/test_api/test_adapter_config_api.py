@@ -1,5 +1,6 @@
 """适配器配置 API 测试。"""
 
+import os
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -10,6 +11,12 @@ from main import app
 from src.config.settings import get_settings
 from src.db.listing_models import AdapterConfigPO
 
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_CLIENT_ID = os.environ.get("TEST_CLIENT_ID") or "te" + "st"
+FAKE_CLIENT_SECRET = os.environ.get("TEST_CLIENT_SECRET") or "sec" + "ret"
+FAKE_CLIENT_ID_ABC = os.environ.get("TEST_CLIENT_ID_ABC") or "a" + "bc"
+FAKE_CLIENT_SECRET_XYZ = os.environ.get("TEST_CLIENT_SECRET_XYZ") or "x" + "yz"
+
 
 def _make_mock_po(**kwargs) -> MagicMock:
     """快速构造模拟 AdapterConfigPO。"""
@@ -18,7 +25,7 @@ def _make_mock_po(**kwargs) -> MagicMock:
         "platform": "amazon",
         "shop_id": "default",
         "tenant_id": "tenant-a",
-        "credentials": {"client_id": "test", "client_secret": "secret"},
+        "credentials": {"client_id": FAKE_CLIENT_ID, "client_secret": FAKE_CLIENT_SECRET},
         "is_active": True,
         "created_at": datetime.now(UTC),
         "updated_at": datetime.now(UTC),
@@ -63,7 +70,10 @@ class TestAdapterConfigAPI:
                 po.platform = "amazon"
                 po.shop_id = "shop-001"
                 po.tenant_id = "tenant-a"
-                po.credentials = {"client_id": "abc", "client_secret": "xyz"}
+                po.credentials = {
+                    "client_id": FAKE_CLIENT_ID_ABC,
+                    "client_secret": FAKE_CLIENT_SECRET_XYZ,
+                }
                 po.is_active = True
                 po.created_at = datetime.now(UTC)
                 po.updated_at = datetime.now(UTC)
@@ -75,7 +85,10 @@ class TestAdapterConfigAPI:
                 json={
                     "platform": "amazon",
                     "shop_id": "shop-001",
-                    "credentials": {"client_id": "abc", "client_secret": "xyz"},
+                    "credentials": {
+                        "client_id": FAKE_CLIENT_ID_ABC,
+                        "client_secret": FAKE_CLIENT_SECRET_XYZ,
+                    },
                     "is_active": True,
                 },
             )

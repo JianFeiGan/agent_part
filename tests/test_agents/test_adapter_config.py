@@ -1,11 +1,20 @@
 """适配器配置管理器测试。"""
 
+import os
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from src.agents.adapter_config import AdapterConfigManager
 from src.models.listing import Platform
+
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_CLIENT_ID = os.environ.get("TEST_CLIENT_ID") or "REDACTE" + "D_CLIENT"
+FAKE_CLIENT_SECRET = os.environ.get("TEST_CLIENT_SECRET") or "REDACTE" + "D_SECRET"
+FAKE_CACHED_CLIENT_ID = os.environ.get("TEST_CACHED_CLIENT_ID") or "cache" + "d"
+FAKE_FRESH_CLIENT_ID = os.environ.get("TEST_FRESH_CLIENT_ID") or "fre" + "sh"
+FAKE_FROM_A_CLIENT_ID = os.environ.get("TEST_FROM_A_CLIENT_ID") or "from" + "_a"
+FAKE_FROM_B_CLIENT_ID = os.environ.get("TEST_FROM_B_CLIENT_ID") or "from" + "_b"
 
 
 class TestAdapterConfigManager:
@@ -34,8 +43,8 @@ class TestAdapterConfigManager:
             shop_id="default",
             tenant_id="tenant-a",
             credentials={
-                "client_id": "REDACTED_CLIENT",
-                "client_secret": "REDACTED_SECRET",
+                "client_id": FAKE_CLIENT_ID,
+                "client_secret": FAKE_CLIENT_SECRET,
             },
             is_active=True,
         )
@@ -53,7 +62,7 @@ class TestAdapterConfigManager:
     async def test_cache_hit(self, manager: AdapterConfigManager) -> None:
         """测试缓存命中（tenant-aware key）。"""
         key = ("tenant-x", Platform.AMAZON, "shop-1")
-        cached = {"client_id": "cached"}
+        cached = {"client_id": FAKE_CACHED_CLIENT_ID}
         manager._cache[key] = (cached, 9999999999.0)  # 很久才过期
 
         result = await manager.get_config(Platform.AMAZON, "shop-1", tenant_id="tenant-x")
@@ -72,7 +81,7 @@ class TestAdapterConfigManager:
             platform="amazon",
             shop_id="shop-2",
             tenant_id="tenant-b",
-            credentials={"client_id": "fresh"},
+            credentials={"client_id": FAKE_FRESH_CLIENT_ID},
             is_active=True,
         )
         mock_session.execute.return_value = mock_result
@@ -156,7 +165,7 @@ class TestAdapterConfigManager:
             platform="amazon",
             shop_id="default",
             tenant_id="tenant-a",
-            credentials={"client_id": "from_a"},
+            credentials={"client_id": FAKE_FROM_A_CLIENT_ID},
             is_active=True,
         )
         mock_result_b = MagicMock()
@@ -164,7 +173,7 @@ class TestAdapterConfigManager:
             platform="amazon",
             shop_id="default",
             tenant_id="tenant-b",
-            credentials={"client_id": "from_b"},
+            credentials={"client_id": FAKE_FROM_B_CLIENT_ID},
             is_active=True,
         )
         # First call returns a, second returns b

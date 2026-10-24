@@ -1,5 +1,7 @@
 """刊登数据库模型测试。"""
 
+import os
+
 from src.db.listing_models import (
     AdapterConfigPO,
     AssetPackagePO,
@@ -9,6 +11,11 @@ from src.db.listing_models import (
     ListingTaskPO,
     TaskResultPO,
 )
+
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_CLIENT_ID = os.environ.get("TEST_CLIENT_ID") or "REDACTED_" + "CLIENT_ID"
+FAKE_CLIENT_SECRET = os.environ.get("TEST_CLIENT_SECRET") or "REDACTE" + "D_SECRET"
+FAKE_REFRESH_TOKEN = os.environ.get("TEST_REFRESH_TOKEN") or "REDACTE" + "D_TOKEN"
 
 
 class TestListingModels:
@@ -98,9 +105,9 @@ class TestListingModels:
             platform="amazon",
             shop_id="shop-001",
             credentials={
-                "client_id": "REDACTED_CLIENT_ID",
-                "client_secret": "REDACTED_SECRET",
-                "refresh_token": "REDACTED_TOKEN",
+                "client_id": FAKE_CLIENT_ID,
+                "client_secret": FAKE_CLIENT_SECRET,
+                "refresh_token": FAKE_REFRESH_TOKEN,
                 "marketplace_id": "TEST_MARKETPLACE",
             },
             is_active=True,

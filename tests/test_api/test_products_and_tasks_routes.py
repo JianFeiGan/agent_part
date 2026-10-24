@@ -1,7 +1,12 @@
-"""商品与任务路由 CRUD 行为测试。
+"""
+商品与任务路由 CRUD 行为测试。
 
-直接调用 handler + Redis 替身，覆盖创建/列表/详情/更新/删除、
-404 分支与 scope 校验。不接真实 Redis。
+Description:
+    直接调用 handler + Redis 替身，覆盖创建/列表/详情/更新/删除、
+    404 分支与 scope 校验。不接真实 Redis。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations

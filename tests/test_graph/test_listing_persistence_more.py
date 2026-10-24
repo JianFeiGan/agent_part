@@ -1,7 +1,12 @@
-"""刊登持久化补充行为测试。
+"""
+刊登持久化补充行为测试。
 
-覆盖素材/文案/合规/推送的 upsert 与 load 路径、best-effort 异常吞掉、
-租户过滤不匹配的跳过分支。
+Description:
+    覆盖素材/文案/合规/推送的 upsert 与 load 路径、best-effort 异常吞掉、
+    租户过滤不匹配的跳过分支。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations

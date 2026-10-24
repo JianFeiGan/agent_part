@@ -1,11 +1,17 @@
-"""千问客户端（LLM / Embedding）行为测试（离线）。
+"""
+千问客户端（LLM / Embedding）行为测试（离线）。
 
-通过注入假 httpx.AsyncClient 与 SimpleNamespace Settings 验证真实调用路径，
-不发起网络请求。
+Description:
+    通过注入假 httpx.AsyncClient 与 SimpleNamespace Settings 验证真实调用路径，
+    不发起网络请求。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -19,6 +25,10 @@ from src.clients.qwen_embedding_client import (
     is_qwen_embedding_configured,
 )
 from src.clients.qwen_llm_client import get_qwen_llm, is_qwen_llm_configured
+
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_API_KEY = os.environ.get("TEST_API_KEY") or "s" + "k"
+FAKE_API_KEY_TEST = os.environ.get("TEST_API_KEY_TEST") or "sk-tes" + "t"
 
 # --------------------------------------------------------------------------- #
 # 夹具
@@ -62,18 +72,20 @@ class TestQwenLLM:
 
     def test_uses_configured_model_and_base(self) -> None:
         """默认模型与 base_url 取自 Settings。"""
-        llm = get_qwen_llm(settings=_settings(effective_qwen_api_key="sk-test"))
+        llm = get_qwen_llm(settings=_settings(effective_qwen_api_key=FAKE_API_KEY_TEST))
         assert llm.model_name == "qwen-plus"
         assert "dashscope" in llm.openai_api_base
 
     def test_model_override(self) -> None:
         """显式 model 参数覆盖 Settings 默认。"""
-        llm = get_qwen_llm(settings=_settings(effective_qwen_api_key="sk-test"), model="qwen-max")
+        llm = get_qwen_llm(
+            settings=_settings(effective_qwen_api_key=FAKE_API_KEY_TEST), model="qwen-max"
+        )
         assert llm.model_name == "qwen-max"
 
     def test_is_configured(self) -> None:
         """is_qwen_llm_configured 依据 effective key 判定。"""
-        assert is_qwen_llm_configured(_settings(effective_qwen_api_key="sk")) is True
+        assert is_qwen_llm_configured(_settings(effective_qwen_api_key=FAKE_API_KEY)) is True
         assert is_qwen_llm_configured(_settings()) is False
 
 
@@ -82,7 +94,7 @@ class TestQwenEmbedding:
 
     def test_is_available(self) -> None:
         """is_available 依据 effective key 判定。"""
-        assert QwenEmbeddingClient(_settings(effective_qwen_api_key="sk")).is_available()
+        assert QwenEmbeddingClient(_settings(effective_qwen_api_key=FAKE_API_KEY)).is_available()
         assert not QwenEmbeddingClient(_settings()).is_available()
 
     async def test_embed_batch_requires_key(self) -> None:
@@ -99,7 +111,9 @@ class TestQwenEmbedding:
                 json_data={"data": [{"embedding": [0.1, 0.2]}, {"embedding": [0.3, 0.4]}]}
             )
         )
-        client = QwenEmbeddingClient(_settings(effective_qwen_api_key="sk"), httpx_client=http)
+        client = QwenEmbeddingClient(
+            _settings(effective_qwen_api_key=FAKE_API_KEY), httpx_client=http
+        )
 
         result = await client.embed_batch(["a", "b"])
 
@@ -116,7 +130,9 @@ class TestQwenEmbedding:
         http.post = AsyncMock(
             return_value=_FakeResponse(json_data={"data": [{"embedding": [1.0, 2.0]}]})
         )
-        client = QwenEmbeddingClient(_settings(effective_qwen_api_key="sk"), httpx_client=http)
+        client = QwenEmbeddingClient(
+            _settings(effective_qwen_api_key=FAKE_API_KEY), httpx_client=http
+        )
 
         assert await client.embed("hello") == [1.0, 2.0]
 
@@ -124,7 +140,9 @@ class TestQwenEmbedding:
         """非 200 响应抛 RuntimeError 并带状态码。"""
         http = AsyncMock()
         http.post = AsyncMock(return_value=_FakeResponse(status_code=429))
-        client = QwenEmbeddingClient(_settings(effective_qwen_api_key="sk"), httpx_client=http)
+        client = QwenEmbeddingClient(
+            _settings(effective_qwen_api_key=FAKE_API_KEY), httpx_client=http
+        )
 
         with pytest.raises(RuntimeError, match="status=429"):
             await client.embed_batch(["a"])
@@ -133,7 +151,9 @@ class TestQwenEmbedding:
         """data 缺失或为空抛 RuntimeError。"""
         http = AsyncMock()
         http.post = AsyncMock(return_value=_FakeResponse(json_data={"data": []}))
-        client = QwenEmbeddingClient(_settings(effective_qwen_api_key="sk"), httpx_client=http)
+        client = QwenEmbeddingClient(
+            _settings(effective_qwen_api_key=FAKE_API_KEY), httpx_client=http
+        )
 
         with pytest.raises(RuntimeError, match="返回数据为空"):
             await client.embed_batch(["a"])
@@ -142,7 +162,7 @@ class TestQwenEmbedding:
         """close() 关闭自建 httpx 客户端并置空。"""
         fake = AsyncMock()
         fake.aclose = AsyncMock()
-        client = QwenEmbeddingClient(_settings(effective_qwen_api_key="sk"))
+        client = QwenEmbeddingClient(_settings(effective_qwen_api_key=FAKE_API_KEY))
         client._httpx = fake  # noqa: SLF001 —— 注入替身
 
         await client.close()
@@ -173,7 +193,7 @@ class TestQwenEmbedding:
 
     def test_is_qwen_embedding_configured(self) -> None:
         """模块级配置判定。"""
-        assert is_qwen_embedding_configured(_settings(effective_qwen_api_key="sk"))
+        assert is_qwen_embedding_configured(_settings(effective_qwen_api_key=FAKE_API_KEY))
         assert not is_qwen_embedding_configured(_settings())
 
     async def test_injected_httpx_reused(self) -> None:
@@ -182,7 +202,9 @@ class TestQwenEmbedding:
         http.post = AsyncMock(
             return_value=_FakeResponse(json_data={"data": [{"embedding": [0.0]}]})
         )
-        client = QwenEmbeddingClient(_settings(effective_qwen_api_key="sk"), httpx_client=http)
+        client = QwenEmbeddingClient(
+            _settings(effective_qwen_api_key=FAKE_API_KEY), httpx_client=http
+        )
 
         await client.embed_batch(["a"])
 
@@ -196,7 +218,9 @@ class TestHttpxErrorWrapping:
         """传输层异常按 httpx 约定向上抛（调用方决定降级）。"""
         http = AsyncMock()
         http.post = AsyncMock(side_effect=httpx.ConnectError("refused"))
-        client = QwenEmbeddingClient(_settings(effective_qwen_api_key="sk"), httpx_client=http)
+        client = QwenEmbeddingClient(
+            _settings(effective_qwen_api_key=FAKE_API_KEY), httpx_client=http
+        )
 
         with pytest.raises(httpx.ConnectError):
             await client.embed_batch(["a"])

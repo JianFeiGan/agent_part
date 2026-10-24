@@ -1,7 +1,12 @@
-"""TaskManager 行为测试。
+"""
+TaskManager 行为测试。
 
-覆盖任务创建、状态/详情查询、取消、终态写入、异常与取消路径、
-僵尸 RUNNING 任务回收。所有外部依赖（Redis / DB / 工作流）均以替身隔离。
+Description:
+    覆盖任务创建、状态/详情查询、取消、终态写入、异常与取消路径、
+    僵尸 RUNNING 任务回收。所有外部依赖（Redis / DB / 工作流）均以替身隔离。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations

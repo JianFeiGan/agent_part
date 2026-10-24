@@ -1,6 +1,11 @@
-"""语义分块器行为测试。
+"""
+语义分块器行为测试。
 
-覆盖滑动窗口分块、句子边界断句、语义分段与超长段落的二次切分。
+Description:
+    覆盖滑动窗口分块、句子边界断句、语义分段与超长段落的二次切分。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations

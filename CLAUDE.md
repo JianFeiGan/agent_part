@@ -62,7 +62,7 @@ Docker：`docker compose up -d`（app :8000 / frontend :3000 / postgres pgvector
 
 **Providers 走数据库而非环境变量**：`src/clients/provider_factory.py` 的 `ProviderFactory.get_llm_provider/get_image_provider/get_video_provider` 从 `model_providers` 表读配置，按 `tenant_id` 隔离，支持任务级 `provider_id` 覆盖；**只有 DB 无配置时才 fallback 到 Settings**。新增厂商客户端参照 `src/clients/` 现有实现（`qwen_llm_client.py` / `dashscope_image_client.py` / `kling_video_client.py` 等，接口协议在 `protocols.py`）。
 
-**Agent 基类**：`src/agents/base.py` 的 `BaseAgent`（泛型于 `AgentRuntimeState`），`AgentRole` 枚举决定角色，`_create_llm` 懒加载 LLM。带 `rag_` 前缀的（`rag_creative_planner.py` 等）是同角色的 RAG 增强变体，由 `RAG_ENABLED` 控制注入。LLM 输出统一用 `src/agents/llm_json.py` 的 `extract_json()` 解析（能处理 ```json 围栏与夹带说明文字），失败返回 `None` 由调用方兜底。
+**Agent 基类**：`src/agents/base.py` 的 `BaseAgent`（泛型于工作流状态 `StateT`，上界 `AgentState`；同文件的 `AgentRuntimeState` 是早期遗留模型，当前代码无任何使用，勿再引用），`AgentRole` 枚举决定角色，`_create_llm` 懒加载 LLM。带 `rag_` 前缀的（`rag_creative_planner.py` 等）是同角色的 RAG 增强变体，由 `RAG_ENABLED` 控制注入。LLM 输出统一用 `src/agents/llm_json.py` 的 `extract_json()` 解析（能处理 ```json 围栏与夹带说明文字），失败返回 `None` 由调用方兜底。
 
 **数据层**：三套模型文件都要注册，否则 Alembic 漏表——`src/db/models.py`（知识库/任务/GraphRAG/记忆/model_providers）、`listing_models.py`（刊登）、`conversation_models.py`（AI 会话日志）。`migrations/env.py` 已 `import` 三者汇总到 `Base.metadata`。
 

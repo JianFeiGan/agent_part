@@ -1,7 +1,12 @@
-"""视觉生成工作流 Agent 执行行为测试。
+"""
+视觉生成工作流 Agent 执行行为测试。
 
-覆盖 OrchestratorAgent 与 RequirementAnalyzerAgent 的输入校验、
-LLM 主路径、解析失败回退默认规划/报告，以及异常包装为失败结果。
+Description:
+    覆盖 OrchestratorAgent 与 RequirementAnalyzerAgent 的输入校验、
+    LLM 主路径、解析失败回退默认规划/报告，以及异常包装为失败结果。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations

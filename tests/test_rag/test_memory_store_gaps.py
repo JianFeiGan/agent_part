@@ -1,7 +1,12 @@
-"""记忆链路补充行为测试。
+"""
+记忆链路补充行为测试。
 
-覆盖 MemoryStore 的分类降级、向量化失败降级、检索过滤与遗忘管理，
-以及 MemoryClassifier 的 LLM 主路径与不可识别结果回退。
+Description:
+    覆盖 MemoryStore 的分类降级、向量化失败降级、检索过滤与遗忘管理，
+    以及 MemoryClassifier 的 LLM 主路径与不可识别结果回退。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations

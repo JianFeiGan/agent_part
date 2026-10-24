@@ -3,21 +3,29 @@
 
 Description:
     补齐 src/graph/workflow.py 的路由分支、make_agent_node 失败/成功路径、
-    RAG 依赖注入分支、ProductVisualWorkflow 生命周期行为，
-    以及 src/graph/listing_workflow.py 的异常路径与部分成功终态判定。
+    Trace 经公开 invoke_llm 产生并回写日志、WorkflowBuilder 各 RAG 配置下的
+    公开构建链路，以及 src/graph/listing_workflow.py 经 run/resume_push
+    公开入口的异常路径与部分成功终态判定。
     全部通过 mock 隔离外部依赖，不发起真实调用。
 @author ganjianfei
-@version 1.0.0
-2026-09-28
+@version 1.1.0
+2026-10-24
 """
 
+from contextlib import ExitStack
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.callbacks import CallbackManagerForLLMRun
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
+from langchain_core.prompts import ChatPromptTemplate
 
 from src.agents.base import AgentResult
 from src.agents.listing_platform_adapter import PushResult
-from src.graph.listing_state import ListingState
+from src.agents.requirement_analyzer import RequirementAnalyzerAgent
 from src.graph.listing_workflow import ListingWorkflow
 from src.graph.state import AgentState, GenerationRequest
 from src.graph.workflow import (
@@ -29,8 +37,67 @@ from src.graph.workflow import (
     route_after_design,
     route_after_image_generation,
 )
-from src.models.listing import ListingProduct, Platform, TaskStatus
+from src.models.listing import (
+    ComplianceReport,
+    ComplianceStatus,
+    ListingProduct,
+    Platform,
+    TaskStatus,
+)
 from src.models.product import Product, ProductCategory
+
+
+class _StubChatModel(BaseChatModel):
+    """最小聊天模型替身：固定回复，model_name 可断言。"""
+
+    model_name: str = "stub-chat-model"
+
+    @property
+    def _llm_type(self) -> str:
+        """LangChain 模型类型标识。"""
+        return "stub-chat-model"
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        """返回固定回复。"""
+        return ChatResult(generations=[ChatGeneration(message=AIMessage(content="ok"))])
+
+
+class _FakeRecorder:
+    """ConversationRecorder 替身：提供固定 token 计数，不触碰数据库。"""
+
+    _input_tokens = 10
+    _output_tokens = 5
+    _start_time: float | None = None
+
+    def __init__(self, **kwargs: Any) -> None:
+        """接受与真实记录器一致的构造参数。"""
+
+    async def __aenter__(self) -> "_FakeRecorder":
+        """进入上下文。"""
+        return self
+
+    async def __aexit__(self, *exc_info: Any) -> bool:
+        """退出上下文，不抑制异常。"""
+        return False
+
+    def set_response(self, response: Any) -> None:
+        """记录响应（no-op）。"""
+
+
+def _make_agent_with_stub_llm() -> RequirementAnalyzerAgent:
+    """构造带 LLM 替身与配置替身的真实 Agent。"""
+    settings = MagicMock()
+    settings.llm_provider = "stub"
+    settings.llm_retry_attempts = 0
+    settings.llm_retry_initial_backoff = 0.0
+    return RequirementAnalyzerAgent(llm=_StubChatModel(), settings=settings)
+
 
 # ==================== 路由分支 ====================
 
@@ -88,13 +155,14 @@ class TestMakeAgentNode:
     @pytest.mark.asyncio
     async def test_failure_path_records_error_and_snapshots(self) -> None:
         """Agent 失败时应写入 error 并保留 input_snapshot。"""
-        agent = AsyncMock()
+        agent = MagicMock()
         agent.execute = AsyncMock(return_value=AgentResult(success=False, error="boom"))
         node = make_agent_node(
             "requirement_analyzer",
             "requirement_analysis",
             agent,
             lambda _r: {"selling_points": []},
+            apply_trace=False,
             summarize="done",
             input_snapshot=lambda _s: {"product_info": "x"},
         )
@@ -106,9 +174,9 @@ class TestMakeAgentNode:
         assert log.input_data == {"product_info": "x"}
 
     @pytest.mark.asyncio
-    async def test_failure_path_without_snapshots(self) -> None:
-        """未提供 snapshot 回调时失败路径不应崩溃。"""
-        agent = AsyncMock()
+    async def test_failure_without_error_still_marks_failed(self) -> None:
+        """Agent 失败且未携带错误信息时，日志仍应标记失败并记录结束时间。"""
+        agent = MagicMock()
         agent.execute = AsyncMock(return_value=AgentResult(success=False, error=None))
         node = make_agent_node(
             "video_generator",
@@ -120,24 +188,20 @@ class TestMakeAgentNode:
         result = await node(self._make_state())
         assert result["error"] is None
         log = result["agent_logs"][0]
-        assert log.message == "执行失败"
+        assert log.status == "failed"
+        assert log.end_time is not None
 
     @pytest.mark.asyncio
     async def test_success_path_applies_trace_and_snapshots(self) -> None:
-        """成功路径应回写 Trace、input/output snapshot 并累加 completed_steps。"""
-        agent = MagicMock()
-        agent._last_trace = {
-            "prompt_template": "tpl",
-            "prompt_variables": {"v": 1},
-            "input_tokens": 10,
-            "output_tokens": 5,
-            "total_tokens": 15,
-            "cost_cny": 0.01,
-            "latency_ms": 123,
-            "model_name": "qwen",
-            "provider": "dashscope",
-        }
-        agent.execute = AsyncMock(
+        """成功路径应回写 Trace、input/output snapshot 并累加 completed_steps。
+
+        Trace 数据经公开入口产生：真实 Agent 用替身 LLM 走一次 invoke_llm。
+        """
+        agent = _make_agent_with_stub_llm()
+        prompt = ChatPromptTemplate.from_template("分析商品 {name}")
+        with patch("src.api.service.conversation_recorder.ConversationRecorder", _FakeRecorder):
+            await agent.invoke_llm(prompt, {"name": "智能手表"})
+        agent.execute = AsyncMock(  # type: ignore[method-assign]
             return_value=AgentResult(
                 success=True, data={"requirement_report": {"key_features": ["f1"]}}
             )
@@ -158,20 +222,24 @@ class TestMakeAgentNode:
         assert result["completed_steps"] == ["orchestration", "requirement_analysis"]
         log = result["agent_logs"][0]
         assert log.status == "completed"
-        assert log.prompt_template == "tpl"
+        assert log.prompt_template is not None
+        assert "分析商品" in (log.prompt_template or "")
         assert log.input_tokens == 10
         assert log.output_tokens == 5
         assert log.total_tokens == 15
-        assert log.model_name == "qwen"
-        assert log.provider == "dashscope"
+        assert log.model_name == "stub-chat-model"
+        assert log.provider == "stub"
+        assert log.cost_cny is not None and log.cost_cny >= 0
         assert log.input_data == {"product_info": "p"}
         assert log.output_data == {"selling_points_count": 0}
 
     @pytest.mark.asyncio
-    async def test_success_path_without_trace(self) -> None:
-        """Agent 无 _last_trace 时成功路径不应崩溃。"""
-        agent = MagicMock(spec=[])  # 无 _last_trace 属性
-        agent.execute = AsyncMock(return_value=AgentResult(success=True, data={}))
+    async def test_success_path_without_llm_call_has_no_trace(self) -> None:
+        """Agent 未调用过 LLM 时，成功日志不应携带 Trace 数据。"""
+        agent = _make_agent_with_stub_llm()
+        agent.execute = AsyncMock(  # type: ignore[method-assign]
+            return_value=AgentResult(success=True, data={})
+        )
         node = make_agent_node(
             "orchestrator",
             "orchestration",
@@ -185,70 +253,54 @@ class TestMakeAgentNode:
         log = result["agent_logs"][0]
         assert log.status == "completed"
         assert log.output_summary == "编排调度完成"
+        assert log.model_name is None
+        assert log.total_tokens == 0
 
 
 # ==================== WorkflowBuilder ====================
 
 
 class TestWorkflowBuilderRagBranches:
-    """WorkflowBuilder RAG 依赖注入分支测试。"""
+    """WorkflowBuilder 各 RAG 配置下公开构建链路测试。"""
 
-    def test_set_rag_dependencies_sets_fields(self) -> None:
-        """set_rag_dependencies 应更新 retriever 与 session。"""
+    def test_set_rag_dependencies_returns_builder_for_chaining(self) -> None:
+        """set_rag_dependencies 应返回 self 并支持后续公开构建链路。"""
         builder = WorkflowBuilder(rag_enabled=True)
-        retriever = MagicMock()
-        session = MagicMock()
-        result = builder.set_rag_dependencies(retriever=retriever, session=session)
+        result = builder.set_rag_dependencies(retriever=MagicMock(), session=MagicMock())
         assert result is builder
-        assert builder._retriever is retriever
-        assert builder._session is session
+        app = result.add_agent_nodes().add_edges().compile()
+        assert hasattr(app, "ainvoke")
 
     def test_set_rag_dependencies_keeps_existing_on_none(self) -> None:
-        """传 None 时不覆盖已有依赖。"""
-        retriever = MagicMock()
-        builder = WorkflowBuilder(retriever=retriever, rag_enabled=True)
+        """传 None 时不覆盖已有依赖，构建链路仍可完成。"""
+        builder = WorkflowBuilder(retriever=MagicMock(), rag_enabled=True)
         builder.set_rag_dependencies()
-        assert builder._retriever is retriever
+        app = builder.add_agent_nodes().add_edges().compile()
+        assert hasattr(app, "ainvoke")
 
-    def test_create_creative_planner_uses_rag_variant(self) -> None:
-        """有 retriever 且 rag_enabled 时应创建 RAG 增强版创意策划 Agent。"""
-        builder = WorkflowBuilder(retriever=MagicMock(), rag_enabled=True)
-        agent = builder._create_creative_planner()
-        from src.agents.rag_creative_planner import RAGEnhancedCreativePlanner
+    def test_compile_with_rag_variants(self) -> None:
+        """配置检索器且启用 RAG 时应能编译出完整工作流（RAG 增强变体注入）。"""
+        app = create_workflow(retriever=MagicMock(), rag_enabled=True)
+        assert app is not None
+        assert hasattr(app, "ainvoke")
 
-        assert isinstance(agent, RAGEnhancedCreativePlanner)
+    def test_compile_without_retriever(self) -> None:
+        """无检索器时应能编译出完整工作流（普通 Agent 注入）。"""
+        app = create_workflow(retriever=None, rag_enabled=True)
+        assert hasattr(app, "ainvoke")
 
-    def test_create_creative_planner_without_rag(self) -> None:
-        """无 retriever 时应创建普通创意策划 Agent。"""
-        builder = WorkflowBuilder(retriever=None, rag_enabled=True)
-        agent = builder._create_creative_planner()
-        from src.agents.creative_planner import CreativePlannerAgent
+    def test_compile_with_rag_disabled(self) -> None:
+        """rag_enabled=False 时应能编译出完整工作流。"""
+        app = create_workflow(retriever=MagicMock(), rag_enabled=False)
+        assert hasattr(app, "ainvoke")
 
-        assert isinstance(agent, CreativePlannerAgent)
-
-    def test_create_quality_reviewer_uses_rag_variant(self) -> None:
-        """有 retriever 且 rag_enabled 时应创建 RAG 增强版质量审核 Agent。"""
-        builder = WorkflowBuilder(retriever=MagicMock(), rag_enabled=True)
-        agent = builder._create_quality_reviewer()
-        from src.agents.rag_quality_reviewer import RAGEnhancedQualityReviewer
-
-        assert isinstance(agent, RAGEnhancedQualityReviewer)
-
-    def test_create_quality_reviewer_without_rag(self) -> None:
-        """rag_enabled=False 时应创建普通质量审核 Agent。"""
-        builder = WorkflowBuilder(retriever=MagicMock(), rag_enabled=False)
-        agent = builder._create_quality_reviewer()
-        from src.agents.quality_reviewer import QualityReviewerAgent
-
-        assert isinstance(agent, QualityReviewerAgent)
-
-    def test_create_image_generator_without_rag(self) -> None:
-        """无 retriever 时应创建普通图片生成 Agent。"""
-        builder = WorkflowBuilder(retriever=None, rag_enabled=True)
-        agent = builder._create_image_generator()
-        from src.agents.image_generator import ImageGeneratorAgent
-
-        assert isinstance(agent, ImageGeneratorAgent)
+    def test_compile_rag_image_generator_when_image_rag_enabled(self) -> None:
+        """image_rag_enabled 开启时 RAG 工作流应能编译（图片生成 RAG 变体注入）。"""
+        settings = MagicMock()
+        settings.image_rag_enabled = True
+        with patch("src.graph.workflow.get_settings", return_value=settings):
+            app = create_workflow(retriever=MagicMock(), rag_enabled=True)
+        assert hasattr(app, "ainvoke")
 
     def test_add_edges_requires_nodes(self) -> None:
         """未添加节点时 add_edges 应抛 RuntimeError。"""
@@ -346,13 +398,11 @@ class TestCreateWorkflow:
         """set_session 应重建 app 以注入新 session。"""
         workflow = ProductVisualWorkflow(rag_enabled=False)
         old_app = workflow.app
-        session = MagicMock()
-        workflow.set_session(session)
+        workflow.set_session(MagicMock())
         assert workflow.app is not old_app
-        assert workflow._session is session
 
 
-# ==================== 刊登工作流：异常与部分成功终态 ====================
+# ==================== 刊登工作流：经公开入口 run/resume_push 的异常与终态 ====================
 
 
 def _make_product() -> ListingProduct:
@@ -365,154 +415,212 @@ def _push_result(success: bool, platform: Platform = Platform.AMAZON) -> PushRes
     return PushResult(success=success, platform=platform, listing_id="L1" if success else None)
 
 
-class TestListingWorkflowExceptionPaths:
-    """刊登工作流各节点异常/空输入路径测试。"""
+def _benign_agents() -> dict[str, MagicMock]:
+    """构造全链路放行的 Agent 协作者替身（素材/文案/合规）。"""
+    optimizer = MagicMock()
+    optimizer.return_value.execute_sync = MagicMock(return_value={"asset_packages": {}})
+    copywriter = MagicMock()
+    copywriter.return_value.execute = AsyncMock(return_value={"copywriting_packages": {}})
+    compliance = MagicMock()
+    compliance.return_value.execute_sync = MagicMock(return_value={"compliance_reports": {}})
+    return {
+        "src.graph.listing_workflow.AssetOptimizerAgent": optimizer,
+        "src.graph.listing_workflow.AICopywritingAgent": copywriter,
+        "src.graph.listing_workflow.ComplianceCheckerAgent": compliance,
+    }
 
-    @pytest.mark.asyncio
-    async def test_compliance_route_with_error_goes_to_finalize(self) -> None:
-        """合规阶段已有 error 时应路由到 finalize。"""
-        state = ListingState(
-            product=_make_product(),
-            target_platforms=[Platform.AMAZON],
-            error="something broke",
+
+def _push_service(
+    results: dict[str, PushResult] | None = None,
+    error: Exception | None = None,
+) -> MagicMock:
+    """构造推送服务替身。"""
+    service = MagicMock()
+    if error is not None:
+        service.return_value.push_to_platforms = AsyncMock(side_effect=error)
+        service.return_value.retry_failed = AsyncMock(side_effect=error)
+    else:
+        service.return_value.push_to_platforms = AsyncMock(return_value=results or {})
+        service.return_value.retry_failed = AsyncMock(return_value=results or {})
+    return service
+
+
+def _pipeline(extra: dict[str, Any] | None = None) -> ExitStack:
+    """进入刊登工作流全链路替身上下文。
+
+    隔离素材/文案/合规 Agent（可选覆盖）、推送服务与全部持久化写入；
+    返回的 ExitStack 需以 with 语句使用。
+    """
+    agents = _benign_agents()
+    if extra:
+        agents.update(extra)
+    stack = ExitStack()
+    stack.enter_context(
+        patch.multiple(
+            "src.graph.listing_workflow", **{k.rsplit(".", 1)[-1]: v for k, v in agents.items()}
         )
-        assert ListingWorkflow._route_after_compliance(state) == ["finalize"]
+    )
+    persistence = "src.graph.listing_workflow.listing_persistence"
+    for fn in (
+        "update_task_status",
+        "save_push_results",
+        "save_asset_packages",
+        "save_copywriting_packages",
+        "save_compliance_reports",
+    ):
+        stack.enter_context(patch(f"{persistence}.{fn}", new=AsyncMock()))
+    return stack
+
+
+class TestListingWorkflowRunPaths:
+    """刊登工作流经公开 run 入口的终态与异常路径测试。"""
 
     @pytest.mark.asyncio
-    async def test_finalize_partial_success_gives_partial(self) -> None:
-        """部分平台成功时终态应为 partial（刊登任务特有）。"""
+    async def test_run_without_product_ends_failed(self) -> None:
+        """商品缺失时应快速失败并终态 failed。"""
         workflow = ListingWorkflow()
-        state = ListingState(
-            product=_make_product(),
-            target_platforms=[Platform.AMAZON, Platform.EBAY],
-            push_results={
+        with patch("src.graph.listing_workflow.listing_persistence.update_task_status"):
+            result = await workflow.run(None, [Platform.AMAZON])
+        assert result["current_step"] == "finalized"
+        assert result["step_results"]["final_status"] == TaskStatus.FAILED.value
+        assert any(e["node"] == "import_product" for e in result["errors"])
+
+    @pytest.mark.asyncio
+    async def test_run_partial_success_gives_partial(self) -> None:
+        """部分平台推送成功时终态应为 partial（刊登任务特有）。"""
+        workflow = ListingWorkflow()
+        service = _push_service(
+            {
                 "amazon": _push_result(True, Platform.AMAZON),
                 "ebay": _push_result(False, Platform.EBAY),
-            },
+            }
         )
-        with patch(
-            "src.graph.listing_workflow.listing_persistence.update_task_status",
-            new=AsyncMock(),
-        ):
-            result = await workflow._finalize_node(state)
+        with _pipeline({"src.graph.listing_workflow.ListingPushService": service}):
+            result = await workflow.run(
+                _make_product(), [Platform.AMAZON, Platform.EBAY], task_id=1, tenant_id="t1"
+            )
         assert result["step_results"]["final_status"] == TaskStatus.PARTIAL.value
 
     @pytest.mark.asyncio
-    async def test_finalize_no_results_no_error_gives_failed(self) -> None:
-        """无推送结果且无阻断/错误时终态应为 failed。"""
+    async def test_run_all_success_gives_published(self) -> None:
+        """全部平台推送成功时终态应为 published。"""
         workflow = ListingWorkflow()
-        state = ListingState(
-            product=_make_product(),
-            target_platforms=[Platform.AMAZON],
+        service = _push_service({"amazon": _push_result(True, Platform.AMAZON)})
+        with _pipeline({"src.graph.listing_workflow.ListingPushService": service}):
+            result = await workflow.run(
+                _make_product(), [Platform.AMAZON], task_id=1, tenant_id="t1"
+            )
+        assert result["step_results"]["final_status"] == TaskStatus.PUBLISHED.value
+
+    @pytest.mark.asyncio
+    async def test_run_compliance_blocked_suspends_reviewing(self) -> None:
+        """合规 FAIL 平台应被阻断：不推送、终态挂起 reviewing。"""
+        workflow = ListingWorkflow()
+        report = ComplianceReport(
+            listing_task_id=1, platform=Platform.AMAZON, overall=ComplianceStatus.FAIL
         )
-        with patch(
-            "src.graph.listing_workflow.listing_persistence.update_task_status",
-            new=AsyncMock(),
+        compliance = MagicMock()
+        compliance.return_value.execute_sync = MagicMock(
+            return_value={"compliance_reports": {Platform.AMAZON: report}}
+        )
+        service = _push_service({})
+        with _pipeline(
+            {
+                "src.graph.listing_workflow.ComplianceCheckerAgent": compliance,
+                "src.graph.listing_workflow.ListingPushService": service,
+            }
         ):
-            result = await workflow._finalize_node(state)
+            result = await workflow.run(
+                _make_product(), [Platform.AMAZON], task_id=1, tenant_id="t1"
+            )
+        assert result["step_results"]["final_status"] == TaskStatus.REVIEWING.value
+        service.return_value.push_to_platforms.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_run_push_exception_ends_failed(self) -> None:
+        """推送服务抛异常时应记录节点错误并终态 failed。"""
+        workflow = ListingWorkflow()
+        service = _push_service(error=RuntimeError("push exploded"))
+        with _pipeline({"src.graph.listing_workflow.ListingPushService": service}):
+            result = await workflow.run(
+                _make_product(), [Platform.AMAZON], task_id=1, tenant_id="t1"
+            )
         assert result["step_results"]["final_status"] == TaskStatus.FAILED.value
-
-    @pytest.mark.asyncio
-    async def test_asset_optimize_without_product_skips(self) -> None:
-        """无商品时素材优化应跳过。"""
-        workflow = ListingWorkflow()
-        state = ListingState(product=None, target_platforms=[Platform.AMAZON])
-        result = await workflow._asset_optimize_node(state)
-        assert result["current_step"] == "optimize_skipped"
-        assert result["errors"][0]["node"] == "optimize_assets"
-
-    @pytest.mark.asyncio
-    async def test_copy_node_without_product_skips(self) -> None:
-        """无商品时文案生成应跳过。"""
-        workflow = ListingWorkflow()
-        state = ListingState(product=None, target_platforms=[Platform.AMAZON])
-        result = await workflow._copy_node(state)
-        assert result["current_step"] == "copy_skipped"
-
-    @pytest.mark.asyncio
-    async def test_compliance_without_product_fails(self) -> None:
-        """无商品时合规检查应记录错误。"""
-        workflow = ListingWorkflow()
-        state = ListingState(product=None, target_platforms=[Platform.AMAZON])
-        result = await workflow._compliance_node(state)
-        assert result["current_step"] == "compliance_failed"
-
-    @pytest.mark.asyncio
-    async def test_push_without_product_fails(self) -> None:
-        """无商品时平台推送应记录错误。"""
-        workflow = ListingWorkflow()
-        state = ListingState(product=None, target_platforms=[Platform.AMAZON])
-        result = await workflow._push_node(state)
-        assert result["current_step"] == "push_failed"
-
-    @pytest.mark.asyncio
-    async def test_push_skipped_when_all_platforms_blocked(self) -> None:
-        """所有平台被阻断时推送应跳过。"""
-        workflow = ListingWorkflow()
-        state = ListingState(
-            product=_make_product(),
-            target_platforms=[Platform.AMAZON],
-            blocked_platforms=[Platform.AMAZON],
+        assert any(
+            e["node"] == "platform_push" and "push exploded" in e["error"] for e in result["errors"]
         )
-        result = await workflow._push_node(state)
-        assert result["current_step"] == "push_skipped"
 
     @pytest.mark.asyncio
-    async def test_push_exception_records_error(self) -> None:
-        """推送内部异常应被记录为节点错误。"""
+    async def test_run_optimizer_failure_records_error(self) -> None:
+        """素材优化 Agent 抛异常时应记录节点错误，流程继续到终态。"""
         workflow = ListingWorkflow()
-        state = ListingState(
-            product=_make_product(),
-            target_platforms=[Platform.AMAZON],
-        )
-        with patch.object(
-            ListingWorkflow,
-            "_push_with_retry",
-            new=AsyncMock(side_effect=RuntimeError("push exploded")),
+        optimizer = MagicMock()
+        optimizer.return_value.execute_sync = MagicMock(side_effect=RuntimeError("opt boom"))
+        service = _push_service({"amazon": _push_result(True, Platform.AMAZON)})
+        with _pipeline(
+            {
+                "src.graph.listing_workflow.AssetOptimizerAgent": optimizer,
+                "src.graph.listing_workflow.ListingPushService": service,
+            }
         ):
-            result = await workflow._push_node(state)
-        assert result["current_step"] == "push_failed"
-        assert "push exploded" in result["errors"][0]["error"]
-
-    @pytest.mark.asyncio
-    async def test_copy_node_exception_records_error(self) -> None:
-        """文案生成内部异常应被记录为节点错误。"""
-        workflow = ListingWorkflow()
-        state = ListingState(
-            product=_make_product(),
-            target_platforms=[Platform.AMAZON],
+            result = await workflow.run(
+                _make_product(), [Platform.AMAZON], task_id=1, tenant_id="t1"
+            )
+        assert any(
+            e["node"] == "optimize_assets" and "opt boom" in e["error"] for e in result["errors"]
         )
-        with patch("src.graph.listing_workflow.AICopywritingAgent") as mock_cls:
-            mock_cls.return_value.execute = AsyncMock(side_effect=RuntimeError("llm down"))
-            result = await workflow._copy_node(state)
-        assert result["current_step"] == "copy_failed"
-        assert "llm down" in result["errors"][0]["error"]
 
     @pytest.mark.asyncio
-    async def test_import_node_load_failure_records_error(self) -> None:
-        """AI 图片加载失败时应记录错误但不中断 import。"""
+    async def test_run_copywriter_failure_records_error(self) -> None:
+        """文案 Agent 抛异常时应记录节点错误，流程继续到终态。"""
+        workflow = ListingWorkflow()
+        copywriter = MagicMock()
+        copywriter.return_value.execute = AsyncMock(side_effect=RuntimeError("llm down"))
+        service = _push_service({"amazon": _push_result(True, Platform.AMAZON)})
+        with _pipeline(
+            {
+                "src.graph.listing_workflow.AICopywritingAgent": copywriter,
+                "src.graph.listing_workflow.ListingPushService": service,
+            }
+        ):
+            result = await workflow.run(
+                _make_product(), [Platform.AMAZON], task_id=1, tenant_id="t1"
+            )
+        assert any(
+            e["node"] == "generate_copy" and "llm down" in e["error"] for e in result["errors"]
+        )
+
+    @pytest.mark.asyncio
+    async def test_run_import_load_failure_records_error(self) -> None:
+        """AI 图片加载失败时应记录错误但不中断导入。"""
         workflow = ListingWorkflow()
         product = ListingProduct(
             sku="WF-SKU-2",
             title="With Source",
             attributes={"source_product_id": 99},
         )
-        state = ListingState(product=product, target_platforms=[Platform.AMAZON])
+        loader = MagicMock()
+        loader.return_value.load_images = AsyncMock(side_effect=RuntimeError("db down"))
+        service = _push_service({"amazon": _push_result(True, Platform.AMAZON)})
+        session = AsyncMock()
         with patch("src.graph.listing_workflow.get_db_session") as mock_session_ctx:
-            mock_session = AsyncMock()
-            mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=session)
             mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
-            with patch("src.graph.listing_workflow.ListingAssetLoader") as mock_loader_cls:
-                mock_loader_cls.return_value.load_images = AsyncMock(
-                    side_effect=RuntimeError("db down")
-                )
-                result = await workflow._import_node(state)
-        assert result["current_step"] == "imported"
-        assert "db down" in result["errors"][0]["error"]
+            with _pipeline(
+                {
+                    "src.graph.listing_workflow.ListingAssetLoader": loader,
+                    "src.graph.listing_workflow.ListingPushService": service,
+                }
+            ):
+                result = await workflow.run(product, [Platform.AMAZON], task_id=1, tenant_id="t1")
+        assert any(
+            e["node"] == "import_product" and "db down" in e["error"] for e in result["errors"]
+        )
+        assert result["step_results"]["final_status"] == TaskStatus.PUBLISHED.value
 
 
 class TestListingWorkflowResumePartial:
-    """resume_push 部分成功终态判定测试。"""
+    """resume_push 部分成功终态判定测试（经公开推送服务替身）。"""
 
     @pytest.mark.asyncio
     async def test_resume_push_partial_gives_partial(self) -> None:
@@ -538,10 +646,18 @@ class TestListingWorkflowResumePartial:
         execute_result.scalar_one_or_none = MagicMock(return_value=product_po)
         session.execute = AsyncMock(return_value=execute_result)
 
+        service = _push_service(
+            {
+                "amazon": _push_result(True, Platform.AMAZON),
+                "ebay": _push_result(False, Platform.EBAY),
+            }
+        )
+
         with patch("src.graph.listing_workflow.get_db_session") as mock_ctx:
             mock_ctx.return_value.__aenter__ = AsyncMock(return_value=session)
             mock_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
             with (
+                patch("src.graph.listing_workflow.ListingPushService", service),
                 patch(
                     "src.graph.listing_workflow.listing_persistence.load_asset_packages",
                     new=AsyncMock(return_value=[]),
@@ -558,10 +674,9 @@ class TestListingWorkflowResumePartial:
                     "src.graph.listing_workflow.listing_persistence.update_task_status",
                     new=AsyncMock(),
                 ),
-                patch.object(
-                    ListingWorkflow,
-                    "_push_with_retry",
-                    new=AsyncMock(return_value={"amazon": _push_result(True)}),
+                patch(
+                    "src.graph.listing_workflow.listing_persistence.save_push_results",
+                    new=AsyncMock(),
                 ),
             ):
                 result = await workflow.resume_push(

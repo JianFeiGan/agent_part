@@ -1,7 +1,12 @@
-"""AI 会话记录 API 行为测试。
+"""
+AI 会话记录 API 行为测试。
 
-覆盖列表过滤、详情的跨租户 404、使用量概览聚合、
-费用预算的零预算分支与内容搜索的 LIKE 通配符转义。
+Description:
+    覆盖列表过滤、详情的跨租户 404、使用量概览聚合、
+    费用预算的零预算分支与内容搜索的 LIKE 通配符转义。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations

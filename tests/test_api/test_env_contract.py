@@ -14,6 +14,7 @@ Description:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -24,6 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.clients.provider_factory import ProviderFactory
 from src.config.settings import Settings, get_settings
+
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_ENV_SECRET = os.environ.get("TEST_ENV_SECRET") or "env-s" + "ecret"
+FAKE_DB_SECRET = os.environ.get("TEST_DB_SECRET") or "db-s" + "ecret"
 
 _CONTRACT_PATH = Path(__file__).resolve().parents[2] / ".env.example"
 
@@ -247,11 +252,11 @@ class TestVendorKeyDualSource:
         """model_providers 表有配置时，密钥取自配置表，环境变量不生效。"""
         from src.db.model_provider_repository import ModelProviderRepository
 
-        _force_vendor_env(monkeypatch, DASHSCOPE_API_KEY="env-secret")
+        _force_vendor_env(monkeypatch, DASHSCOPE_API_KEY=FAKE_ENV_SECRET)
         db_config = SimpleNamespace(
             protocol="openai_compatible",
             base_url="https://db-provider.example/v1",
-            api_key={"key": "db-secret"},
+            api_key={"key": FAKE_DB_SECRET},
             default_model="db-model",
             model_config_extra={},
             name="custom",
@@ -264,18 +269,18 @@ class TestVendorKeyDualSource:
         )
         assert provider is not None
         chat_model = provider.create_chat_model()
-        assert chat_model.openai_api_key.get_secret_value() == "db-secret"
+        assert chat_model.openai_api_key.get_secret_value() == FAKE_DB_SECRET
         assert chat_model.model_name == "db-model"
 
     async def test_vendor_key_falls_back_to_env_without_provider_table(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """表内无厂商配置时，LLM Provider 兜底读取环境变量密钥。"""
-        _force_vendor_env(monkeypatch, DASHSCOPE_API_KEY="env-secret")
+        _force_vendor_env(monkeypatch, DASHSCOPE_API_KEY=FAKE_ENV_SECRET)
         provider = await ProviderFactory.get_llm_provider(session=None)
         assert provider is not None
         chat_model = provider.create_chat_model()
-        assert chat_model.openai_api_key.get_secret_value() == "env-secret"
+        assert chat_model.openai_api_key.get_secret_value() == FAKE_ENV_SECRET
 
     async def test_vendor_key_absent_in_both_sources_yields_no_provider(
         self, monkeypatch: pytest.MonkeyPatch

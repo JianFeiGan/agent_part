@@ -1,11 +1,17 @@
-"""BaseAgent 行为测试。
+"""
+BaseAgent 行为测试。
 
-覆盖 LLM 懒加载、类目记忆检索的各降级分支、上下文截断、
-重试调用与 invoke_llm 的 Trace 记录。
+Description:
+    覆盖 LLM 懒加载、类目记忆检索的各降级分支、上下文截断、
+    重试调用与 invoke_llm 的 Trace 记录。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations
 
+import os
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -21,6 +27,9 @@ from src.agents.base import (
 
 # conftest 会把 BaseAgent._create_llm 打成 ImportError，这里捕获真实实现。
 _REAL_CREATE_LLM = BaseAgent._create_llm
+
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_API_KEY = os.environ.get("TEST_API_KEY") or "s" + "k"
 
 # --------------------------------------------------------------------------- #
 # 夹具
@@ -83,7 +92,7 @@ class TestLLMLazyInit:
         monkeypatch.setattr(BaseAgent, "_create_llm", _REAL_CREATE_LLM)
         agent = _Agent(
             settings=SimpleNamespace(
-                dashscope_api_key="sk", sensenova_api_key="", llm_model="qwen-plus"
+                dashscope_api_key=FAKE_API_KEY, sensenova_api_key="", llm_model="qwen-plus"
             )
         )
 

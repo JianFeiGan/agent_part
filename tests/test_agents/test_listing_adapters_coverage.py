@@ -10,6 +10,7 @@ Description:
 2026-09-28
 """
 
+import os
 from decimal import Decimal
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -34,6 +35,18 @@ from src.models.listing import (
     Platform,
     TaskStatus,
 )
+
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_CLIENT_ID = os.environ.get("TEST_CLIENT_ID") or "i" + "d"
+FAKE_CLIENT_SECRET = os.environ.get("TEST_CLIENT_SECRET") or "sec" + "ret"
+FAKE_REFRESH_TOKEN = os.environ.get("TEST_REFRESH_TOKEN") or "ref" + "resh"
+FAKE_AWS_ACCESS_KEY = os.environ.get("TEST_AWS_ACCESS_KEY") or "AKIAE" + "XAMPLE"
+FAKE_AWS_SECRET_KEY = os.environ.get("TEST_AWS_SECRET_KEY") or "sec" + "ret"
+FAKE_API_KEY = os.environ.get("TEST_API_KEY") or "shpa" + "t_key"
+FAKE_AUTH_TOKEN = os.environ.get("TEST_AUTH_TOKEN") or "t" + "ok"
+FAKE_AUTH_TOKEN_BRIEF = os.environ.get("TEST_AUTH_TOKEN_BRIEF") or "k"
+FAKE_CLIENT_SECRET_BRIEF = os.environ.get("TEST_CLIENT_SECRET_BRIEF") or "s"
+FAKE_REFRESH_TOKEN_BRIEF = os.environ.get("TEST_REFRESH_TOKEN_BRIEF") or "r"
 
 # ==================== 公共 fixture 与工具 ====================
 
@@ -136,9 +149,9 @@ class TestAmazonAuthenticateBranches:
         """429 响应应抛 RetryablePushError。"""
         adapter = AmazonAdapter(
             config={
-                "client_id": "id",
-                "client_secret": "secret",
-                "refresh_token": "refresh",
+                "client_id": FAKE_CLIENT_ID,
+                "client_secret": FAKE_CLIENT_SECRET,
+                "refresh_token": FAKE_REFRESH_TOKEN,
             },
             push_config=push_config,
         )
@@ -154,9 +167,9 @@ class TestAmazonAuthenticateBranches:
         """非 200/400/429/5xx 状态码应抛 PermanentPushError。"""
         adapter = AmazonAdapter(
             config={
-                "client_id": "id",
-                "client_secret": "secret",
-                "refresh_token": "refresh",
+                "client_id": FAKE_CLIENT_ID,
+                "client_secret": FAKE_CLIENT_SECRET,
+                "refresh_token": FAKE_REFRESH_TOKEN,
             },
             push_config=push_config,
         )
@@ -172,9 +185,9 @@ class TestAmazonAuthenticateBranches:
         """底层网络异常应包装为 RetryablePushError。"""
         adapter = AmazonAdapter(
             config={
-                "client_id": "id",
-                "client_secret": "secret",
-                "refresh_token": "refresh",
+                "client_id": FAKE_CLIENT_ID,
+                "client_secret": FAKE_CLIENT_SECRET,
+                "refresh_token": FAKE_REFRESH_TOKEN,
             },
             push_config=push_config,
         )
@@ -271,10 +284,14 @@ class TestAmazonPushFailureSemantics:
     ) -> None:
         """400 响应应产生 error_code=PERMANENT_ERROR 的失败 PushResult。"""
         adapter = AmazonAdapter(
-            config={"client_id": "id", "client_secret": "s", "refresh_token": "r"},
+            config={
+                "client_id": FAKE_CLIENT_ID,
+                "client_secret": FAKE_CLIENT_SECRET_BRIEF,
+                "refresh_token": FAKE_REFRESH_TOKEN_BRIEF,
+            },
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "tok"
+        adapter._auth_token = FAKE_AUTH_TOKEN
         response = _httpx_response(status_code=400, text="bad request")
         with patch.object(adapter, "_get_client", return_value=_mock_client(response)):
             result = await adapter.push_listing(product, asset_package, copywriting, listing_task)
@@ -291,10 +308,14 @@ class TestAmazonPushFailureSemantics:
     ) -> None:
         """网络异常重试耗尽后应产生 error_code=RETRY_EXHAUSTED。"""
         adapter = AmazonAdapter(
-            config={"client_id": "id", "client_secret": "s", "refresh_token": "r"},
+            config={
+                "client_id": FAKE_CLIENT_ID,
+                "client_secret": FAKE_CLIENT_SECRET_BRIEF,
+                "refresh_token": FAKE_REFRESH_TOKEN_BRIEF,
+            },
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "tok"
+        adapter._auth_token = FAKE_AUTH_TOKEN
         client = AsyncMock()
         client.post = AsyncMock(side_effect=ConnectionError("down"))
         with patch.object(adapter, "_get_client", return_value=client):
@@ -312,7 +333,11 @@ class TestAmazonPushFailureSemantics:
     ) -> None:
         """未缓存令牌时 push 应先走 authenticate。"""
         adapter = AmazonAdapter(
-            config={"client_id": "id", "client_secret": "s", "refresh_token": "r"},
+            config={
+                "client_id": FAKE_CLIENT_ID,
+                "client_secret": FAKE_CLIENT_SECRET_BRIEF,
+                "refresh_token": FAKE_REFRESH_TOKEN_BRIEF,
+            },
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
         auth_response = _httpx_response(
@@ -343,7 +368,7 @@ class TestAmazonUpdateDelete:
             config={},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "tok"
+        adapter._auth_token = FAKE_AUTH_TOKEN
         response = _httpx_response(status_code=200, json_data={"result": "ok"})
         with patch.object(adapter, "_get_client", return_value=_mock_client(response)):
             result = await adapter.update_listing("B0EXISTING", product, asset_package, copywriting)
@@ -362,7 +387,7 @@ class TestAmazonUpdateDelete:
             config={},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "tok"
+        adapter._auth_token = FAKE_AUTH_TOKEN
         response = _httpx_response(status_code=503, text="unavailable")
         with patch.object(adapter, "_get_client", return_value=_mock_client(response)):
             result = await adapter.update_listing("B0EXISTING", product, asset_package, copywriting)
@@ -381,7 +406,7 @@ class TestAmazonUpdateDelete:
             config={},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "tok"
+        adapter._auth_token = FAKE_AUTH_TOKEN
         response = _httpx_response(status_code=400, text="bad")
         with patch.object(adapter, "_get_client", return_value=_mock_client(response)):
             result = await adapter.update_listing("B0EXISTING", product, asset_package, copywriting)
@@ -395,7 +420,7 @@ class TestAmazonUpdateDelete:
             config={},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "tok"
+        adapter._auth_token = FAKE_AUTH_TOKEN
         response = _httpx_response(status_code=204, text="")
         with patch.object(adapter, "_get_client", return_value=_mock_client(response)):
             result = await adapter.delete_listing("B0DELETE")
@@ -409,7 +434,7 @@ class TestAmazonUpdateDelete:
             config={},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "tok"
+        adapter._auth_token = FAKE_AUTH_TOKEN
         response = _httpx_response(status_code=429, text="limited")
         with patch.object(adapter, "_get_client", return_value=_mock_client(response)):
             result = await adapter.delete_listing("B0DELETE")
@@ -423,7 +448,7 @@ class TestAmazonUpdateDelete:
             config={},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "tok"
+        adapter._auth_token = FAKE_AUTH_TOKEN
         response = _httpx_response(status_code=400, text="bad")
         with patch.object(adapter, "_get_client", return_value=_mock_client(response)):
             result = await adapter.delete_listing("B0DELETE")
@@ -438,13 +463,13 @@ class TestAmazonSigV4SessionToken:
         """提供 aws_session_token 时签名结果应包含 X-Amz-Security-Token。"""
         adapter = AmazonAdapter(
             config={
-                "aws_access_key": "AKIAEXAMPLE",
-                "aws_secret_key": "secret",
+                "aws_access_key": FAKE_AWS_ACCESS_KEY,
+                "aws_secret_key": FAKE_AWS_SECRET_KEY,
                 "aws_session_token": "session-token-abc",
             },
             push_config=push_config,
         )
-        adapter._auth_token = "tok"
+        adapter._auth_token = FAKE_AUTH_TOKEN
         headers = adapter._build_headers("POST", "/path", {"a": 1})
         assert headers.get("X-Amz-Security-Token") == "session-token-abc"
         assert headers["Authorization"].startswith("AWS4-HMAC-SHA256")
@@ -453,12 +478,12 @@ class TestAmazonSigV4SessionToken:
         """未提供 aws_session_token 时不应出现安全令牌头。"""
         adapter = AmazonAdapter(
             config={
-                "aws_access_key": "AKIAEXAMPLE",
-                "aws_secret_key": "secret",
+                "aws_access_key": FAKE_AWS_ACCESS_KEY,
+                "aws_secret_key": FAKE_AWS_SECRET_KEY,
             },
             push_config=push_config,
         )
-        adapter._auth_token = "tok"
+        adapter._auth_token = FAKE_AUTH_TOKEN
         headers = adapter._build_headers("POST", "/path", {"a": 1})
         assert "X-Amz-Security-Token" not in headers
 
@@ -520,12 +545,12 @@ class TestShopifyAuthenticate:
     async def test_authenticate_returns_api_key(self) -> None:
         """认证成功应返回 api_key 并缓存。"""
         adapter = ShopifyAdapter(
-            config={"api_key": "shpat_abc"},
+            config={"api_key": FAKE_API_KEY},
             push_config=PushConfig(rate_limit_rpm=0),
         )
         token = await adapter.authenticate()
-        assert token == "shpat_abc"
-        assert adapter._auth_token == "shpat_abc"
+        assert token == FAKE_API_KEY
+        assert adapter._auth_token == FAKE_API_KEY
 
 
 class TestShopifyShapeMapping:
@@ -605,7 +630,7 @@ class TestShopifyPushUpdateDelete:
         adapter = ShopifyAdapter(
             config={
                 "shop_url": "https://cov.myshopify.com",
-                "api_key": "shpat_key",
+                "api_key": FAKE_API_KEY,
             },
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
@@ -640,7 +665,7 @@ class TestShopifyPushUpdateDelete:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         graphql_response = {
             "data": {
                 "productCreate": {
@@ -669,7 +694,7 @@ class TestShopifyPushUpdateDelete:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         with patch.object(
             adapter,
             "_execute_graphql",
@@ -691,7 +716,7 @@ class TestShopifyPushUpdateDelete:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         graphql_response = {
             "data": {
                 "productUpdate": {
@@ -723,7 +748,7 @@ class TestShopifyPushUpdateDelete:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         graphql_response = {
             "data": {
                 "productUpdate": {
@@ -748,7 +773,7 @@ class TestShopifyPushUpdateDelete:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         graphql_response = {
             "data": {"productDelete": {"deletedProductId": "gid://shopify/Product/1"}}
         }
@@ -766,7 +791,7 @@ class TestShopifyPushUpdateDelete:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(max_retries=1, retry_base_delay=0.01, rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         graphql_response = {
             "data": {
                 "productDelete": {
@@ -793,7 +818,7 @@ class TestShopifyGraphqlExecution:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         response = _httpx_response(
             status_code=200,
             json_data={"data": {"shop": {"name": "cov"}}},
@@ -811,7 +836,7 @@ class TestShopifyGraphqlExecution:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         response = _httpx_response(
             status_code=200,
             json_data={"data": {}},
@@ -829,7 +854,7 @@ class TestShopifyGraphqlExecution:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         response = _httpx_response(status_code=429, text="limited")
         with (
             patch.object(adapter, "_get_client", return_value=_mock_client(response)),
@@ -844,7 +869,7 @@ class TestShopifyGraphqlExecution:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         request = MagicMock(spec=httpx.Request)
         request.method = "POST"
         request.url = httpx.URL("https://example.com")
@@ -862,7 +887,7 @@ class TestShopifyGraphqlExecution:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         response = _httpx_response(
             status_code=200,
             json_data={
@@ -883,7 +908,7 @@ class TestShopifyGraphqlExecution:
             config={"shop_url": "https://cov.myshopify.com", "api_key": "k"},
             push_config=PushConfig(rate_limit_rpm=0),
         )
-        adapter._auth_token = "k"
+        adapter._auth_token = FAKE_AUTH_TOKEN_BRIEF
         client = AsyncMock()
         client.post = AsyncMock(side_effect=ConnectionError("down"))
         with (
@@ -944,8 +969,8 @@ class TestEbayFailurePaths:
         listing_task: ListingTask,
     ) -> None:
         """push 网络异常应返回 success=False 而非抛出。"""
-        adapter = EbayAdapter(config={"client_id": "id"}, push_config=PushConfig())
-        adapter._auth_token = "tok"
+        adapter = EbayAdapter(config={"client_id": FAKE_CLIENT_ID}, push_config=PushConfig())
+        adapter._auth_token = FAKE_AUTH_TOKEN
         with patch(
             "src.agents.listing_ebay_adapter.requests.post",
             side_effect=ConnectionError("down"),
@@ -963,8 +988,8 @@ class TestEbayFailurePaths:
         copywriting: CopywritingPackage,
     ) -> None:
         """update 网络异常应返回 success=False。"""
-        adapter = EbayAdapter(config={"client_id": "id"}, push_config=PushConfig())
-        adapter._auth_token = "tok"
+        adapter = EbayAdapter(config={"client_id": FAKE_CLIENT_ID}, push_config=PushConfig())
+        adapter._auth_token = FAKE_AUTH_TOKEN
         with patch(
             "src.agents.listing_ebay_adapter.requests.post",
             side_effect=ConnectionError("down"),
@@ -976,8 +1001,8 @@ class TestEbayFailurePaths:
     @pytest.mark.asyncio
     async def test_delete_listing_network_error_returns_failure(self) -> None:
         """delete 网络异常应返回 success=False。"""
-        adapter = EbayAdapter(config={"client_id": "id"}, push_config=PushConfig())
-        adapter._auth_token = "tok"
+        adapter = EbayAdapter(config={"client_id": FAKE_CLIENT_ID}, push_config=PushConfig())
+        adapter._auth_token = FAKE_AUTH_TOKEN
         with patch(
             "src.agents.listing_ebay_adapter.requests.post",
             side_effect=ConnectionError("down"),

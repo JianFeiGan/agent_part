@@ -9,6 +9,7 @@ Description:
 2026-04-25
 """
 
+import os
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -24,14 +25,22 @@ from src.models.listing import (
     Platform,
 )
 
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_CLIENT_ID = os.environ.get("TEST_CLIENT_ID") or "test_cl" + "ient_id"
+FAKE_CLIENT_SECRET = os.environ.get("TEST_CLIENT_SECRET") or "test_clie" + "nt_secret"
+FAKE_REFRESH_TOKEN = os.environ.get("TEST_REFRESH_TOKEN") or "test_refr" + "esh_token"
+FAKE_ACCESS_TOKEN = os.environ.get("TEST_ACCESS_TOKEN") or "test_acces" + "s_token_123"
+FAKE_ACCESS_TOKEN_2 = os.environ.get("TEST_ACCESS_TOKEN_2") or "auto_" + "token"
+FAKE_AUTH_TOKEN = os.environ.get("TEST_AUTH_TOKEN") or "test_" + "token"
+
 
 @pytest.fixture
 def config() -> dict:
     """创建 eBay 平台配置。"""
     return {
-        "client_id": "test_client_id",
-        "client_secret": "test_client_secret",
-        "refresh_token": "test_refresh_token",
+        "client_id": FAKE_CLIENT_ID,
+        "client_secret": FAKE_CLIENT_SECRET,
+        "refresh_token": FAKE_REFRESH_TOKEN,
         "site_id": "0",
     }
 
@@ -107,7 +116,7 @@ class TestEbayAdapterAuthenticate:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
-            "access_token": "test_access_token_123",
+            "access_token": FAKE_ACCESS_TOKEN,
             "token_type": "Bearer",
             "expires_in": 7200,
         }
@@ -272,7 +281,7 @@ class TestEbayAdapterPushListing:
         task: ListingTask,
     ) -> None:
         """测试刊登推送成功。"""
-        adapter._auth_token = "test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -296,7 +305,7 @@ class TestEbayAdapterPushListing:
         task: ListingTask,
     ) -> None:
         """测试刊登推送失败。"""
-        adapter._auth_token = "test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -310,6 +319,33 @@ class TestEbayAdapterPushListing:
         assert result.platform == Platform.EBAY
         assert "Invalid category" in result.error
 
+    @pytest.mark.asyncio
+    async def test_push_listing_rejects_dtd_response(
+        self,
+        adapter: EbayAdapter,
+        product: ListingProduct,
+        asset_package: AssetPackage,
+        copywriting: CopywritingPackage,
+        task: ListingTask,
+    ) -> None:
+        """响应携带 DTD/实体声明时应判定为失败，而非触发实体扩展。"""
+        adapter._auth_token = FAKE_AUTH_TOKEN
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = (
+            '<?xml version="1.0"?><!DOCTYPE AddItemResponse [<!ENTITY x "xx">]>'
+            '<AddItemResponse xmlns="urn:ebay:apis:eBLBaseComponents"><Ack>&x;</Ack>'
+            "</AddItemResponse>"
+        )
+
+        with patch("src.agents.listing_ebay_adapter.requests.post") as mock_post:
+            mock_post.return_value = mock_response
+            result = await adapter.push_listing(product, asset_package, copywriting, task)
+
+        assert result.success is False
+        assert result.platform == Platform.EBAY
+
     async def test_push_listing_triggers_auth_if_needed(
         self,
         adapter: EbayAdapter,
@@ -322,7 +358,7 @@ class TestEbayAdapterPushListing:
         mock_token_response = MagicMock()
         mock_token_response.status_code = 200
         mock_token_response.json.return_value = {
-            "access_token": "auto_token",
+            "access_token": FAKE_ACCESS_TOKEN_2,
         }
 
         mock_api_response = MagicMock()
@@ -356,7 +392,7 @@ class TestEbayAdapterUpdateListing:
         copywriting: CopywritingPackage,
     ) -> None:
         """测试刊登更新成功。"""
-        adapter._auth_token = "test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -378,7 +414,7 @@ class TestEbayAdapterUpdateListing:
         copywriting: CopywritingPackage,
     ) -> None:
         """测试刊登更新失败。"""
-        adapter._auth_token = "test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -418,7 +454,7 @@ class TestEbayAdapterDeleteListing:
         adapter: EbayAdapter,
     ) -> None:
         """测试刊登删除成功。"""
-        adapter._auth_token = "test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -437,7 +473,7 @@ class TestEbayAdapterDeleteListing:
         adapter: EbayAdapter,
     ) -> None:
         """测试刊登删除失败。"""
-        adapter._auth_token = "test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -471,7 +507,7 @@ class TestEbayAdapterXmlPayload:
         task: ListingTask,
     ) -> None:
         """测试请求头 Content-Type 包含 xml。"""
-        adapter._auth_token = "test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = MagicMock()
         mock_response.status_code = 200

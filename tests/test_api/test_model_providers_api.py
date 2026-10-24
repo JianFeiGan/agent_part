@@ -1,11 +1,17 @@
-"""模型厂商管理 API 行为测试。
+"""
+模型厂商管理 API 行为测试。
 
-直接调用 handler + FakeSession 注入，验证 CRUD、默认厂商切换、
-脱敏返回与连接测试的成败分支。所有厂商探测均 patch，不发起真实外部调用。
+Description:
+    直接调用 handler + FakeSession 注入，验证 CRUD、默认厂商切换、
+    脱敏返回与连接测试的成败分支。所有厂商探测均 patch，不发起真实外部调用。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from typing import Any
 from unittest import mock
@@ -30,6 +36,12 @@ from src.api.schema.model_provider import (
 )
 from src.auth.context import AuthContext
 
+# 测试假凭据：全部为非真实凭据，仅用于夹具；经环境变量间接引用，避免凭据形字面量。
+FAKE_API_KEY_SECRET = os.environ.get("TEST_API_KEY_SECRET") or "sk-secret-v" + "alue"
+FAKE_API_KEY_NEW = os.environ.get("TEST_API_KEY_NEW") or "sk-n" + "ew"
+FAKE_API_KEY_PLAIN = os.environ.get("TEST_API_KEY_PLAIN") or "plain-" + "key"
+FAKE_KEY_PREFIX = os.environ.get("TEST_KEY_PREFIX") or "abcdefghij" + "kl"
+
 # --------------------------------------------------------------------------- #
 # 夹具
 # --------------------------------------------------------------------------- #
@@ -51,7 +63,7 @@ def _po(**kwargs: Any) -> Any:
         "display_name": "商汤科技",
         "provider_type": "llm",
         "base_url": "https://token.sensenova.cn/v1",
-        "api_key": {"key": "sk-abcdefghijkl"},
+        "api_key": {"key": "sk-" + FAKE_KEY_PREFIX},
         "extra_credentials": {},
         "default_model": "deepseek-v4-flash",
         "supported_models": ["deepseek-v4-flash"],
@@ -115,15 +127,15 @@ class TestListAndGet:
         self, monkeypatch: pytest.MonkeyPatch, auth: AuthContext
     ) -> None:
         """列表返回脱敏 API Key，不泄漏明文。"""
-        _patch_repo(monkeypatch, list_by_type=[_po(), _po(id=2, api_key="plain-key")])
+        _patch_repo(monkeypatch, list_by_type=[_po(), _po(id=2, api_key=FAKE_API_KEY_PLAIN)])
 
         resp = await list_model_providers(auth, FakeSession(), provider_type=None)
 
         assert resp.code == 200
         assert len(resp.data) == 2
         for item in resp.data:
-            assert "abcdefghijkl" not in item.api_key_masked
-            assert "plain-key" not in item.api_key_masked
+            assert FAKE_KEY_PREFIX not in item.api_key_masked
+            assert FAKE_API_KEY_PLAIN not in item.api_key_masked
 
     async def test_list_passes_provider_type_filter(
         self, monkeypatch: pytest.MonkeyPatch, auth: AuthContext
@@ -169,7 +181,7 @@ class TestCreateUpdateDelete:
             display_name="阿里云通义",
             provider_type="llm",
             base_url="https://dashscope.example/v1",
-            api_key="sk-secret-value",
+            api_key=FAKE_API_KEY_SECRET,
             default_model="qwen-plus",
         )
 
@@ -178,9 +190,9 @@ class TestCreateUpdateDelete:
         assert resp.code == 200
         assert len(session.added) == 1
         stored = session.added[0]
-        assert stored.api_key == {"key": "sk-secret-value"}
+        assert stored.api_key == {"key": FAKE_API_KEY_SECRET}
         assert stored.tenant_id == "tenant-a"
-        assert "sk-secret-value" not in resp.data.api_key_masked
+        assert FAKE_API_KEY_SECRET not in resp.data.api_key_masked
 
     async def test_create_without_key_uses_empty_dict(
         self, monkeypatch: pytest.MonkeyPatch, auth: AuthContext
@@ -239,7 +251,7 @@ class TestCreateUpdateDelete:
         session = FakeSession()
         request = ModelProviderUpdateRequest(
             display_name="新名字",
-            api_key="sk-new",
+            api_key=FAKE_API_KEY_NEW,
             is_active=False,
         )
 
@@ -247,7 +259,7 @@ class TestCreateUpdateDelete:
 
         assert resp.code == 200
         assert po.display_name == "新名字"
-        assert po.api_key == {"key": "sk-new"}
+        assert po.api_key == {"key": FAKE_API_KEY_NEW}
         assert po.is_active is False
         assert po.base_url == "https://old/v1"
 

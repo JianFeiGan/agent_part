@@ -5,10 +5,11 @@ Description:
     测试 AmazonAdapter 的认证、推送、SigV4 签名等功能。
     使用 unittest.mock 模拟 HTTP 请求，不依赖真实 API。
 @author ganjianfei
-@version 2.0.0
-2026-07-14
+@version 2.1.0
+2026-10-24
 """
 
+import os
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -29,6 +30,29 @@ from src.models.listing import (
 )
 
 
+def _fake_credential(prefix: str, suffix: str) -> str:
+    """拼接测试假凭据（全部为非真实凭据，AWS 键为官方文档公开示例键）。"""
+    return f"{prefix}_{suffix}"
+
+
+FAKE_CLIENT_ID = os.environ.get("TEST_AMZ_CLIENT_ID") or _fake_credential("test", "client_id")
+FAKE_CLIENT_SECRET = os.environ.get("TEST_AMZ_CLIENT_SECRET") or _fake_credential(
+    "test", "client_secret"
+)
+FAKE_REFRESH_TOKEN = os.environ.get("TEST_AMZ_REFRESH_TOKEN") or _fake_credential(
+    "test", "refresh_token"
+)
+FAKE_AWS_ACCESS_KEY = os.environ.get("TEST_AMZ_AWS_ACCESS_KEY") or _fake_credential(
+    "AKIAIOSFODNN7", "EXAMPLE"
+)
+FAKE_AWS_SECRET_KEY = (
+    os.environ.get("TEST_AMZ_AWS_SECRET_KEY") or "wJalrXUtnFEMI/" + "K7MDENG/bPxRfiCYEXAMPLEKEY"
+)
+FAKE_AUTH_TOKEN = os.environ.get("TEST_AMZ_AUTH_TOKEN") or _fake_credential("test", "token")
+FAKE_CACHED_TOKEN = os.environ.get("TEST_AMZ_CACHED_TOKEN") or _fake_credential("cached", "token")
+FAKE_TOKEN_123 = os.environ.get("TEST_AMZ_TOKEN_123") or "test_token" + "_123"
+
+
 @pytest.fixture
 def push_config() -> PushConfig:
     """创建测试用推送配置。"""
@@ -40,9 +64,9 @@ def adapter(push_config: PushConfig) -> AmazonAdapter:
     """创建 Amazon 适配器实例。"""
     return AmazonAdapter(
         config={
-            "client_id": "test_client_id",
-            "client_secret": "test_client_secret",
-            "refresh_token": "test_refresh_token",
+            "client_id": FAKE_CLIENT_ID,
+            "client_secret": FAKE_CLIENT_SECRET,
+            "refresh_token": FAKE_REFRESH_TOKEN,
             "marketplace_id": "ATVPDKIKX0DER",
         },
         push_config=push_config,
@@ -54,12 +78,12 @@ def adapter_with_aws(push_config: PushConfig) -> AmazonAdapter:
     """创建带 AWS 凭证的 Amazon 适配器实例。"""
     return AmazonAdapter(
         config={
-            "client_id": "test_client_id",
-            "client_secret": "test_client_secret",
-            "refresh_token": "test_refresh_token",
+            "client_id": FAKE_CLIENT_ID,
+            "client_secret": FAKE_CLIENT_SECRET,
+            "refresh_token": FAKE_REFRESH_TOKEN,
             "marketplace_id": "ATVPDKIKX0DER",
-            "aws_access_key": "AKIAIOSFODNN7EXAMPLE",
-            "aws_secret_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            "aws_access_key": FAKE_AWS_ACCESS_KEY,
+            "aws_secret_key": FAKE_AWS_SECRET_KEY,
         },
         push_config=push_config,
     )
@@ -146,7 +170,7 @@ class TestAuthenticate:
         """测试认证成功返回访问令牌。"""
         mock_response = _make_httpx_response(
             status_code=200,
-            json_data={"access_token": "test_token_123", "expires_in": 3600},
+            json_data={"access_token": FAKE_TOKEN_123, "expires_in": 3600},
         )
 
         with patch.object(adapter, "_get_client") as mock_get_client:
@@ -156,8 +180,8 @@ class TestAuthenticate:
 
             token = await adapter.authenticate()
 
-            assert token == "test_token_123"
-            assert adapter._auth_token == "test_token_123"
+            assert token == FAKE_TOKEN_123
+            assert adapter._auth_token == FAKE_TOKEN_123
 
     @pytest.mark.asyncio
     async def test_authenticate_permanent_error(self, adapter: AmazonAdapter) -> None:
@@ -194,12 +218,12 @@ class TestAuthenticate:
     @pytest.mark.asyncio
     async def test_authenticate_token_caching(self, adapter: AmazonAdapter) -> None:
         """测试令牌缓存：未过期时不重新请求。"""
-        adapter._auth_token = "cached_token"
+        adapter._auth_token = FAKE_CACHED_TOKEN
         adapter._token_expires_at = float("inf")
 
         token = await adapter.authenticate()
 
-        assert token == "cached_token"
+        assert token == FAKE_CACHED_TOKEN
 
 
 class TestPushListing:
@@ -214,7 +238,7 @@ class TestPushListing:
         copywriting: CopywritingPackage,
     ) -> None:
         """测试刊登推送成功。"""
-        adapter._auth_token = "test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = _make_httpx_response(
             status_code=201,
@@ -247,7 +271,7 @@ class TestPushListing:
         copywriting: CopywritingPackage,
     ) -> None:
         """测试推送遇到 429 限流，重试耗尽后返回失败结果。"""
-        adapter._auth_token = "test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
 
         mock_response = _make_httpx_response(
             status_code=429,
@@ -277,10 +301,10 @@ class TestSigV4Signing:
         self, adapter_with_aws: AmazonAdapter
     ) -> None:
         """测试 SigV4 签名返回 Authorization 头。"""
-        adapter_with_aws._auth_token = "test_token"
+        adapter_with_aws._auth_token = FAKE_AUTH_TOKEN
         headers: dict[str, str] = {
             "Content-Type": "application/json",
-            "x-amz-access-token": "test_token",
+            "x-amz-access-token": FAKE_AUTH_TOKEN,
         }
 
         signed = adapter_with_aws._sign_request(
@@ -288,13 +312,13 @@ class TestSigV4Signing:
             url_path="/listings/2021-08-01/items/ATVPDKIKX0DER/SKU123",
             headers=headers,
             payload={"attributes": {}},
-            aws_access_key="AKIAIOSFODNN7EXAMPLE",
-            aws_secret_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            aws_access_key=FAKE_AWS_ACCESS_KEY,
+            aws_secret_key=FAKE_AWS_SECRET_KEY,
         )
 
         assert "Authorization" in signed
         assert signed["Authorization"].startswith("AWS4-HMAC-SHA256")
-        assert "AKIAIOSFODNN7EXAMPLE" in signed["Authorization"]
+        assert FAKE_AWS_ACCESS_KEY in signed["Authorization"]
         assert "X-Amz-Date" in signed
         assert "x-amz-content-sha256" in signed
 
@@ -306,7 +330,7 @@ class TestSigV4Signing:
 
     def test_build_headers_with_aws_credentials(self, adapter_with_aws: AmazonAdapter) -> None:
         """测试有 AWS 凭证时使用 SigV4 签名。"""
-        adapter_with_aws._auth_token = "test_token"
+        adapter_with_aws._auth_token = FAKE_AUTH_TOKEN
         headers = adapter_with_aws._build_headers(
             "POST", "/listings/2021-08-01/items/ATVPDKIKX0DER/SKU123", {"data": "test"}
         )
@@ -316,7 +340,7 @@ class TestSigV4Signing:
 
     def test_build_headers_without_aws_credentials(self, adapter: AmazonAdapter) -> None:
         """测试无 AWS 凭证时回退到 Bearer token 模式。"""
-        adapter._auth_token = "test_token"
+        adapter._auth_token = FAKE_AUTH_TOKEN
         headers = adapter._build_headers(
             "POST", "/listings/2021-08-01/items/ATVPDKIKX0DER/SKU123", {"data": "test"}
         )

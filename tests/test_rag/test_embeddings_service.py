@@ -1,7 +1,12 @@
-"""Embedding 服务行为测试。
+"""
+Embedding 服务行为测试。
 
-覆盖 qwen / 本地两条提供商路径的同步与异步入口、维度查询、
-以及本地模型未安装时的显式 ImportError。
+Description:
+    覆盖 qwen / 本地两条提供商路径的同步与异步入口、维度查询、
+    以及本地模型未安装时的显式 ImportError。
+@author ganjianfei
+@version 1.0.0
+2026-09-28
 """
 
 from __future__ import annotations

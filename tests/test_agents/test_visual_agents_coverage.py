@@ -1189,7 +1189,7 @@ class TestRAGImageGenerator:
         assert doc_id is None
 
     async def test_tenant_id_resolution_fallbacks(self) -> None:
-        """tenant_id 依次取请求、商品、状态，最后 system。"""
+        """tenant_id 依次取请求、状态，最后 system（商品模型不携带租户）。"""
         retriever = _knowledge_retriever()
         retriever.retrieve_for_image_generation = AsyncMock(  # type: ignore[method-assign]
             return_value=RetrievalResult(query="q", results=[], context="", sources=[])
@@ -1207,24 +1207,11 @@ class TestRAGImageGenerator:
         )
         assert retriever.retrieve_for_image_generation.call_args.kwargs["tenant_id"] == "req-tenant"
 
-        # 仅商品带 tenant_id（Product 模型无该字段，用 setattr 绕过校验模拟）
-        product = _product()
-        object.__setattr__(product, "tenant_id", "prod-tenant")
-        await agent.execute(
-            _state(
-                product_info=product,
-                generation_request=GenerationRequest(task_id="t1", tenant_id=""),
-            )
-        )
-        assert (
-            retriever.retrieve_for_image_generation.call_args.kwargs["tenant_id"] == "prod-tenant"
-        )
-
-        # 请求与商品都无 tenant_id 时落到状态级
+        # 请求未携带时落到状态级
         state = _state(
             generation_request=GenerationRequest(task_id="t1", tenant_id=""),
         )
-        object.__setattr__(state, "tenant_id", "state-tenant")
+        state.tenant_id = "state-tenant"
         await agent.execute(state)
         assert (
             retriever.retrieve_for_image_generation.call_args.kwargs["tenant_id"] == "state-tenant"
